@@ -5,4 +5,5 @@ outputs/*.json
 outputs/*.jsonl
 outputs/debug_*.txt
 outputs/smoke/
+outputs/runs/
 !outputs/.gitkeep

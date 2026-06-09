@@ -1,5 +1,6 @@
 import argparse
 import json
+import shutil
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,22 +50,32 @@ def _parse_scalar(value: str) -> Any:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the EAGC Track 1 MVP demo.")
     parser.add_argument("--episode-id", help="Mock episode id. Defaults to config.yaml episode_id.")
+    parser.add_argument("--run-id", help="Stable run id for output directory naming.")
+    parser.add_argument("--output-dir", help="Directory for this run's artifacts.")
     parser.add_argument("--validate", action="store_true", help="Run validators after the episode.")
     parser.add_argument("--use-mock-llm", action="store_true", help="Use deterministic mock LLM instead of vLLM.")
     return parser.parse_args()
 
 
 def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
-    args = args or argparse.Namespace(episode_id=None, validate=False, use_mock_llm=False)
+    args = args or argparse.Namespace(
+        episode_id=None,
+        run_id=None,
+        output_dir=None,
+        validate=False,
+        use_mock_llm=False,
+    )
     config = load_config(PROJECT_ROOT / "config.yaml")
-    output_dir = _resolve_output_dir(str(config.get("output_dir", "outputs")))
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_root = _resolve_output_path(str(config.get("output_dir", "outputs")))
 
     episode_id = args.episode_id or str(config.get("episode_id", "mock-bedroom-relocated"))
     use_mock_llm = bool(args.use_mock_llm or config.get("use_mock_llm", False))
     max_recovery_steps = int(config.get("max_recovery_steps", 6))
     started_wall = datetime.now(timezone.utc)
     started = time.perf_counter()
+    run_id = args.run_id or _default_run_id(started_wall)
+    output_dir = _select_output_dir(args.output_dir, output_root, run_id, episode_id)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     world_model_path = output_dir / "world_model.json"
     episode_log_path = output_dir / "episode_log.jsonl"
@@ -209,16 +220,21 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
 
         audit = build_run_audit(
             config=config,
+            run_id=run_id,
             episode_id=initial["episode_id"],
+            output_dir=output_dir,
             use_mock_llm=use_mock_llm,
             started_wall=started_wall,
             latency_seconds=time.perf_counter() - started,
             client=client,
+            fallback_used=extractor.fallback_used,
+            debug_raw_path=output_dir / "debug_qwen_raw.txt",
             world_model_path=world_model_path,
             episode_log_path=episode_log_path,
             validation_status=validation_status,
         )
         write_run_audit(audit_path, audit)
+        write_latest_artifacts(output_root, world_model_path, episode_log_path, audit_path)
         print(f"Demo complete. Wrote {world_model_path}")
         print(f"Demo complete. Wrote {episode_log_path}")
         print(f"Run audit written to {audit_path}")
@@ -228,11 +244,15 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
     except QwenClientError as exc:
         audit = build_run_audit(
             config=config,
+            run_id=run_id,
             episode_id=episode_id,
+            output_dir=output_dir,
             use_mock_llm=use_mock_llm,
             started_wall=started_wall,
             latency_seconds=time.perf_counter() - started,
             client=client,
+            fallback_used=False,
+            debug_raw_path=output_dir / "debug_qwen_raw.txt",
             world_model_path=world_model_path,
             episode_log_path=episode_log_path,
             validation_status={"status": "not_run", "reason": "qwen_client_error"},
@@ -378,11 +398,15 @@ def update_task_status(world_model: Dict[str, Any], task: str, episode_id: str) 
 
 def build_run_audit(
     config: Dict[str, Any],
+    run_id: str,
     episode_id: str,
+    output_dir: Path,
     use_mock_llm: bool,
     started_wall: datetime,
     latency_seconds: float,
     client: QwenClient | MockLLMClient | None,
+    fallback_used: bool,
+    debug_raw_path: Path,
     world_model_path: Path,
     episode_log_path: Path,
     validation_status: Dict[str, Any] | str,
@@ -392,7 +416,9 @@ def build_run_audit(
     qwen_success_count = 0 if use_mock_llm or client is None else client.success_count
     qwen_failure_count = 0 if use_mock_llm or client is None else client.failure_count
     return {
+        "run_id": run_id,
         "episode_id": episode_id,
+        "output_dir": str(output_dir),
         "model": "deterministic-mock-llm" if use_mock_llm else config.get("model"),
         "base_url": "mock://local" if use_mock_llm else config.get("base_url"),
         "use_mock_llm": use_mock_llm,
@@ -402,6 +428,8 @@ def build_run_audit(
         "qwen_call_count": qwen_call_count,
         "qwen_call_success_count": qwen_success_count,
         "qwen_call_failure_count": qwen_failure_count,
+        "fallback_used": fallback_used,
+        "debug_raw_path": str(debug_raw_path) if debug_raw_path.exists() else "",
         "world_model_path": str(world_model_path),
         "episode_log_path": str(episode_log_path),
         "validation_status": validation_status,
@@ -413,11 +441,32 @@ def write_run_audit(path: Path, audit: Dict[str, Any]) -> None:
     path.write_text(json.dumps(audit, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def _resolve_output_dir(value: str) -> Path:
+def write_latest_artifacts(output_root: Path, world_model_path: Path, episode_log_path: Path, audit_path: Path) -> None:
+    output_root.mkdir(parents=True, exist_ok=True)
+    for source, name in [
+        (world_model_path, "world_model.json"),
+        (episode_log_path, "episode_log.jsonl"),
+        (audit_path, "run_audit.json"),
+    ]:
+        if source.exists():
+            shutil.copy2(source, output_root / name)
+
+
+def _resolve_output_path(value: str) -> Path:
     path = Path(value)
     if not path.is_absolute():
         path = PROJECT_ROOT / path
     return path
+
+
+def _select_output_dir(output_dir_arg: str | None, output_root: Path, run_id: str, episode_id: str) -> Path:
+    if output_dir_arg:
+        return _resolve_output_path(output_dir_arg)
+    return output_root / "runs" / f"{run_id}_{episode_id}"
+
+
+def _default_run_id(started_wall: datetime) -> str:
+    return started_wall.strftime("%Y%m%dT%H%M%S%fZ")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.4.2 task completion evaluator and stateful mock environment.
+Current version: v0.4.3 isolated run outputs and real-vLLM smoke tests.
 
 The demo loop:
 
@@ -73,6 +73,27 @@ Run with validators after the episode:
 python main.py --episode-id mock-bedroom-relocated --validate
 ```
 
+Use an explicit run id or output directory:
+
+```powershell
+python main.py --episode-id mock-bedroom-relocated --run-id demo001
+python main.py --episode-id mock-bedroom-relocated --output-dir outputs/custom/demo001
+```
+
+Without `--output-dir`, each run writes to an isolated directory:
+
+```text
+outputs/runs/<timestamp>_<episode_id>/
+```
+
+For compatibility, latest copies are also written to:
+
+```text
+outputs/world_model.json
+outputs/episode_log.jsonl
+outputs/run_audit.json
+```
+
 Run without calling vLLM, using deterministic mock LLM extraction:
 
 ```powershell
@@ -129,6 +150,8 @@ Run the same smoke coverage against the real local vLLM:
 
 ```powershell
 python tests/smoke_test_all_mock_episodes.py --mode real
+python tests/smoke_test_all_mock_episodes.py --mode real --episode-id mock-bedroom-relocated
+python tests/smoke_test_all_mock_episodes.py --mode real --all
 ```
 
 Run both modes:
@@ -245,6 +268,14 @@ The action ontology now includes:
 use_tool(tool, target)
 enter(room)
 ```
+
+## v0.4.3 Notes
+
+v0.4.3 isolates run outputs under `outputs/runs/` by default and records `run_id`, `output_dir`, `fallback_used`, `debug_raw_path`, and Qwen call counts in `run_audit.json`.
+
+The smoke test now writes each episode to `outputs/smoke/<mode>/<episode_id>/`, runs validators through imported Python functions, and supports targeted real-vLLM checks.
+
+If Qwen returns malformed JSON, the raw output is saved as `debug_qwen_raw.txt` in that run directory. The pipeline can still use fallback extraction, but `run_audit.json` records `fallback_used: true`.
 
 ## Adapter Layout
 

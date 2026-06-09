@@ -13,8 +13,10 @@ class VLMExtractor:
     def __init__(self, client: QwenClient, debug_output_path: Path | None = None) -> None:
         self.client = client
         self.debug_output_path = debug_output_path
+        self.fallback_used = False
 
     def extract(self, observation: str, task: str) -> Dict[str, Any]:
+        self.fallback_used = False
         messages = [
             {"role": "system", "content": EXTRACTOR_SYSTEM_PROMPT},
             {"role": "user", "content": build_extraction_prompt(observation, task)},
@@ -23,6 +25,7 @@ class VLMExtractor:
         try:
             raw_update = parse_json_from_text(raw_text)
         except (ValueError, TypeError) as exc:
+            self.fallback_used = True
             self._save_raw_output(raw_text)
             raw_update = fallback_minimal_extraction(observation, note=str(exc))
         return normalize_extraction(raw_update)
