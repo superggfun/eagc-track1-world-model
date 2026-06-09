@@ -1,6 +1,6 @@
 from typing import Any, Dict
 
-from planner.action_schema import invalid_actions
+from planner.action_schema import invalid_actions, parse_action
 from world_model.update import mark_object_location_unknown
 
 
@@ -13,14 +13,27 @@ class Replanner:
         exception_type = exception.get("type", "unknown_exception")
 
         if exception_type == "object_relocated":
-            recovery_actions = _search_actions_for_object(world_model, object_name)
+            recovery_actions = []
+            has_likely_location = False
             for location in exception.get("likely_locations", []):
                 if isinstance(location, str) and location:
+                    has_likely_location = True
                     for action in [f"navigate_to({location})", f"search({location})"]:
                         if action not in recovery_actions:
                             recovery_actions.append(action)
+            if not has_likely_location:
+                for action in _search_actions_for_object(world_model, object_name):
+                    if action not in recovery_actions:
+                        recovery_actions.append(action)
             mark_object_location_unknown(world_model, object_name, reason)
-            recovery_actions.extend([f"pick_up({object_name})", _resume_place_action(world_model, object_name)])
+            place_action = _resume_place_action(world_model, object_name)
+            placement_target = _placement_target(place_action)
+            recovery_actions.append(f"pick_up({object_name})")
+            if placement_target:
+                navigate_action = f"navigate_to({placement_target})"
+                if navigate_action not in recovery_actions:
+                    recovery_actions.append(navigate_action)
+            recovery_actions.append(place_action)
             recovery_subgoals = [
                 f"Mark the {object_name} location as unknown.",
                 "Search likely nearby locations.",
@@ -110,6 +123,13 @@ def _resume_place_action(world_model: Dict[str, Any], object_name: str) -> str:
             if action.startswith(f"place_in({object_name},"):
                 return action
     return f"place_on({object_name}, chair)"
+
+
+def _placement_target(action: str) -> str:
+    action_name, args = parse_action(action)
+    if action_name in {"place_on", "place_in"} and len(args) == 2:
+        return args[1]
+    return ""
 
 
 def _find_object(world_model: Dict[str, Any], object_name: str) -> Dict[str, Any] | None:

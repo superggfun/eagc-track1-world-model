@@ -261,7 +261,7 @@ class LocalSimEnv(BaseEnvAdapter):
             "visible_objects": visible_objects,
             "visible_rooms": [self.current_room],
             "visible_frontiers": visible_frontiers,
-            "topology": self._topology_nodes(),
+            "topology": self._partial_topology_nodes(),
             "object_hints": self._object_hints(visible_objects),
             "last_action_result": dict(self.last_action_result),
         }
@@ -416,8 +416,14 @@ class LocalSimEnv(BaseEnvAdapter):
                 extra={"object_to_place": obj, "fallback_target": "counter"},
             )
         target_room = str(target_item.get("room", self.current_room))
-        self.current_room = target_room
-        self.visited_rooms.add(target_room)
+        if target_room != self.current_room:
+            return self._failure(
+                action,
+                "target_not_reachable",
+                target,
+                "Cannot place object on target because target is not in current room.",
+                extra={"object_to_place": obj, "target_room": target_room},
+            )
         item = self.objects[obj]
         item["room"] = target_room
         item["region"] = str(target_item.get("region", "visible_area"))
@@ -505,6 +511,35 @@ class LocalSimEnv(BaseEnvAdapter):
                         }
                         for neighbor in neighbors
                     ],
+                }
+            )
+        return nodes
+
+    def _partial_topology_nodes(self) -> List[Dict[str, Any]]:
+        nodes = []
+        discovered_rooms = set(self.visited_rooms)
+        discovered_rooms.add(self.current_room)
+        for room in sorted(discovered_rooms):
+            if room not in TOPOLOGY:
+                continue
+            frontiers = []
+            for neighbor in TOPOLOGY.get(room, []):
+                door_name = self._door_between(room, neighbor)
+                door = self.doors.get(door_name, {})
+                frontiers.append(
+                    {
+                        "target": neighbor,
+                        "via": door_name,
+                        "status": "locked" if door.get("locked") else ("open" if door.get("open") else "closed"),
+                        "confidence": 1.0,
+                    }
+                )
+            nodes.append(
+                {
+                    "room": room,
+                    "node_type": "room",
+                    "visited": room in self.visited_rooms,
+                    "frontiers": frontiers,
                 }
             )
         return nodes

@@ -176,12 +176,18 @@ def _apply_navigation(world_model: Dict[str, Any], target: str) -> None:
     if target == "door" or target.endswith("_door"):
         upsert_state(world_model, {"entity": "agent", "attribute": "near", "value": target})
         return
-    world_model.setdefault("agent_state", {})["current_room"] = target
-    world_model["visited_rooms"] = _merge_scalar(world_model.get("visited_rooms", []), [target])
+    target_room = _room_for_navigation_target(world_model, target)
+    if not target_room:
+        upsert_state(world_model, {"entity": "agent", "attribute": "near", "value": target})
+        return
+    world_model.setdefault("agent_state", {})["current_room"] = target_room
+    world_model["visited_rooms"] = _merge_scalar(world_model.get("visited_rooms", []), [target_room])
     for node in world_model.get("topology", []):
-        if isinstance(node, dict) and node.get("room") == target:
+        if isinstance(node, dict) and node.get("room") == target_room:
             node["visited"] = True
-    upsert_state(world_model, {"entity": "agent", "attribute": "location", "value": target})
+    upsert_state(world_model, {"entity": "agent", "attribute": "location", "value": target_room})
+    if target != target_room:
+        upsert_state(world_model, {"entity": "agent", "attribute": "near", "value": target})
     if target == "next_room":
         upsert_state(world_model, {"entity": "agent", "attribute": "entered", "value": "next_room"})
 
@@ -216,6 +222,20 @@ def _region_for_object(world_model: Dict[str, Any], name: str) -> str:
     if obj and isinstance(obj.get("location"), dict):
         return str(obj["location"].get("region") or "visible_area")
     return "visible_area"
+
+
+def _room_for_navigation_target(world_model: Dict[str, Any], target: str) -> str:
+    room_names = {
+        str(node.get("room"))
+        for node in world_model.get("topology", [])
+        if isinstance(node, dict) and node.get("room")
+    }
+    if target in room_names or target == "next_room":
+        return target
+    obj = _find_object(world_model, target)
+    if obj and isinstance(obj.get("location"), dict):
+        return str(obj["location"].get("room") or "")
+    return ""
 
 
 def _merge_scalar(existing: list[Any], incoming: list[Any]) -> list[Any]:

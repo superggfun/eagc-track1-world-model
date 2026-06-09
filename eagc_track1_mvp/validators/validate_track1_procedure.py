@@ -16,6 +16,16 @@ REQUIRED_ORDER = [
 ]
 
 EXPLORATION_ACTIONS = {"explore", "navigate_to", "search"}
+TASK_SPECIFIC_TARGETS = {
+    "book",
+    "chair",
+    "cup",
+    "drawer",
+    "counter",
+    "screwdriver",
+    "coin",
+    "loose_screw",
+}
 
 
 def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -> List[str]:
@@ -29,6 +39,7 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
     errors.extend(_validate_event_order(rows))
     errors.extend(_validate_task_reception(rows, world_model))
     errors.extend(_validate_exploration_actions(rows))
+    errors.extend(_validate_partial_observability(rows))
     errors.extend(_validate_world_model_fields(world_model))
     errors.extend(_validate_audit(audit))
     errors.extend(_validate_score(audit))
@@ -89,6 +100,43 @@ def _validate_exploration_actions(rows: List[Dict[str, Any]]) -> List[str]:
         action_name, _args = parse_action(action)
         if action_name not in EXPLORATION_ACTIONS:
             errors.append(f"Exploration phase used non-exploration action: {action}")
+        if any(arg in TASK_SPECIFIC_TARGETS for arg in _args):
+            errors.append(f"Exploration phase used task-specific target before task reception: {action}")
+    return errors
+
+
+def _validate_partial_observability(rows: List[Dict[str, Any]]) -> List[str]:
+    errors: List[str] = []
+    in_exploration = False
+    for row in rows:
+        event_type = row.get("event_type")
+        if event_type == "exploration_start":
+            in_exploration = True
+            continue
+        if event_type == "exploration_end":
+            in_exploration = False
+        if not in_exploration:
+            continue
+        model_update = row.get("model_update")
+        if not isinstance(model_update, dict):
+            continue
+        topology = model_update.get("topology")
+        if not isinstance(topology, list) or not topology:
+            continue
+        visited_count = sum(1 for node in topology if isinstance(node, dict) and node.get("visited") is True)
+        if len(topology) >= 4 and visited_count == len(topology):
+            errors.append("Exploration phase marked all topology rooms visited before exploration_end.")
+            break
+        for node in topology:
+            if not isinstance(node, dict):
+                continue
+            frontiers = node.get("frontiers")
+            frontier_count = len(frontiers) if isinstance(frontiers, list) else 0
+            if node.get("visited") is False and frontier_count > 1:
+                errors.append(
+                    f"Exploration phase exposed full frontier details for unvisited room {node.get('room')!r}."
+                )
+                break
     return errors
 
 

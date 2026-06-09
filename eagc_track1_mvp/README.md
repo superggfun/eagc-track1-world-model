@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.7 official-style Track 1 procedure runner.
+Current version: v0.7.1 LocalSim partial observability and realism fixes.
 
 The demo loop:
 
@@ -242,6 +242,14 @@ python tests/smoke_test_track1_procedure.py --mode real
 python tests/smoke_test_track1_procedure.py --mode mock
 ```
 
+Package tracked source files only:
+
+```powershell
+python tools/package_source.py
+```
+
+The source package excludes local virtual environments, generated outputs, image assets, `source_pack/`, Python caches, and zip artifacts.
+
 The mock smoke test runs all five mock episodes, validates each output, and archives per-episode artifacts under `outputs/smoke/`.
 It also prints and checks each episode's final `task_status`.
 
@@ -255,7 +263,7 @@ outputs/run_audit.json
 
 It records the episode id, model, base URL, mock LLM flag, run timing, Qwen call counts, output paths, and validation status.
 
-For `--track1-procedure`, it also records phase budgets, phase step usage, `phase_budget_exceeded`, `track1_score_path`, and `track1_total_score`. The local score is written to:
+For `--track1-procedure`, it also records phase budgets, phase step usage, `phase_budget_exceeded`, `track1_score_path`, and `track1_total_score`. This is a local heuristic debugging score, not an official EAGC score. The local score is written to:
 
 ```text
 outputs/track1_score.json
@@ -407,11 +415,22 @@ v0.7 adds `Track1ProcedureRunner`, an official-style local Track 1 procedure run
 - `track1_runner/procedure_runner.py` runs `exploration_start -> exploration_end -> task_received -> planning -> execution_start -> task_evaluation`.
 - Exploration uses only `explore`, `navigate_to`, and `search` actions, and LocalSim hides the natural-language task until task reception.
 - `config.yaml` includes `track1_budgets` for exploration, planning, execution, and recovery step budgets.
-- `scoring/track1_score.py` writes `track1_score.json` with a 100-point heuristic score over task completion, world-model quality, exception recovery, efficiency, and robustness/safety.
+- `scoring/track1_score.py` writes `track1_score.json` with a 100-point local heuristic score over task completion, world-model quality, exception recovery, efficiency, and robustness/safety. It is not an official EAGC score.
 - `validators/validate_track1_procedure.py` checks phase order, task leakage, exploration action constraints, required audit fields, and score file validity.
 - `tests/smoke_test_track1_procedure.py --mode real` runs all LocalSim episodes through the procedure runner.
 
 This is an official-style local procedure, not the official EAGC runtime/API. `official_adapter.py` remains a reserved interface stub.
+
+## v0.7.1 Notes
+
+v0.7.1 tightens LocalSim realism without changing the overall architecture:
+
+- LocalSim observations are partially observable. The environment keeps the full internal topology, but observations only expose visited rooms and currently visible frontiers.
+- World-model topology updates are merged by room instead of overwritten by the latest observation.
+- LocalSim no longer allows teleport placement. `place_on` and `place_in` fail if the target object is not in the current room.
+- Navigation action effects distinguish rooms, objects, and doors so `visited_rooms` contains only actual rooms.
+- LocalSim and Track 1 procedure validators check visited-room integrity, placement reachability, partial-observability leakage, and exploration actions that depend on task-specific targets.
+- `tools/package_source.py` creates `dist/eagc_track1_mvp_source.zip` from git tracked source files only.
 
 ## AI2-THOR Experimental Notes
 

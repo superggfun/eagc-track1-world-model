@@ -71,7 +71,7 @@ def apply_environment_context(world_model: Dict[str, Any], env_packet: Dict[str,
     topology = env_packet.get("topology") or [
         {"room": current_room, "node_type": "room", "visited": True, "frontiers": []}
     ]
-    world_model["topology"] = topology
+    world_model["topology"] = upsert_topology(world_model.get("topology", []), topology)
     visited_rooms = list(packet_agent_state.get("visited_rooms", []))
     if not visited_rooms:
         visited_rooms = [
@@ -235,6 +235,53 @@ def merge_unique(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:
         if fingerprint not in fingerprints:
             merged.append(item)
             fingerprints.add(fingerprint)
+    return merged
+
+
+def upsert_topology(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:
+    merged = [dict(item) for item in existing if isinstance(item, dict)]
+    for item in incoming:
+        if not isinstance(item, dict):
+            continue
+        room = item.get("room")
+        if not room:
+            continue
+        incoming_node = dict(item)
+        incoming_frontiers = incoming_node.get("frontiers", [])
+        for index, current in enumerate(merged):
+            if current.get("room") != room:
+                continue
+            current_frontiers = current.get("frontiers", [])
+            if not isinstance(current_frontiers, list):
+                current_frontiers = []
+            if not isinstance(incoming_frontiers, list):
+                incoming_frontiers = []
+            merged[index] = {
+                **current,
+                **incoming_node,
+                "visited": bool(current.get("visited")) or bool(incoming_node.get("visited")),
+                "frontiers": _merge_frontiers(current_frontiers, incoming_frontiers),
+            }
+            break
+        else:
+            if not isinstance(incoming_node.get("frontiers", []), list):
+                incoming_node["frontiers"] = []
+            merged.append(incoming_node)
+    return merged
+
+
+def _merge_frontiers(existing: List[Any], incoming: List[Any]) -> List[Any]:
+    merged = [item for item in existing if isinstance(item, dict)]
+    for item in incoming:
+        if not isinstance(item, dict):
+            continue
+        key = (item.get("target"), item.get("via"))
+        for index, current in enumerate(merged):
+            if (current.get("target"), current.get("via")) == key:
+                merged[index] = {**current, **item}
+                break
+        else:
+            merged.append(dict(item))
     return merged
 
 

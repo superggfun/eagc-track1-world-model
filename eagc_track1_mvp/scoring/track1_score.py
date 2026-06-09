@@ -25,7 +25,10 @@ def compute_track1_score(
         2,
     )
     return {
+        "score_type": "local_heuristic_score",
+        "official_score": False,
         "total_score": total,
+        "local_heuristic_total_score": total,
         "max_score": 100,
         "components": {
             "task_completion": task_completion,
