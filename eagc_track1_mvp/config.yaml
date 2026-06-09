@@ -6,3 +6,4 @@ episode_id: mock-bedroom-relocated
 use_mock_llm: false
 output_dir: outputs
 max_recovery_steps: 6
+oracle_metadata_mode: false

@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
+from env_adapters.ai2thor_adapter import AI2ThorAdapter, AI2ThorAdapterError
 from clients.mock_llm_client import MockLLMClient
 from clients.qwen_client import QwenClient, QwenClientError
 from env_adapters.mock_env import MockEnv
@@ -57,6 +58,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", help="Directory for this run's artifacts.")
     parser.add_argument("--validate", action="store_true", help="Run validators after the episode.")
     parser.add_argument("--use-mock-llm", action="store_true", help="Use deterministic mock LLM instead of vLLM.")
+    parser.add_argument("--env", choices=["mock", "visual_mock", "ai2thor"], default="mock")
+    parser.add_argument("--scene", default="FloorPlan1", help="AI2-THOR scene for --env ai2thor.")
     parser.add_argument("--vision", action="store_true", help="Run the visual mock episode with image input.")
     parser.add_argument("--image-path", help="Local image path for --vision runs.")
     return parser.parse_args()
@@ -69,16 +72,26 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         output_dir=None,
         validate=False,
         use_mock_llm=False,
+        env="mock",
+        scene="FloorPlan1",
         vision=False,
         image_path=None,
     )
     config = load_config(PROJECT_ROOT / "config.yaml")
     output_root = _resolve_output_path(str(config.get("output_dir", "outputs")))
 
-    vision_mode = bool(args.vision)
-    image_path = _resolve_image_path(args.image_path) if vision_mode else None
-    episode_id = "visual-bedroom-smoke" if vision_mode else args.episode_id or str(config.get("episode_id", "mock-bedroom-relocated"))
+    env_name = "visual_mock" if args.vision else str(getattr(args, "env", "mock"))
+    vision_mode = env_name in {"visual_mock", "ai2thor"}
+    image_path = _resolve_image_path(args.image_path) if env_name == "visual_mock" else None
+    scene = str(getattr(args, "scene", "FloorPlan1"))
+    if env_name == "ai2thor":
+        episode_id = f"ai2thor-smoke-{scene}"
+    elif env_name == "visual_mock":
+        episode_id = "visual-bedroom-smoke"
+    else:
+        episode_id = args.episode_id or str(config.get("episode_id", "mock-bedroom-relocated"))
     use_mock_llm = bool(args.use_mock_llm or config.get("use_mock_llm", False))
+    oracle_metadata_mode = bool(config.get("oracle_metadata_mode", False))
     max_recovery_steps = int(config.get("max_recovery_steps", 6))
     started_wall = datetime.now(timezone.utc)
     started = time.perf_counter()
@@ -94,10 +107,29 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
     validation_status: Dict[str, Any] | str = "not_requested"
     client: QwenClient | MockLLMClient | None = None
     extractor: VLMExtractor | None = None
+    env: MockEnv | VisualMockEnv | AI2ThorAdapter | None = None
+    ai2thor_start_success = False
+    ai2thor_error_message = ""
+    simulator_frame_path: Path | None = None
+    simulator_metadata_path: Path | None = None
 
     try:
-        env = VisualMockEnv(image_path or PROJECT_ROOT / "assets" / "test_images" / "bedroom.png") if vision_mode else MockEnv(episode_id)
+        if env_name == "ai2thor":
+            env = AI2ThorAdapter(
+                output_dir=output_dir,
+                scene=scene,
+                oracle_metadata_mode=oracle_metadata_mode,
+            )
+        elif env_name == "visual_mock":
+            env = VisualMockEnv(image_path or PROJECT_ROOT / "assets" / "test_images" / "bedroom.png")
+        else:
+            env = MockEnv(episode_id)
         initial = env.reset()
+        ai2thor_start_success = bool(getattr(env, "start_success", False))
+        if env_name == "ai2thor":
+            simulator_frame_path = Path(initial.get("image_path", ""))
+            simulator_metadata_path = Path(initial.get("metadata_path", ""))
+            image_path = simulator_frame_path
         observation_for_log = _render_observation(initial["observation"])
 
         logger = EpisodeLogger(episode_log_path)
@@ -248,14 +280,21 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             validation_status=validation_status,
             prompt_version=PROMPT_VERSION,
             qwen_response_summary_path=qwen_response_summary_path,
+            env_name=env_name,
+            scene=scene,
             vision_mode=vision_mode,
             image_path=image_path,
             vision_call_success=bool(extractor.last_call_success) if extractor else False,
             vision_parse_success=bool(extractor.last_parse_success) if extractor else False,
+            simulator_frame_path=simulator_frame_path,
+            simulator_metadata_path=simulator_metadata_path,
+            ai2thor_start_success=ai2thor_start_success,
+            ai2thor_error_message=ai2thor_error_message,
+            oracle_metadata_mode=oracle_metadata_mode,
         )
         write_run_audit(audit_path, audit)
         if args.validate:
-            validation_status = run_validators(world_model_path, episode_log_path, audit_path, vision_mode)
+            validation_status = run_validators(world_model_path, episode_log_path, audit_path, vision_mode, env_name)
             audit["validation_status"] = validation_status
             write_run_audit(audit_path, audit)
         write_latest_artifacts(output_root, world_model_path, episode_log_path, audit_path)
@@ -265,6 +304,44 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         if args.validate and isinstance(validation_status, dict) and not validation_status.get("passed", False):
             raise SystemExit(1)
         return audit
+    except AI2ThorAdapterError as exc:
+        ai2thor_error_message = str(exc)
+        audit = build_run_audit(
+            config=config,
+            run_id=run_id,
+            episode_id=episode_id,
+            output_dir=output_dir,
+            use_mock_llm=use_mock_llm,
+            started_wall=started_wall,
+            latency_seconds=time.perf_counter() - started,
+            client=client,
+            fallback_used=False,
+            debug_raw_path=output_dir / "debug_qwen_raw.txt",
+            world_model_path=world_model_path,
+            episode_log_path=episode_log_path,
+            validation_status={"status": "not_run", "reason": "ai2thor_adapter_error"},
+            prompt_version=PROMPT_VERSION,
+            qwen_response_summary_path=qwen_response_summary_path,
+            env_name=env_name,
+            scene=scene,
+            vision_mode=vision_mode,
+            image_path=image_path,
+            vision_call_success=False,
+            vision_parse_success=False,
+            simulator_frame_path=simulator_frame_path,
+            simulator_metadata_path=simulator_metadata_path,
+            ai2thor_start_success=ai2thor_start_success,
+            ai2thor_error_message=ai2thor_error_message,
+            oracle_metadata_mode=oracle_metadata_mode,
+        )
+        audit["error_message"] = ai2thor_error_message
+        write_run_audit(audit_path, audit)
+        raise SystemExit(
+            "\n[ERROR] Could not start or observe AI2-THOR.\n"
+            f"{exc}\n\n"
+            "If AI2-THOR is not installed, run: pip install ai2thor\n"
+            "If it is installed, check the local Unity/OpenGL/graphics environment.\n"
+        ) from exc
     except QwenClientError as exc:
         audit = build_run_audit(
             config=config,
@@ -282,10 +359,17 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             validation_status={"status": "not_run", "reason": "qwen_client_error"},
             prompt_version=PROMPT_VERSION,
             qwen_response_summary_path=qwen_response_summary_path,
+            env_name=env_name,
+            scene=scene,
             vision_mode=vision_mode,
             image_path=image_path,
             vision_call_success=False,
             vision_parse_success=False,
+            simulator_frame_path=simulator_frame_path,
+            simulator_metadata_path=simulator_metadata_path,
+            ai2thor_start_success=ai2thor_start_success,
+            ai2thor_error_message=ai2thor_error_message,
+            oracle_metadata_mode=oracle_metadata_mode,
         )
         audit["error_message"] = str(exc)
         write_run_audit(audit_path, audit)
@@ -295,6 +379,9 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             "Please check that vLLM is running at the configured base_url and that "
             "the configured model name is served.\n"
         ) from exc
+    finally:
+        if env is not None and hasattr(env, "close"):
+            env.close()
 
 
 def run_validators(
@@ -302,6 +389,7 @@ def run_validators(
     episode_log_path: Path,
     audit_path: Path | None = None,
     vision_mode: bool = False,
+    env_name: str = "mock",
 ) -> Dict[str, Any]:
     checks = {
         "world_model": validate_world_model(world_model_path),
@@ -311,6 +399,10 @@ def run_validators(
     }
     if vision_mode and audit_path is not None:
         checks["vision_extraction"] = validate_vision_extraction(world_model_path, audit_path)
+    if env_name == "ai2thor" and audit_path is not None:
+        from validators.validate_ai2thor_smoke import validate as validate_ai2thor_smoke
+
+        checks["ai2thor_smoke"] = validate_ai2thor_smoke(world_model_path, audit_path)
     status = {
         name: {"passed": not errors, "errors": errors}
         for name, errors in checks.items()
@@ -449,10 +541,17 @@ def build_run_audit(
     validation_status: Dict[str, Any] | str,
     prompt_version: str,
     qwen_response_summary_path: Path,
+    env_name: str,
+    scene: str,
     vision_mode: bool,
     image_path: Path | None,
     vision_call_success: bool,
     vision_parse_success: bool,
+    simulator_frame_path: Path | None,
+    simulator_metadata_path: Path | None,
+    ai2thor_start_success: bool,
+    ai2thor_error_message: str,
+    oracle_metadata_mode: bool,
 ) -> Dict[str, Any]:
     ended = datetime.now(timezone.utc)
     qwen_call_count = 0 if use_mock_llm or client is None else client.call_count
@@ -465,6 +564,8 @@ def build_run_audit(
         "model": "deterministic-mock-llm" if use_mock_llm else config.get("model"),
         "base_url": "mock://local" if use_mock_llm else config.get("base_url"),
         "use_mock_llm": use_mock_llm,
+        "env": env_name,
+        "scene": scene,
         "prompt_version": prompt_version,
         "vision_mode": vision_mode,
         "image_path": str(image_path) if image_path else "",
@@ -472,6 +573,11 @@ def build_run_audit(
         "image_size_bytes": image_path.stat().st_size if image_path and image_path.exists() else 0,
         "vision_call_success": vision_call_success if vision_mode else False,
         "vision_parse_success": vision_parse_success if vision_mode else False,
+        "simulator_frame_path": str(simulator_frame_path) if simulator_frame_path else "",
+        "simulator_metadata_path": str(simulator_metadata_path) if simulator_metadata_path else "",
+        "ai2thor_start_success": ai2thor_start_success if env_name == "ai2thor" else False,
+        "ai2thor_error_message": ai2thor_error_message,
+        "oracle_metadata_mode": oracle_metadata_mode,
         "start_time": started_wall.isoformat(),
         "end_time": ended.isoformat(),
         "latency_seconds": round(latency_seconds, 6),

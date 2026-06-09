@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.5 vision input smoke test for Qwen vLLM.
+Current version: v0.6 AI2-THOR simulator adapter smoke test.
 
 The demo loop:
 
@@ -46,6 +46,7 @@ max_tokens: 2048
 episode_id: mock-bedroom-relocated
 use_mock_llm: false
 output_dir: outputs
+oracle_metadata_mode: false
 ```
 
 The client currently supports text-only chat completions through:
@@ -110,6 +111,12 @@ python main.py --vision --image-path assets/test_images/bedroom.png --validate
 
 If `assets/test_images/bedroom.png` does not exist, place a local bedroom scene image there or pass another local path with `--image-path`.
 
+Run the AI2-THOR simulator smoke episode:
+
+```powershell
+python main.py --env ai2thor --scene FloorPlan1 --validate
+```
+
 Expected outputs:
 
 ```text
@@ -137,6 +144,7 @@ python -m validators.validate_world_model outputs/world_model.json
 python -m validators.validate_semantic_consistency outputs/world_model.json
 python -m validators.validate_episode_log outputs/episode_log.jsonl
 python -m validators.validate_vision_extraction outputs/world_model.json outputs/run_audit.json
+python -m validators.validate_ai2thor_smoke outputs/world_model.json outputs/run_audit.json
 ```
 
 The world model validator checks required top-level fields, object identity fields, unique object IDs, plans, and structured exception recovery records.
@@ -170,6 +178,13 @@ Run a direct Qwen vision smoke call:
 
 ```powershell
 python tools/test_qwen_vision_call.py --image-path assets/test_images/bedroom.png
+```
+
+Run an AI2-THOR adapter smoke call:
+
+```powershell
+pip install ai2thor
+python tools/test_ai2thor_adapter.py --scene FloorPlan1
 ```
 
 The smoke test runs all five mock episodes, validates each output, and archives per-episode artifacts under `outputs/smoke/`.
@@ -301,6 +316,26 @@ v0.5 adds a minimal vision interface smoke test:
 - `qwen_response_summary.json` records `input_mode: "vision"` for vision extraction.
 
 This is not a ProcTHOR adapter and does not train or modify any model. It is only a static local-image interface smoke test that keeps the official runtime adapter boundary unchanged.
+
+## v0.6 Notes
+
+v0.6 adds a minimal AI2-THOR simulator adapter smoke test:
+
+- `env_adapters/ai2thor_adapter.py` starts an `ai2thor.controller.Controller`, captures one RGB frame, and saves simulator metadata.
+- `tools/test_ai2thor_adapter.py --scene FloorPlan1` verifies that AI2-THOR can start on the local machine and writes `outputs/ai2thor_smoke/frame.png` plus `outputs/ai2thor_smoke/metadata.json`.
+- `main.py --env ai2thor --scene FloorPlan1 --validate` captures a simulator frame, sends it through the existing Qwen vision extraction path, updates the world model, and runs validators.
+- `run_audit.json` records simulator frame path, metadata path, scene, AI2-THOR startup status, and any simulator error message.
+- `validators/validate_ai2thor_smoke.py` checks the saved frame, metadata, AI2-THOR audit fields, episode log, and non-empty world-model objects.
+
+Install AI2-THOR only when you want to run the simulator smoke:
+
+```powershell
+pip install ai2thor
+```
+
+`oracle_metadata_mode: false` is the default. In this mode, world-model extraction should come from Qwen vision, not directly from simulator metadata. Setting `oracle_metadata_mode: true` may write `debug_oracle_objects.json` for development comparison, debugging, or training-data analysis, but oracle metadata should not be treated as a final official evaluation dependency.
+
+v0.6 is not ProcTHOR training, not a navigation benchmark, and not the official EAGC runtime. It is only a one-frame simulator adapter smoke test.
 
 ## Adapter Layout
 

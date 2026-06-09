@@ -1,4 +1,4 @@
-PROMPT_VERSION = "v0.5"
+PROMPT_VERSION = "v0.6"
 
 EXTRACTOR_SYSTEM_PROMPT = """You are a text-only perception module for an embodied agent.
 Return one valid JSON object only. Do not use markdown fences, prose, explanations, or comments.
