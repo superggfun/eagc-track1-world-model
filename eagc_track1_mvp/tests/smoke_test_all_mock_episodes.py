@@ -1,4 +1,5 @@
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,13 @@ EPISODES = [
     "mock-study-tool-substitution",
     "mock-livingroom-nominal",
 ]
+
+EXCEPTION_EPISODES = {
+    "mock-bedroom-relocated": "object_relocated",
+    "mock-hallway-door-locked": "door_locked",
+    "mock-kitchen-container-unavailable": "target_container_unavailable",
+    "mock-study-tool-substitution": "tool_substitution",
+}
 
 OUTPUT_FILES = [
     "world_model.json",
@@ -40,6 +48,10 @@ def main() -> int:
             completed = subprocess.run(command, cwd=PROJECT_ROOT)
             if completed.returncode != 0:
                 return completed.returncode
+            expectation_error = _check_recovery_expectations(episode_id)
+            if expectation_error:
+                print(expectation_error)
+                return 1
             _archive_outputs(mode, episode_id)
     print("\nAll requested mock episode smoke tests passed.")
     return 0
@@ -79,6 +91,32 @@ def _archive_outputs(mode: str, episode_id: str) -> None:
         source = OUTPUT_DIR / name
         if source.exists():
             shutil.copy2(source, episode_dir / name)
+
+
+def _check_recovery_expectations(episode_id: str) -> str:
+    log_path = OUTPUT_DIR / "episode_log.jsonl"
+    world_model_path = OUTPUT_DIR / "world_model.json"
+    rows = [
+        json.loads(line)
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    event_types = [row.get("event_type") for row in rows]
+    if episode_id in EXCEPTION_EPISODES:
+        expected_type = EXCEPTION_EPISODES[episode_id]
+        world_model = json.loads(world_model_path.read_text(encoding="utf-8"))
+        exception_types = [
+            item.get("exception", {}).get("type")
+            for item in world_model.get("exceptions", [])
+            if isinstance(item, dict)
+        ]
+        if expected_type not in exception_types:
+            return f"{episode_id} missing expected exception type {expected_type}."
+        if "replanning" not in event_types:
+            return f"{episode_id} missing replanning event."
+        if not any(event in event_types for event in ["recovery_action", "recovery_complete"]):
+            return f"{episode_id} missing recovery_action or recovery_complete event."
+    return ""
 
 
 if __name__ == "__main__":

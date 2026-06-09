@@ -35,6 +35,8 @@ def validate(path: Path) -> List[str]:
     errors.extend(_validate_topology(data.get("topology")))
     errors.extend(_validate_locations(objects))
     errors.extend(_validate_relations(data.get("relations", []), object_names, objects))
+    errors.extend(_validate_location_relation_consistency(data))
+    errors.extend(_validate_holding_consistency(data))
     errors.extend(_validate_actions(data, objects))
     errors.extend(_validate_recovery_links(data))
     errors.extend(_validate_object_relocated(data, objects))
@@ -161,8 +163,8 @@ def _validate_object_relocated(data: Dict[str, Any], objects: Any) -> List[str]:
     for item in relocated:
         object_name = item["exception"].get("object")
         obj = _find_object(objects, object_name)
-        if not obj or not isinstance(obj.get("location"), dict) or obj["location"].get("status") != "unknown":
-            errors.append(f"object_relocated for {object_name} must set object location.status to unknown.")
+        if not obj or not isinstance(obj.get("location"), dict):
+            errors.append(f"object_relocated for {object_name} must keep a structured object location.")
         stale_found = any(
             isinstance(relation, dict)
             and relation.get("subject") == object_name
@@ -178,6 +180,70 @@ def _validate_object_relocated(data: Dict[str, Any], objects: Any) -> List[str]:
     return errors
 
 
+def _validate_location_relation_consistency(data: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    objects = data.get("objects", [])
+    relations = data.get("relations", [])
+    if not isinstance(objects, list) or not isinstance(relations, list):
+        return errors
+
+    active_by_subject: Dict[str, List[Dict[str, Any]]] = {}
+    for relation in relations:
+        if (
+            isinstance(relation, dict)
+            and relation.get("relation") in LOCATION_RELATIONS
+            and relation.get("status") == "active"
+        ):
+            active_by_subject.setdefault(str(relation.get("subject")), []).append(relation)
+
+    for subject, active_relations in active_by_subject.items():
+        if len(active_relations) > 1:
+            rendered = [f"{rel.get('relation')} {rel.get('object')}" for rel in active_relations]
+            errors.append(f"{subject} has multiple active location relations: {rendered}")
+
+    for obj in objects:
+        if not isinstance(obj, dict):
+            continue
+        name = str(obj.get("name") or obj.get("id"))
+        location = obj.get("location")
+        if not isinstance(location, dict):
+            continue
+        support = location.get("support")
+        if location.get("status") == "known" and support and support != "agent_hand":
+            if not any(rel.get("object") == support for rel in active_by_subject.get(name, [])):
+                errors.append(f"{name} location.support={support!r} lacks matching active relation.")
+        if location.get("status") == "known" and support == "agent_hand":
+            holding = data.get("agent_state", {}).get("holding")
+            if holding != name:
+                errors.append(f"{name} is supported by agent_hand but agent_state.holding is {holding!r}.")
+    return errors
+
+
+def _validate_holding_consistency(data: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    agent_state = data.get("agent_state", {})
+    holding = agent_state.get("holding") if isinstance(agent_state, dict) else None
+    states = data.get("states", [])
+    objects = data.get("objects", [])
+
+    held_by_agent = [
+        state
+        for state in states
+        if isinstance(state, dict)
+        and state.get("attribute") == "held_by"
+        and state.get("value") == "agent"
+    ]
+    if holding is None and held_by_agent:
+        errors.append("agent_state.holding is null but states still contain held_by=agent.")
+    if holding is not None:
+        obj = _find_object(objects, str(holding))
+        if not obj or not isinstance(obj.get("location"), dict):
+            errors.append(f"held object {holding} is missing structured location.")
+        elif obj["location"].get("support") != "agent_hand":
+            errors.append(f"held object {holding} must have location.support=agent_hand.")
+    return errors
+
+
 def _validate_exception_state_effects(data: Dict[str, Any]) -> List[str]:
     errors: List[str] = []
     states = data.get("states", [])
@@ -188,7 +254,11 @@ def _validate_exception_state_effects(data: Dict[str, Any]) -> List[str]:
         exception_type = exception.get("type")
         obj = exception.get("object")
         if exception_type == "door_locked":
-            if not _has_state(states, obj, "lock_state", "locked") and not _has_state(states, obj, "status", "locked"):
+            if (
+                not _has_state(states, obj, "lock_state", "locked")
+                and not _has_state(states, obj, "status", "locked")
+                and not _has_state(states, obj, "observed_lock_state", "locked")
+            ):
                 errors.append("door_locked exception must record a locked state.")
         elif exception_type == "target_container_unavailable":
             if not _has_state(states, obj, "availability", "unavailable"):

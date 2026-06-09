@@ -60,6 +60,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
 
     episode_id = args.episode_id or str(config.get("episode_id", "mock-bedroom-relocated"))
     use_mock_llm = bool(args.use_mock_llm or config.get("use_mock_llm", False))
+    max_recovery_steps = int(config.get("max_recovery_steps", 6))
     started_wall = datetime.now(timezone.utc)
     started = time.perf_counter()
 
@@ -170,6 +171,15 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                     result="recovery_plan_created",
                     notes="Exception handled; recovery plan created.",
                 )
+                step += 1
+                step = execute_recovery_plan(
+                    recovery_plan=recovery_plan,
+                    executor=executor,
+                    world_model=world_model,
+                    logger=logger,
+                    start_step=step,
+                    max_recovery_steps=max_recovery_steps,
+                )
                 break
 
         store.save()
@@ -233,6 +243,60 @@ def run_validators(world_model_path: Path, episode_log_path: Path) -> Dict[str, 
             for error in item["errors"]:
                 print(f"- {error}")
     return status
+
+
+def execute_recovery_plan(
+    recovery_plan: Dict[str, Any],
+    executor: ActionExecutor,
+    world_model: Dict[str, Any],
+    logger: EpisodeLogger,
+    start_step: int,
+    max_recovery_steps: int,
+) -> int:
+    step = start_step
+    actions = list(recovery_plan.get("actions", []))[:max_recovery_steps]
+    for action in actions:
+        result = executor.execute(action)
+        if result.get("success", False):
+            apply_action_effect(world_model, action, result, step)
+        update_agent_state(
+            world_model,
+            step=step,
+            last_action=action,
+            mode="recovering" if result.get("success", False) else "recovery_failed",
+            result=result.get("result", ""),
+        )
+        logger.log(
+            step=step,
+            event_type="recovery_action",
+            observation=result.get("observation", ""),
+            action=action,
+            result=result.get("result", ""),
+            notes=result.get("message", ""),
+        )
+        step += 1
+        if not result.get("success", False):
+            logger.log(
+                step=step,
+                event_type="recovery_failed",
+                observation=result.get("observation", ""),
+                model_update=result.get("exception", {}),
+                action=action,
+                result=result.get("result", ""),
+                notes=result.get("message", ""),
+            )
+            update_agent_state(world_model, step=step, last_action=action, mode="recovery_failed")
+            return step + 1
+
+    logger.log(
+        step=step,
+        event_type="recovery_complete",
+        model_update=recovery_plan,
+        result="success",
+        notes=f"Executed {len(actions)} recovery actions.",
+    )
+    update_agent_state(world_model, step=step, last_action="", mode="recovery_complete")
+    return step + 1
 
 
 def build_run_audit(

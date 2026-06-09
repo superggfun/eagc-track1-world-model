@@ -22,6 +22,9 @@ AUDIT_EVENT_TYPES = {
     "execution_exception",
     "replanning",
     "recovery_plan",
+    "recovery_action",
+    "recovery_complete",
+    "recovery_failed",
 }
 
 
@@ -49,7 +52,7 @@ def validate(path: Path) -> List[str]:
 
     errors.extend(_validate_steps(rows))
     errors.extend(_validate_event_coverage(rows))
-    errors.extend(_validate_pickup_recovery(rows))
+    errors.extend(_validate_exception_recovery(rows))
     return errors
 
 
@@ -78,22 +81,31 @@ def _validate_event_coverage(rows: List[Dict[str, Any]]) -> List[str]:
     return []
 
 
-def _validate_pickup_recovery(rows: List[Dict[str, Any]]) -> List[str]:
-    failure_index = None
+def _validate_exception_recovery(rows: List[Dict[str, Any]]) -> List[str]:
+    errors: List[str] = []
     for index, row in enumerate(rows):
-        if row.get("action") == "pick_up(book)" and row.get("result") == "failure":
-            failure_index = index
-            break
+        if row.get("event_type") == "execution_exception":
+            later_events = [later.get("event_type") for later in rows[index + 1 :]]
+            if "replanning" not in later_events:
+                errors.append(
+                    f"execution_exception at step {row.get('step')} has no later replanning event."
+                )
+        if row.get("event_type") == "replanning":
+            later_events = [later.get("event_type") for later in rows[index + 1 :]]
+            if not any(
+                event in {"recovery_action", "recovery_complete", "recovery_failed"}
+                for event in later_events
+            ):
+                errors.append(
+                    f"replanning at step {row.get('step')} has no later recovery execution event."
+                )
 
-    if failure_index is None:
-        return []
-
-    for row in rows[failure_index + 1 :]:
-        event_type = row.get("event_type")
-        result = row.get("result")
-        if event_type in {"replanning", "recovery_plan"} or result == "recovery_plan_created":
-            return []
-    return ["pick_up(book) failed, but no later replanning or recovery_plan event was found."]
+    for index, row in enumerate(rows):
+        if row.get("result") == "failure" and row.get("event_type") in {"action", "recovery_action"}:
+            later_events = [later.get("event_type") for later in rows[index + 1 :]]
+            if row.get("event_type") == "action" and "replanning" not in later_events:
+                errors.append(f"failed action at step {row.get('step')} has no later replanning event.")
+    return errors
 
 
 def main() -> int:

@@ -5,3 +5,4 @@ max_tokens: 2048
 episode_id: mock-bedroom-relocated
 use_mock_llm: false
 output_dir: outputs
+max_recovery_steps: 6

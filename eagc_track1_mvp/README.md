@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.4 run audit and CLI controls.
+Current version: v0.4.1 closed-loop recovery and state consistency.
 
 The demo loop:
 
@@ -221,6 +221,14 @@ Generated output files are ignored by `.gitignore`; `outputs/.gitkeep` keeps the
 ## v0.4 Notes
 
 v0.4 adds CLI controls, deterministic mock LLM mode, Qwen call audit logging, and per-run audit summaries. The default behavior still calls the configured local vLLM unless `use_mock_llm: true` or `--use-mock-llm` is set.
+
+## v0.4.1 Notes
+
+v0.4.1 executes recovery plans after replanning instead of stopping at plan generation. Recovery actions are logged as `recovery_action`, followed by `recovery_complete` or `recovery_failed`.
+
+Action effects now stale old active location relations before `pick_up` and `place_on`, clear stale `held_by=agent` state after placement, and keep `agent_state.holding` consistent with `agent_hand` support.
+
+Semantic and episode-log validators now check closed-loop recovery execution, single active location relation per object, location support consistency, and generic failure-to-replanning behavior.
 
 ## Adapter Layout
 

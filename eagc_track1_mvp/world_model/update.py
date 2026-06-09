@@ -49,6 +49,10 @@ def apply_environment_context(world_model: Dict[str, Any], env_packet: Dict[str,
         obj["location"] = location
         if hint.get("category"):
             obj["category"] = hint["category"]
+        support = location.get("support")
+        if support and location.get("status") != "unknown":
+            _ensure_support_object(world_model, str(support), current_room)
+            _reconcile_support_relation(world_model, str(obj.get("name")), str(support))
 
     known_names = {
         obj.get("name")
@@ -105,6 +109,22 @@ def upsert_relation(world_model: Dict[str, Any], relation: Dict[str, Any]) -> Di
     return world_model
 
 
+def remove_state(
+    world_model: Dict[str, Any], entity: str, attribute: str, value: Any | None = None
+) -> Dict[str, Any]:
+    world_model["states"] = [
+        state
+        for state in world_model.get("states", [])
+        if not (
+            isinstance(state, dict)
+            and state.get("entity") == entity
+            and state.get("attribute") == attribute
+            and (value is None or state.get("value") == value)
+        )
+    ]
+    return world_model
+
+
 def mark_object_location_unknown(
     world_model: Dict[str, Any], object_name: str, reason: str
 ) -> Dict[str, Any]:
@@ -141,6 +161,18 @@ def stale_location_relations(world_model: Dict[str, Any], object_name: str) -> N
         if relation.get("subject") == object_name and relation.get("relation") in location_relations:
             relation["status"] = "stale"
             relation["confidence"] = min(float(relation.get("confidence", 0.5)), 0.2)
+
+
+def active_location_relations(world_model: Dict[str, Any], object_name: str) -> List[Dict[str, Any]]:
+    location_relations = {"on", "inside", "under", "near", "beside", "at"}
+    return [
+        relation
+        for relation in world_model.get("relations", [])
+        if isinstance(relation, dict)
+        and relation.get("subject") == object_name
+        and relation.get("relation") in location_relations
+        and relation.get("status") == "active"
+    ]
 
 
 def merge_unique(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:
@@ -240,3 +272,51 @@ def _known_location(room: str) -> Dict[str, Any]:
 
 def slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_") or "unknown_object"
+
+
+def _ensure_support_object(world_model: Dict[str, Any], support: str, room: str) -> None:
+    if any(
+        isinstance(obj, dict) and (obj.get("name") == support or obj.get("id") == support)
+        for obj in world_model.get("objects", [])
+    ):
+        return
+    upsert_object(
+        world_model,
+        {
+            "id": slug(support),
+            "name": support,
+            "category": "inferred_support",
+            "location": {
+                "room": room,
+                "region": "inferred_area",
+                "support": "",
+                "status": "inferred",
+                "confidence": 0.5,
+            },
+            "state": "inferred",
+        },
+    )
+
+
+def _reconcile_support_relation(world_model: Dict[str, Any], object_name: str, support: str) -> None:
+    if any(
+        relation.get("subject") == object_name
+        and relation.get("relation") == "on"
+        and relation.get("object") == support
+        and relation.get("status") == "active"
+        for relation in world_model.get("relations", [])
+        if isinstance(relation, dict)
+    ):
+        return
+    stale_location_relations(world_model, object_name)
+    upsert_relation(
+        world_model,
+        {
+            "subject": object_name,
+            "relation": "on",
+            "object": support,
+            "status": "active",
+            "confidence": 0.85,
+            "observed_at_step": 1,
+        },
+    )

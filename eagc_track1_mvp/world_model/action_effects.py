@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 from planner.action_schema import parse_action
-from world_model.update import upsert_relation, upsert_state
+from world_model.update import remove_state, stale_location_relations, upsert_relation, upsert_state
 
 
 def apply_action_effect(
@@ -33,6 +33,7 @@ def apply_exception_effect(
     message = failure.get("message", "")
 
     if exception_type == "door_locked" and obj:
+        upsert_state(world_model, {"entity": obj, "attribute": "observed_lock_state", "value": "locked"})
         upsert_state(world_model, {"entity": obj, "attribute": "lock_state", "value": "locked"})
         upsert_state(world_model, {"entity": obj, "attribute": "status", "value": "locked"})
         world_model.setdefault("uncertainty", []).append(
@@ -62,6 +63,7 @@ def apply_exception_effect(
 
 
 def _apply_pick_up(world_model: Dict[str, Any], obj_name: str) -> None:
+    stale_location_relations(world_model, obj_name)
     agent_state = world_model.setdefault("agent_state", {})
     agent_state["holding"] = obj_name
     obj = _find_object(world_model, obj_name)
@@ -74,6 +76,7 @@ def _apply_pick_up(world_model: Dict[str, Any], obj_name: str) -> None:
 
 
 def _apply_place_on(world_model: Dict[str, Any], obj_name: str, target: str, step: int) -> None:
+    stale_location_relations(world_model, obj_name)
     agent_state = world_model.setdefault("agent_state", {})
     if agent_state.get("holding") == obj_name:
         agent_state["holding"] = None
@@ -99,6 +102,7 @@ def _apply_place_on(world_model: Dict[str, Any], obj_name: str, target: str, ste
             "observed_at_step": step,
         },
     )
+    remove_state(world_model, obj_name, "held_by", "agent")
     upsert_state(world_model, {"entity": obj_name, "attribute": "location", "value": target})
 
 
