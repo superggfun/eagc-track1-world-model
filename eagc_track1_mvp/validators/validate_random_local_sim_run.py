@@ -36,7 +36,10 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
     if not score_path.exists():
         errors.append(f"track1_score.json is missing: {score_path}")
 
-    controlled_exception = spec.get("controlled_exception", {}) if isinstance(spec, dict) else {}
+    hidden_spec = spec.get("hidden_spec", {}) if isinstance(spec, dict) else {}
+    if not isinstance(hidden_spec, dict):
+        hidden_spec = {}
+    controlled_exception = hidden_spec.get("controlled_exception", spec.get("controlled_exception", {})) if isinstance(spec, dict) else {}
     if isinstance(controlled_exception, dict) and controlled_exception.get("type"):
         event_types = [row.get("event_type") for row in rows if isinstance(row, dict)]
         if task_status.get("status") != "blocked_recovered":
@@ -48,7 +51,7 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
 
     errors.extend(_validate_no_teleport_placement(world_model, rows))
 
-    expected = str(audit.get("expected_task_status") or spec.get("expected_task_status") or "")
+    expected = str(audit.get("expected_task_status") or hidden_spec.get("expected_task_status") or spec.get("expected_task_status") or "")
     actual = str(task_status.get("status") or "")
     if expected and actual != expected:
         if not audit.get("accepted_failure"):

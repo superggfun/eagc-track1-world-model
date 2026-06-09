@@ -167,6 +167,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
     frame_count = 0
     generated_episode_spec: Dict[str, Any] | None = None
     generated_episode_spec_path: Path | None = None
+    evaluator_context: Dict[str, Any] = {}
 
     try:
         if env_name == "ai2thor":
@@ -193,6 +194,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                 json.dumps(generated_episode_spec, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
+            evaluator_context = dict(generated_episode_spec.get("hidden_spec", {}))
             env = LocalSimEnv.from_generated_episode(generated_episode_spec)
             track1_procedure = True
         elif env_name == "local_sim":
@@ -217,6 +219,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                 logger=logger,
                 output_dir=output_dir,
                 budgets=track1_budgets,
+                evaluator_context=evaluator_context,
             )
             result = runner.run_episode(episode_id)
             audit = build_run_audit(
@@ -261,6 +264,8 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             audit.update(result["audit_updates"])
             audit["track1_score_path"] = str(result["track1_score_path"])
             audit["track1_total_score"] = result["track1_score"]["total_score"]
+            if generated_episode_spec:
+                _mark_generated_acceptance(audit, result["world_model"], generated_episode_spec)
             write_run_audit(audit_path, audit)
             if args.validate:
                 validation_status = run_validators(
@@ -281,6 +286,12 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                 score_path = Path(audit["track1_score_path"])
                 write_track1_score(score_path, score)
                 audit["track1_total_score"] = score["total_score"]
+                if generated_episode_spec:
+                    _mark_generated_acceptance(
+                        audit,
+                        json.loads(world_model_path.read_text(encoding="utf-8")),
+                        generated_episode_spec,
+                    )
                 write_run_audit(audit_path, audit)
             write_latest_artifacts(output_root, world_model_path, episode_log_path, audit_path)
             print(f"Demo complete. Wrote {world_model_path}")
@@ -443,7 +454,12 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                     post_action_hook=_local_sim_sync_hook(env_name, extractor, store, world_model, logger),
                 )
                 if recovery_complete:
-                    current_status = update_task_status(world_model, initial["task"], initial["episode_id"])
+                    current_status = update_task_status(
+                        world_model,
+                        initial["task"],
+                        initial["episode_id"],
+                        evaluator_context=evaluator_context,
+                    )
                     if current_status["status"] not in {"complete", "blocked_recovered"}:
                         step = execute_resume_actions(
                             actions=plan_actions[action_index + 1 :],
@@ -455,7 +471,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                         )
                 break
 
-        final_status = update_task_status(world_model, initial["task"], initial["episode_id"])
+        final_status = update_task_status(world_model, initial["task"], initial["episode_id"], evaluator_context=evaluator_context)
         logger.log(
             step=step,
             event_type="task_status",
@@ -668,8 +684,10 @@ def run_validators(
         checks["local_sim"] = validate_local_sim_run(world_model_path, audit_path, episode_log_path)
     if env_name == "local_sim_random" and audit_path is not None:
         from validators.validate_random_local_sim_run import validate as validate_random_local_sim_run
+        from validators.validate_no_hidden_spec_leakage import validate as validate_no_hidden_spec_leakage
 
         checks["random_local_sim"] = validate_random_local_sim_run(world_model_path, audit_path, episode_log_path)
+        checks["no_hidden_spec_leakage"] = validate_no_hidden_spec_leakage(world_model_path, audit_path, episode_log_path)
     if track1_procedure and audit_path is not None:
         from validators.validate_track1_procedure import validate as validate_track1_procedure
 
@@ -997,8 +1015,13 @@ def sync_post_action_observation(
     return start_step + 2
 
 
-def update_task_status(world_model: Dict[str, Any], task: str, episode_id: str) -> Dict[str, Any]:
-    evaluated = evaluate_task_status(task, world_model, episode_id)
+def update_task_status(
+    world_model: Dict[str, Any],
+    task: str,
+    episode_id: str,
+    evaluator_context: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    evaluated = evaluate_task_status(task, world_model, episode_id, evaluator_context=evaluator_context)
     status = {
         "status": evaluated["task_status"],
         "success": evaluated["success"],
@@ -1090,7 +1113,10 @@ def _add_generated_audit_fields(
     seed: int,
     difficulty: str,
 ) -> None:
-    controlled_exception = episode_spec.get("controlled_exception", {})
+    hidden_spec = episode_spec.get("hidden_spec", {})
+    if not isinstance(hidden_spec, dict):
+        hidden_spec = {}
+    controlled_exception = hidden_spec.get("controlled_exception", episode_spec.get("controlled_exception", {}))
     if not isinstance(controlled_exception, dict):
         controlled_exception = {}
     audit.update(
@@ -1099,9 +1125,27 @@ def _add_generated_audit_fields(
             "difficulty": difficulty,
             "generated_episode_spec_path": str(generated_episode_spec_path) if generated_episode_spec_path else "",
             "controlled_exception_type": controlled_exception.get("type", ""),
-            "expected_task_status": episode_spec.get("expected_task_status", ""),
+            "expected_task_status": hidden_spec.get("expected_task_status", episode_spec.get("expected_task_status", "")),
+            "recoverable": bool(hidden_spec.get("recoverable", episode_spec.get("recoverable", True))),
+            "accepted_failure": False,
+            "accepted_failure_reason": "",
         }
     )
+
+
+def _mark_generated_acceptance(
+    audit: Dict[str, Any],
+    world_model: Dict[str, Any],
+    episode_spec: Dict[str, Any],
+) -> None:
+    hidden_spec = episode_spec.get("hidden_spec", {})
+    if not isinstance(hidden_spec, dict):
+        hidden_spec = {}
+    status = str(world_model.get("task_status", {}).get("status") or "")
+    recoverable = bool(hidden_spec.get("recoverable", True))
+    if not recoverable and status in {"failed", "blocked_recovered", "in_progress"}:
+        audit["accepted_failure"] = True
+        audit["accepted_failure_reason"] = f"Generated episode is marked unrecoverable; final status was {status}."
 
 
 def write_run_audit(path: Path, audit: Dict[str, Any]) -> None:

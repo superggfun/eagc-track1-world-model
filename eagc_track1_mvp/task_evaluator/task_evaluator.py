@@ -1,10 +1,17 @@
 from typing import Any, Dict, List
 
 
-def evaluate_task_status(task: str, world_model: Dict[str, Any], episode_id: str) -> Dict[str, Any]:
+def evaluate_task_status(
+    task: str,
+    world_model: Dict[str, Any],
+    episode_id: str,
+    evaluator_context: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
     del task
-    if isinstance(world_model.get("success_condition"), dict) and world_model["success_condition"]:
-        return _evaluate_success_condition(world_model["success_condition"], world_model)
+    evaluator_context = evaluator_context or {}
+    success_condition = evaluator_context.get("success_condition")
+    if isinstance(success_condition, dict) and success_condition:
+        return _evaluate_success_condition(success_condition, world_model)
     if episode_id in {"mock-bedroom-relocated", "visual-bedroom-smoke", "local-explore-book-relocated"}:
         return _object_on_support(world_model, "book", "chair")
     if episode_id == "local-door-locked-route":
@@ -133,6 +140,13 @@ def _evaluate_success_condition(condition: Dict[str, Any], world_model: Dict[str
         if _location_support(world_model, obj) == target or _has_relation(world_model, obj, "inside", target):
             return _status("complete", True, f"{obj} reached primary target {target}.", [f"{obj} support {target}"])
         return _status("in_progress", False, f"{obj} has not reached {target} or fallback {fallback_target}.", [])
+
+    if condition_type == "unrecoverable":
+        obj = str(condition.get("object", ""))
+        target = str(condition.get("target", ""))
+        if _location_support(world_model, obj) == target or _has_relation(world_model, obj, "inside", target):
+            return _status("complete", True, f"{obj} unexpectedly reached primary target {target}.", [f"{obj} support {target}"])
+        return _status("failed", False, f"Unrecoverable condition remained unresolved for {obj} -> {target}.", [])
 
     return _status("in_progress", False, f"Unsupported success_condition type {condition_type!r}.", [])
 

@@ -36,6 +36,7 @@ class Track1ProcedureRunner:
         logger: EpisodeLogger,
         output_dir: Path,
         budgets: Dict[str, Any] | None = None,
+        evaluator_context: Dict[str, Any] | None = None,
     ) -> None:
         self.env = env
         self.extractor = extractor
@@ -54,6 +55,7 @@ class Track1ProcedureRunner:
         self.phase_budget_exceeded = False
         self.task = ""
         self.plan: Dict[str, Any] = {}
+        self.evaluator_context = evaluator_context or {}
 
     def run_episode(self, episode_id: str) -> Dict[str, Any]:
         del episode_id
@@ -187,7 +189,12 @@ class Track1ProcedureRunner:
                 break
 
     def final_evaluation(self) -> None:
-        evaluated = evaluate_task_status(self.task, self.store.world_model, self.store.world_model["episode_id"])
+        evaluated = evaluate_task_status(
+            self.task,
+            self.store.world_model,
+            self.store.world_model["episode_id"],
+            evaluator_context=self.evaluator_context,
+        )
         status = {
             "status": evaluated["task_status"],
             "success": evaluated["success"],
@@ -259,7 +266,12 @@ class Track1ProcedureRunner:
         recovery_complete = self._execute_recovery_actions(recovery_plan)
         if not recovery_complete:
             return
-        current = evaluate_task_status(self.task, self.store.world_model, self.store.world_model["episode_id"])
+        current = evaluate_task_status(
+            self.task,
+            self.store.world_model,
+            self.store.world_model["episode_id"],
+            evaluator_context=self.evaluator_context,
+        )
         if current["task_status"] in {"complete", "blocked_recovered"}:
             return
         for resume_action in remaining_actions:

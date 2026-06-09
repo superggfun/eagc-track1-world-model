@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.8 randomized LocalSim hidden-style robustness evaluation.
+Current version: v0.8.1 randomized LocalSim leakage audit and medium robustness stress test.
 
 The demo loop:
 
@@ -154,9 +154,13 @@ python main.py --env local_sim_random --seed 1 --difficulty easy --track1-proced
 Run randomized LocalSim robustness evaluation:
 
 ```powershell
-python tests/robustness_test_random_local_sim.py --mode real --num-episodes 20 --difficulty easy
-python tests/robustness_test_random_local_sim.py --mode real --num-episodes 50 --difficulty medium
+python tests/robustness_test_random_local_sim.py --mode mock --num-episodes 100 --difficulty easy --strict-leakage-check
+python tests/robustness_test_random_local_sim.py --mode real --num-episodes 20 --difficulty easy --strict-leakage-check
+python tests/robustness_test_random_local_sim.py --mode real --num-episodes 10 --difficulty medium --strict-leakage-check
+python tests/robustness_test_random_local_sim.py --mode real --num-episodes 50 --difficulty medium --strict-leakage-check
 ```
+
+The 50-episode real medium run is intended as an optional overnight stress test, not a v0.8.1 commit gate.
 
 Sequence frames should be local files named in deterministic order:
 
@@ -200,6 +204,7 @@ python -m validators.validate_visual_sequence outputs/world_model.json outputs/r
 python -m validators.validate_local_sim_run outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 python -m validators.validate_track1_procedure outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 python -m validators.validate_random_local_sim_run outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
+python -m validators.validate_no_hidden_spec_leakage outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 ```
 
 The world model validator checks required top-level fields, object identity fields, unique object IDs, plans, and structured exception recovery records.
@@ -447,6 +452,30 @@ v0.8 adds randomized hidden-style LocalSim robustness evaluation:
 - `tests/robustness_test_random_local_sim.py` runs seed batches and writes `summary_report.json`, `summary_report.md`, and `failure_case.json` for failed cases.
 
 This is hidden-style local robustness evaluation, not an official EAGC benchmark or official score.
+
+## v0.8.1 Notes
+
+v0.8.1 separates agent-visible runtime data from evaluator-only generated specs:
+
+- Generated episode specs now contain `public_env_config` and `hidden_spec`.
+- `LocalSimEnv` may hold `hidden_spec` internally, but observations, Qwen prompts, episode logs, and world-model updates do not expose `success_condition`, `expected_task_status`, or raw `controlled_exception`.
+- `TaskEvaluator` receives evaluator-only context from the runner instead of reading hidden success conditions from the world model.
+- `validators/validate_no_hidden_spec_leakage.py` audits world model, episode log, Qwen call summaries, and Qwen response summaries for hidden spec leakage.
+- Medium difficulty adds more varied object placement, distractors, non-adjacent relocation targets, blocked routes, candidate substitutes, and a small number of accepted unrecoverable cases.
+- Robustness summaries now include accepted failures, recoverable success rate, average Qwen calls, average latency, fallback count, leakage status, per-template stats, per-exception stats, and top failure reasons.
+
+Local standards for this MVP:
+
+- easy 100 mock episodes: verifies the generator, planner, validators, and local heuristic scoring
+- easy 20 real episodes: verifies Qwen stability on easy randomized runs
+- medium 10 real episodes: quick robustness exposure for harder randomized runs
+- medium 50 real episodes: optional overnight stress test, not required for v0.8.1 submission
+- easy threshold: `complete + blocked_recovered >= 85%`
+- medium threshold: `complete + blocked_recovered + accepted_failure >= 60%`
+- `fallback_used_count` should ideally be 0
+- leakage checks must pass for every generated run
+
+These are local hidden-style checks for robustness. They are not official EAGC evaluation results.
 
 ## v0.7.1 Notes
 

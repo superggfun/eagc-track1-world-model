@@ -15,6 +15,7 @@ def apply_extraction(world_model: Dict[str, Any], extraction: Dict[str, Any]) ->
     world_model["uncertainty"] = merge_unique(
         world_model.get("uncertainty", []), extraction.get("uncertainty", [])
     )
+    _normalize_held_object(world_model)
     return world_model
 
 
@@ -85,9 +86,6 @@ def apply_environment_context(world_model: Dict[str, Any], env_packet: Dict[str,
     if frontiers:
         world_model["frontiers"] = merge_unique(world_model.get("frontiers", []), frontiers)
 
-    for field in ["success_condition", "expected_task_status", "controlled_exception"]:
-        if env_packet.get(field):
-            world_model[field] = env_packet[field]
     if env_packet.get("generated_episode"):
         world_model["generated_episode"] = True
 
@@ -137,6 +135,7 @@ def apply_environment_context(world_model: Dict[str, Any], env_packet: Dict[str,
                 "state": hint.get("state", "inferred"),
             },
         )
+    _normalize_held_object(world_model)
     return world_model
 
 
@@ -390,6 +389,35 @@ def _known_location(room: str) -> Dict[str, Any]:
         "status": "known",
         "confidence": 0.75,
     }
+
+
+def _normalize_held_object(world_model: Dict[str, Any]) -> None:
+    agent_state = world_model.get("agent_state", {})
+    if not isinstance(agent_state, dict):
+        return
+    holding = agent_state.get("holding")
+    if not holding:
+        return
+    current_room = str(agent_state.get("current_room") or "")
+    holding_name = str(holding)
+    for obj in world_model.get("objects", []):
+        if not isinstance(obj, dict):
+            continue
+        if obj.get("name") != holding_name and obj.get("id") != holding_name:
+            continue
+        obj["location"] = {
+            "room": current_room,
+            "region": "agent",
+            "support": "agent_hand",
+            "status": "known",
+            "confidence": 1.0,
+        }
+        if obj.get("category") in {"container", "surface", "furniture", "door", "room"}:
+            obj["category"] = "object"
+        obj["state"] = "held"
+        upsert_state(world_model, {"entity": holding_name, "attribute": "held_by", "value": "agent"})
+        _ensure_support_object(world_model, "agent_hand", current_room)
+        return
 
 
 def slug(value: str) -> str:
