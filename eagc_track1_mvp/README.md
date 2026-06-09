@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.7.1 LocalSim partial observability and realism fixes.
+Current version: v0.8 randomized LocalSim hidden-style robustness evaluation.
 
 The demo loop:
 
@@ -145,6 +145,19 @@ python main.py --env local_sim --episode-id local-explore-book-relocated --track
 
 This mode separates exploration, task reception, planning, execution/recovery, and final evaluation. The task is hidden during exploration and is only written into the world model after `exploration_end`.
 
+Run a generated hidden-style LocalSim episode:
+
+```powershell
+python main.py --env local_sim_random --seed 1 --difficulty easy --track1-procedure --validate
+```
+
+Run randomized LocalSim robustness evaluation:
+
+```powershell
+python tests/robustness_test_random_local_sim.py --mode real --num-episodes 20 --difficulty easy
+python tests/robustness_test_random_local_sim.py --mode real --num-episodes 50 --difficulty medium
+```
+
 Sequence frames should be local files named in deterministic order:
 
 ```text
@@ -186,6 +199,7 @@ python -m validators.validate_ai2thor_smoke outputs/world_model.json outputs/run
 python -m validators.validate_visual_sequence outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 python -m validators.validate_local_sim_run outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 python -m validators.validate_track1_procedure outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
+python -m validators.validate_random_local_sim_run outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 ```
 
 The world model validator checks required top-level fields, object identity fields, unique object IDs, plans, and structured exception recovery records.
@@ -420,6 +434,19 @@ v0.7 adds `Track1ProcedureRunner`, an official-style local Track 1 procedure run
 - `tests/smoke_test_track1_procedure.py --mode real` runs all LocalSim episodes through the procedure runner.
 
 This is an official-style local procedure, not the official EAGC runtime/API. `official_adapter.py` remains a reserved interface stub.
+
+## v0.8 Notes
+
+v0.8 adds randomized hidden-style LocalSim robustness evaluation:
+
+- `env_adapters/local_sim_generator.py` creates deterministic generated LocalSim specs from `seed` and `difficulty`.
+- `main.py --env local_sim_random --seed N --difficulty easy --track1-procedure --validate` saves `generated_episode_spec.json` and runs the same Track 1 procedure runner.
+- Generated specs include rooms, topology, doors, objects, object locations, task text, controlled exception, expected task status, and success condition.
+- `TaskEvaluator` now prefers `success_condition` from the generated spec before falling back to fixed episode rules.
+- `validators/validate_random_local_sim_run.py` checks generated-spec auditability, expected status, exception recovery evidence, legal visited rooms, topology, and non-teleport placement.
+- `tests/robustness_test_random_local_sim.py` runs seed batches and writes `summary_report.json`, `summary_report.md`, and `failure_case.json` for failed cases.
+
+This is hidden-style local robustness evaluation, not an official EAGC benchmark or official score.
 
 ## v0.7.1 Notes
 

@@ -10,6 +10,7 @@ from env_adapters.ai2thor_adapter import AI2ThorAdapter, AI2ThorAdapterError
 from clients.mock_llm_client import MockLLMClient
 from clients.qwen_client import QwenClient, QwenClientError
 from env_adapters.local_sim_env import LocalSimEnv
+from env_adapters.local_sim_generator import generate_random_local_sim_episode
 from env_adapters.mock_env import MockEnv
 from env_adapters.visual_mock_env import VisualMockEnv
 from env_adapters.visual_sequence_env import VisualSequenceEnv
@@ -80,9 +81,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use-mock-llm", action="store_true", help="Use deterministic mock LLM instead of vLLM.")
     parser.add_argument(
         "--env",
-        choices=["mock", "visual_mock", "visual_sequence", "ai2thor", "local_sim"],
+        choices=["mock", "visual_mock", "visual_sequence", "ai2thor", "local_sim", "local_sim_random"],
         default="mock",
     )
+    parser.add_argument("--seed", type=int, default=1, help="Random LocalSim seed for --env local_sim_random.")
+    parser.add_argument("--difficulty", choices=["easy", "medium"], default="easy", help="Random LocalSim difficulty.")
     parser.add_argument("--scene", default="FloorPlan1", help="AI2-THOR scene for --env ai2thor.")
     parser.add_argument("--vision", action="store_true", help="Run the visual mock episode with image input.")
     parser.add_argument("--image-path", help="Local image path for --vision runs.")
@@ -110,6 +113,8 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         image_dir=None,
         max_steps=None,
         track1_procedure=False,
+        seed=1,
+        difficulty="easy",
     )
     config = load_config(PROJECT_ROOT / "config.yaml")
     output_root = _resolve_output_path(str(config.get("output_dir", "outputs")))
@@ -126,6 +131,8 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         episode_id = f"visual-sequence-{(image_dir or Path('sequence')).name}"
     elif env_name == "visual_mock":
         episode_id = "visual-bedroom-smoke"
+    elif env_name == "local_sim_random":
+        episode_id = f"random-local-sim-seed-{int(getattr(args, 'seed', 1)):04d}"
     elif env_name == "local_sim":
         episode_id = args.episode_id or "local-explore-book-relocated"
     else:
@@ -158,6 +165,8 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
     simulator_metadata_path: Path | None = None
     processed_frames: list[str] = []
     frame_count = 0
+    generated_episode_spec: Dict[str, Any] | None = None
+    generated_episode_spec_path: Path | None = None
 
     try:
         if env_name == "ai2thor":
@@ -173,13 +182,26 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             )
         elif env_name == "visual_mock":
             env = VisualMockEnv(image_path or PROJECT_ROOT / "assets" / "test_images" / "bedroom.png")
+        elif env_name == "local_sim_random":
+            generated_episode_spec = generate_random_local_sim_episode(
+                seed=int(getattr(args, "seed", 1)),
+                difficulty=str(getattr(args, "difficulty", "easy")),
+            )
+            episode_id = str(generated_episode_spec["episode_id"])
+            generated_episode_spec_path = output_dir / "generated_episode_spec.json"
+            generated_episode_spec_path.write_text(
+                json.dumps(generated_episode_spec, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            env = LocalSimEnv.from_generated_episode(generated_episode_spec)
+            track1_procedure = True
         elif env_name == "local_sim":
             env = LocalSimEnv(episode_id)
         else:
             env = MockEnv(episode_id)
         if track1_procedure:
-            if env_name != "local_sim" or not isinstance(env, LocalSimEnv):
-                raise ValueError("--track1-procedure currently requires --env local_sim.")
+            if env_name not in {"local_sim", "local_sim_random"} or not isinstance(env, LocalSimEnv):
+                raise ValueError("--track1-procedure currently requires --env local_sim or --env local_sim_random.")
             logger = EpisodeLogger(episode_log_path)
             store = WorldModelStore(world_model_path)
             client = create_client(config, use_mock_llm, qwen_calls_path)
@@ -228,6 +250,14 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                 image_dir=None,
                 processed_frames=[],
             )
+            if generated_episode_spec:
+                _add_generated_audit_fields(
+                    audit,
+                    generated_episode_spec,
+                    generated_episode_spec_path,
+                    seed=int(getattr(args, "seed", 1)),
+                    difficulty=str(getattr(args, "difficulty", "easy")),
+                )
             audit.update(result["audit_updates"])
             audit["track1_score_path"] = str(result["track1_score_path"])
             audit["track1_total_score"] = result["track1_score"]["total_score"]
@@ -632,10 +662,14 @@ def run_validators(
         from validators.validate_visual_sequence import validate as validate_visual_sequence
 
         checks["visual_sequence"] = validate_visual_sequence(world_model_path, audit_path, episode_log_path)
-    if env_name == "local_sim" and audit_path is not None:
+    if env_name in {"local_sim", "local_sim_random"} and audit_path is not None:
         from validators.validate_local_sim_run import validate as validate_local_sim_run
 
         checks["local_sim"] = validate_local_sim_run(world_model_path, audit_path, episode_log_path)
+    if env_name == "local_sim_random" and audit_path is not None:
+        from validators.validate_random_local_sim_run import validate as validate_random_local_sim_run
+
+        checks["random_local_sim"] = validate_random_local_sim_run(world_model_path, audit_path, episode_log_path)
     if track1_procedure and audit_path is not None:
         from validators.validate_track1_procedure import validate as validate_track1_procedure
 
@@ -1047,6 +1081,27 @@ def build_run_audit(
         "episode_log_path": str(episode_log_path),
         "validation_status": validation_status,
     }
+
+
+def _add_generated_audit_fields(
+    audit: Dict[str, Any],
+    episode_spec: Dict[str, Any],
+    generated_episode_spec_path: Path | None,
+    seed: int,
+    difficulty: str,
+) -> None:
+    controlled_exception = episode_spec.get("controlled_exception", {})
+    if not isinstance(controlled_exception, dict):
+        controlled_exception = {}
+    audit.update(
+        {
+            "seed": seed,
+            "difficulty": difficulty,
+            "generated_episode_spec_path": str(generated_episode_spec_path) if generated_episode_spec_path else "",
+            "controlled_exception_type": controlled_exception.get("type", ""),
+            "expected_task_status": episode_spec.get("expected_task_status", ""),
+        }
+    )
 
 
 def write_run_audit(path: Path, audit: Dict[str, Any]) -> None:

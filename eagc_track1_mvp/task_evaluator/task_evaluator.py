@@ -3,6 +3,8 @@ from typing import Any, Dict, List
 
 def evaluate_task_status(task: str, world_model: Dict[str, Any], episode_id: str) -> Dict[str, Any]:
     del task
+    if isinstance(world_model.get("success_condition"), dict) and world_model["success_condition"]:
+        return _evaluate_success_condition(world_model["success_condition"], world_model)
     if episode_id in {"mock-bedroom-relocated", "visual-bedroom-smoke", "local-explore-book-relocated"}:
         return _object_on_support(world_model, "book", "chair")
     if episode_id == "local-door-locked-route":
@@ -75,6 +77,66 @@ def evaluate_task_status(task: str, world_model: Dict[str, Any], episode_id: str
     return _status("in_progress", False, f"No evaluator rule for episode {episode_id}.", [])
 
 
+def _evaluate_success_condition(condition: Dict[str, Any], world_model: Dict[str, Any]) -> Dict[str, Any]:
+    condition_type = condition.get("type")
+    expected_status = str(condition.get("status") or "complete")
+    if condition_type == "object_on_support":
+        obj = str(condition.get("object", ""))
+        target = str(condition.get("target", ""))
+        if _location_support(world_model, obj) == target:
+            return _status(expected_status, True, f"{obj} is on {target}.", [f"{obj}.location.support == {target}"])
+        return _status("in_progress", False, f"{obj} is not on {target}.", [])
+
+    if condition_type == "object_in_container":
+        obj = str(condition.get("object", ""))
+        target = str(condition.get("target", ""))
+        if _location_support(world_model, obj) == target or _has_relation(world_model, obj, "inside", target):
+            return _status(expected_status, True, f"{obj} is inside {target}.", [f"{obj} inside {target}"])
+        return _status("in_progress", False, f"{obj} is not inside {target}.", [])
+
+    if condition_type == "agent_room_and_object_on_support":
+        room = str(condition.get("room", ""))
+        obj = str(condition.get("object", ""))
+        target = str(condition.get("target", ""))
+        if world_model.get("agent_state", {}).get("current_room") == room and _location_support(world_model, obj) == target:
+            return _status(
+                expected_status,
+                True,
+                f"Agent reached {room} and placed {obj} on {target}.",
+                [f"agent current_room {room}", f"{obj}.location.support == {target}"],
+            )
+        return _status("in_progress", False, f"Agent/object condition for {obj} on {target} in {room} is unmet.", [])
+
+    if condition_type == "tool_substitution":
+        target = str(condition.get("target", ""))
+        substitute = str(condition.get("substitute_tool", ""))
+        if _has_state(world_model, target, "tightened_by", substitute) or _has_state(world_model, target, "status", "tightened"):
+            return _status(
+                expected_status,
+                True,
+                f"{target} was completed with substitute tool {substitute}.",
+                [f"{target} tightened_by {substitute}"],
+            )
+        return _status("in_progress", False, f"{target} has not been completed with {substitute}.", [])
+
+    if condition_type == "fallback_placement":
+        obj = str(condition.get("object", ""))
+        target = str(condition.get("target", ""))
+        fallback_target = str(condition.get("fallback_target", ""))
+        if _location_support(world_model, obj) == fallback_target:
+            return _status(
+                "blocked_recovered",
+                True,
+                f"{target} was unavailable; {obj} was placed on fallback target {fallback_target}.",
+                [f"{obj}.location.support == {fallback_target}"],
+            )
+        if _location_support(world_model, obj) == target or _has_relation(world_model, obj, "inside", target):
+            return _status("complete", True, f"{obj} reached primary target {target}.", [f"{obj} support {target}"])
+        return _status("in_progress", False, f"{obj} has not reached {target} or fallback {fallback_target}.", [])
+
+    return _status("in_progress", False, f"Unsupported success_condition type {condition_type!r}.", [])
+
+
 def _object_on_support(world_model: Dict[str, Any], object_name: str, support: str) -> Dict[str, Any]:
     current_support = _location_support(world_model, object_name)
     if current_support == support:
@@ -116,6 +178,19 @@ def _has_state(world_model: Dict[str, Any], entity: str, attribute: str, value: 
             and state.get("entity") == entity
             and state.get("attribute") == attribute
             and state.get("value") == value
+        ):
+            return True
+    return False
+
+
+def _has_relation(world_model: Dict[str, Any], subject: str, relation_name: str, obj: str) -> bool:
+    for relation in world_model.get("relations", []):
+        if (
+            isinstance(relation, dict)
+            and relation.get("subject") == subject
+            and relation.get("relation") == relation_name
+            and relation.get("object") == obj
+            and relation.get("status") == "active"
         ):
             return True
     return False

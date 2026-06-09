@@ -30,8 +30,8 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
     if errors:
         return errors
 
-    if audit.get("env") != "local_sim":
-        errors.append(f"run_audit.env must be local_sim, got {audit.get('env')!r}.")
+    if audit.get("env") not in {"local_sim", "local_sim_random"}:
+        errors.append(f"run_audit.env must be local_sim or local_sim_random, got {audit.get('env')!r}.")
 
     topology = world_model.get("topology")
     if not isinstance(topology, list) or not topology:

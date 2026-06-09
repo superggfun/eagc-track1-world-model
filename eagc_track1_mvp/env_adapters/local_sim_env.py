@@ -200,12 +200,13 @@ def _initial_objects() -> Dict[str, Dict[str, Any]]:
 class LocalSimEnv(BaseEnvAdapter):
     """Deterministic local simulator for Track 1 closed-loop smoke tests."""
 
-    def __init__(self, episode_id: str = "local-explore-book-relocated") -> None:
-        if episode_id not in LOCAL_SIM_EPISODES:
+    def __init__(self, episode_id: str = "local-explore-book-relocated", episode_spec: Dict[str, Any] | None = None) -> None:
+        if episode_spec is None and episode_id not in LOCAL_SIM_EPISODES:
             available = ", ".join(sorted(LOCAL_SIM_EPISODES))
             raise ValueError(f"Unknown local_sim episode_id={episode_id!r}. Available: {available}")
         self.episode_id = episode_id
-        self.episode = LOCAL_SIM_EPISODES[episode_id]
+        self.episode_spec = deepcopy(episode_spec) if episode_spec else None
+        self.episode = self._episode_from_spec(self.episode_spec) if self.episode_spec else LOCAL_SIM_EPISODES[episode_id]
         self.task = str(self.episode["task"])
         self.step_count = 0
         self.current_room = str(self.episode["start_room"])
@@ -216,7 +217,12 @@ class LocalSimEnv(BaseEnvAdapter):
         self.doors: Dict[str, Dict[str, Any]] = {}
         self.last_action_result: Dict[str, Any] = {}
         self.book_relocated = False
+        self.generated_relocation_done = False
         self.task_visible = True
+
+    @classmethod
+    def from_generated_episode(cls, episode_spec: Dict[str, Any]) -> "LocalSimEnv":
+        return cls(str(episode_spec.get("episode_id", "random-local-sim-seed-0000")), episode_spec=episode_spec)
 
     def reset(self, reveal_task: bool = True) -> Dict[str, Any]:
         self.step_count = 0
@@ -228,7 +234,16 @@ class LocalSimEnv(BaseEnvAdapter):
         self.doors = deepcopy(DOORS)
         self.last_action_result = {}
         self.book_relocated = False
+        self.generated_relocation_done = False
         self.task_visible = reveal_task
+
+        if self.episode_spec:
+            self.objects = {
+                name: dict(value)
+                for name, value in self.episode_spec.get("objects", _initial_objects()).items()
+                if isinstance(value, dict)
+            }
+            self.doors = deepcopy(self.episode_spec.get("doors", DOORS))
 
         if self.episode_id == "local-door-locked-route":
             self.doors["kitchen_door"]["locked"] = True
@@ -264,6 +279,10 @@ class LocalSimEnv(BaseEnvAdapter):
             "topology": self._partial_topology_nodes(),
             "object_hints": self._object_hints(visible_objects),
             "last_action_result": dict(self.last_action_result),
+            "success_condition": deepcopy(self.episode_spec.get("success_condition", {})) if self.episode_spec else {},
+            "expected_task_status": self.episode_spec.get("expected_task_status", "") if self.episode_spec else "",
+            "controlled_exception": deepcopy(self.episode_spec.get("controlled_exception", {})) if self.episode_spec else {},
+            "generated_episode": bool(self.episode_spec),
         }
 
     def step(self, action: str) -> Dict[str, Any]:
@@ -366,18 +385,24 @@ class LocalSimEnv(BaseEnvAdapter):
         item = self.objects.get(obj)
         if item is None:
             return self._failure(action, "unknown_object", obj, f"Unknown object {obj}.")
-        if self.episode_id == "local-explore-book-relocated" and obj == "book" and not self.book_relocated:
+        if self._should_relocate_on_pickup(obj):
             self.book_relocated = True
-            item["room"] = "living_room"
-            item["region"] = "table_area"
-            item["support"] = "side_table"
+            self.generated_relocation_done = True
+            relocation = self._relocation_exception()
+            item["room"] = relocation.get("to_room", "living_room")
+            item["region"] = relocation.get("to_region", "table_area")
+            item["support"] = relocation.get("to_support", "side_table")
             item["visible"] = False
             return self._failure(
                 action,
                 "object_relocated",
                 obj,
-                "Attempted pick_up(book), but the book moved from the bed to an unknown nearby room.",
-                extra={"likely_locations": ["living_room"], "prior_support": "bed", "prior_region": "bed_area"},
+                f"Attempted {action}, but {obj} moved from its previous support to an unknown nearby room.",
+                extra={
+                    "likely_locations": relocation.get("likely_locations", [item["room"]]),
+                    "prior_support": relocation.get("prior_support", ""),
+                    "prior_region": relocation.get("prior_region", ""),
+                },
             )
         if not item.get("available", True):
             if obj == "screwdriver":
@@ -630,3 +655,39 @@ class LocalSimEnv(BaseEnvAdapter):
             if {room_a, room_b} == set(door["connects"]):
                 return door_name
         return DOOR_BY_ROOM.get(room_b, "door")
+
+    def _episode_from_spec(self, episode_spec: Dict[str, Any] | None) -> Dict[str, Any]:
+        if not episode_spec:
+            return {}
+        return {
+            "task": episode_spec.get("task", ""),
+            "start_room": episode_spec.get("start_room", "bedroom"),
+            "expected_status": episode_spec.get("expected_task_status", "complete"),
+        }
+
+    def _relocation_exception(self) -> Dict[str, Any]:
+        if self.episode_spec:
+            exception = self.episode_spec.get("controlled_exception", {})
+            if isinstance(exception, dict) and exception.get("type") == "object_relocated":
+                return exception
+        return {
+            "type": "object_relocated",
+            "object": "book",
+            "to_room": "living_room",
+            "to_region": "table_area",
+            "to_support": "side_table",
+            "likely_locations": ["living_room"],
+            "prior_support": "bed",
+            "prior_region": "bed_area",
+        }
+
+    def _should_relocate_on_pickup(self, obj: str) -> bool:
+        if self.episode_spec:
+            exception = self.episode_spec.get("controlled_exception", {})
+            return (
+                isinstance(exception, dict)
+                and exception.get("type") == "object_relocated"
+                and exception.get("object") == obj
+                and not self.generated_relocation_done
+            )
+        return self.episode_id == "local-explore-book-relocated" and obj == "book" and not self.book_relocated

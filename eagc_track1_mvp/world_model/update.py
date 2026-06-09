@@ -85,6 +85,12 @@ def apply_environment_context(world_model: Dict[str, Any], env_packet: Dict[str,
     if frontiers:
         world_model["frontiers"] = merge_unique(world_model.get("frontiers", []), frontiers)
 
+    for field in ["success_condition", "expected_task_status", "controlled_exception"]:
+        if env_packet.get(field):
+            world_model[field] = env_packet[field]
+    if env_packet.get("generated_episode"):
+        world_model["generated_episode"] = True
+
     object_hints = env_packet.get("object_hints", {})
     for obj in world_model.get("objects", []):
         if not isinstance(obj, dict):
