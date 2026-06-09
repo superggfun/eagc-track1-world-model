@@ -11,6 +11,7 @@ from clients.qwen_client import QwenClient, QwenClientError
 from env_adapters.mock_env import MockEnv
 from executor.action_executor import ActionExecutor
 from logging_utils.episode_logger import EpisodeLogger
+from perception.prompts import PROMPT_VERSION
 from perception.vlm_extractor import VLMExtractor
 from planner.replanner import Replanner
 from planner.rule_planner import RulePlanner
@@ -81,6 +82,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
     episode_log_path = output_dir / "episode_log.jsonl"
     audit_path = output_dir / "run_audit.json"
     qwen_calls_path = output_dir / "qwen_calls.jsonl"
+    qwen_response_summary_path = output_dir / "qwen_response_summary.json"
     validation_status: Dict[str, Any] | str = "not_requested"
     client: QwenClient | MockLLMClient | None = None
 
@@ -110,7 +112,11 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                 max_tokens=int(config["max_tokens"]),
                 audit_path=qwen_calls_path,
             )
-        extractor = VLMExtractor(client, debug_output_path=output_dir / "debug_qwen_raw.txt")
+        extractor = VLMExtractor(
+            client,
+            debug_output_path=output_dir / "debug_qwen_raw.txt",
+            response_summary_path=qwen_response_summary_path,
+        )
 
         extraction = extractor.extract(initial["observation"], initial["task"])
         world_model = store.update_from_extraction(extraction)
@@ -232,6 +238,8 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             world_model_path=world_model_path,
             episode_log_path=episode_log_path,
             validation_status=validation_status,
+            prompt_version=PROMPT_VERSION,
+            qwen_response_summary_path=qwen_response_summary_path,
         )
         write_run_audit(audit_path, audit)
         write_latest_artifacts(output_root, world_model_path, episode_log_path, audit_path)
@@ -256,6 +264,8 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             world_model_path=world_model_path,
             episode_log_path=episode_log_path,
             validation_status={"status": "not_run", "reason": "qwen_client_error"},
+            prompt_version=PROMPT_VERSION,
+            qwen_response_summary_path=qwen_response_summary_path,
         )
         audit["error_message"] = str(exc)
         write_run_audit(audit_path, audit)
@@ -410,6 +420,8 @@ def build_run_audit(
     world_model_path: Path,
     episode_log_path: Path,
     validation_status: Dict[str, Any] | str,
+    prompt_version: str,
+    qwen_response_summary_path: Path,
 ) -> Dict[str, Any]:
     ended = datetime.now(timezone.utc)
     qwen_call_count = 0 if use_mock_llm or client is None else client.call_count
@@ -422,6 +434,7 @@ def build_run_audit(
         "model": "deterministic-mock-llm" if use_mock_llm else config.get("model"),
         "base_url": "mock://local" if use_mock_llm else config.get("base_url"),
         "use_mock_llm": use_mock_llm,
+        "prompt_version": prompt_version,
         "start_time": started_wall.isoformat(),
         "end_time": ended.isoformat(),
         "latency_seconds": round(latency_seconds, 6),
@@ -430,6 +443,7 @@ def build_run_audit(
         "qwen_call_failure_count": qwen_failure_count,
         "fallback_used": fallback_used,
         "debug_raw_path": str(debug_raw_path) if debug_raw_path.exists() else "",
+        "qwen_response_summary_path": str(qwen_response_summary_path) if qwen_response_summary_path.exists() else "",
         "world_model_path": str(world_model_path),
         "episode_log_path": str(episode_log_path),
         "validation_status": validation_status,

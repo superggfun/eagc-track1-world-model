@@ -1,19 +1,38 @@
+import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List
 
 from clients.qwen_client import QwenClient
 from perception.json_utils import parse_json_from_text
-from perception.prompts import EXTRACTOR_SYSTEM_PROMPT, build_extraction_prompt
+from perception.prompts import EXTRACTOR_SYSTEM_PROMPT, PROMPT_VERSION, build_extraction_prompt
+
+
+REQUIRED_EXTRACTION_KEYS = [
+    "rooms",
+    "topology",
+    "objects",
+    "relations",
+    "states",
+    "affordances",
+    "uncertainty",
+]
 
 
 class VLMExtractor:
     """Text-only extractor. Image inputs can be added behind this interface later."""
 
-    def __init__(self, client: QwenClient, debug_output_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        client: QwenClient,
+        debug_output_path: Path | None = None,
+        response_summary_path: Path | None = None,
+    ) -> None:
         self.client = client
         self.debug_output_path = debug_output_path
+        self.response_summary_path = response_summary_path
         self.fallback_used = False
+        self.last_parse_summary: Dict[str, Any] = {}
 
     def extract(self, observation: str, task: str) -> Dict[str, Any]:
         self.fallback_used = False
@@ -22,12 +41,18 @@ class VLMExtractor:
             {"role": "user", "content": build_extraction_prompt(observation, task)},
         ]
         raw_text = self.client.chat(messages)
+        raw_update: Dict[str, Any]
+        parsed_ok = False
+        parse_error = ""
         try:
             raw_update = parse_json_from_text(raw_text)
+            parsed_ok = True
         except (ValueError, TypeError) as exc:
+            parse_error = str(exc)
             self.fallback_used = True
             self._save_raw_output(raw_text)
-            raw_update = fallback_minimal_extraction(observation, note=str(exc))
+            raw_update = fallback_minimal_extraction(observation, note=parse_error)
+        self._save_response_summary(raw_text, raw_update, parsed_ok, parse_error)
         return normalize_extraction(raw_update)
 
     def _save_raw_output(self, raw_text: str) -> None:
@@ -36,10 +61,37 @@ class VLMExtractor:
         self.debug_output_path.parent.mkdir(parents=True, exist_ok=True)
         self.debug_output_path.write_text(raw_text, encoding="utf-8")
 
+    def _save_response_summary(
+        self,
+        raw_text: str,
+        raw_update: Dict[str, Any],
+        parsed_ok: bool,
+        parse_error: str,
+    ) -> None:
+        top_level_keys = sorted(raw_update.keys()) if isinstance(raw_update, dict) else []
+        summary = {
+            "prompt_version": PROMPT_VERSION,
+            "raw_chars": len(raw_text),
+            "parsed_ok": parsed_ok,
+            "fallback_used": self.fallback_used,
+            "top_level_keys": top_level_keys,
+            "missing_keys": [key for key in REQUIRED_EXTRACTION_KEYS if key not in top_level_keys],
+            "parse_error": parse_error,
+        }
+        self.last_parse_summary = summary
+        if self.response_summary_path is None or getattr(self.client, "base_url", "") == "mock://local":
+            return
+        self.response_summary_path.parent.mkdir(parents=True, exist_ok=True)
+        self.response_summary_path.write_text(
+            json.dumps(summary, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
 
 def normalize_extraction(update: Dict[str, Any]) -> Dict[str, Any]:
     defaults = {
         "rooms": [],
+        "topology": [],
         "objects": [],
         "relations": [],
         "states": [],

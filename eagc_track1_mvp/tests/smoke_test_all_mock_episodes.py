@@ -45,6 +45,7 @@ EXPECTED_TASK_STATUS = {
 def main() -> int:
     args = parse_args()
     episodes = selected_episodes(args)
+    summary_rows = []
     for episode_id in episodes:
         output_dir = SMOKE_DIR / args.mode / episode_id
         print(f"\n=== Smoke mode={args.mode} episode={episode_id} ===")
@@ -74,14 +75,27 @@ def main() -> int:
         task_status = world_model.get("task_status", {})
         print(
             "episode_id={episode_id} task_status={status} success={success} "
-            "qwen_call_count={qwen_call_count} validation={validation} output_dir={output_dir}".format(
+            "qwen_call_count={qwen_call_count} fallback_used={fallback_used} "
+            "validation={validation} output_dir={output_dir}".format(
                 episode_id=episode_id,
                 status=task_status.get("status"),
                 success=task_status.get("success"),
                 qwen_call_count=audit.get("qwen_call_count"),
+                fallback_used=audit.get("fallback_used"),
                 validation="passed" if validation["passed"] else "failed",
                 output_dir=output_dir,
             )
+        )
+        summary_rows.append(
+            {
+                "episode_id": episode_id,
+                "task_status": task_status.get("status"),
+                "fallback_used": audit.get("fallback_used", False),
+                "qwen_call_count": audit.get("qwen_call_count", 0),
+                "latency_seconds": audit.get("latency_seconds", 0),
+                "validation_status": "passed" if validation["passed"] else "failed",
+                "output_dir": str(output_dir),
+            }
         )
         if not validation["passed"]:
             print(json.dumps(validation, indent=2, ensure_ascii=False))
@@ -95,8 +109,15 @@ def main() -> int:
         if task_status_error:
             print(task_status_error)
             return 1
+        strict_error = _check_strict_real(args, episode_id, audit, task_status, validation)
+        if strict_error:
+            print(strict_error)
+            return 1
 
-    print("\nAll requested mock episode smoke tests passed.")
+    if args.mode == "real":
+        _write_real_summary_report(summary_rows)
+
+    print(f"\nAll requested {args.mode} episode smoke tests passed.")
     return 0
 
 
@@ -110,6 +131,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--episode-id", choices=EPISODES, help="Run only one episode.")
     parser.add_argument("--all", action="store_true", help="Run all episodes.")
+    parser.add_argument(
+        "--strict-real",
+        action="store_true",
+        help="In real mode, fail if fallback/debug output/Qwen failures occur.",
+    )
     return parser.parse_args()
 
 
@@ -165,6 +191,39 @@ def _check_task_status(episode_id: str, world_model: Dict[str, Any]) -> str:
     if task_status.get("status") != expected:
         return f"{episode_id} expected task_status {expected}, got {task_status.get('status')}."
     return ""
+
+
+def _check_strict_real(
+    args: argparse.Namespace,
+    episode_id: str,
+    audit: Dict[str, Any],
+    task_status: Dict[str, Any],
+    validation: Dict[str, Any],
+) -> str:
+    if args.mode != "real" or not args.strict_real:
+        return ""
+    expected = EXPECTED_TASK_STATUS[episode_id]
+    failures = []
+    if audit.get("fallback_used") is not False:
+        failures.append("fallback_used must be false")
+    if audit.get("debug_raw_path"):
+        failures.append("debug_raw_path must be empty")
+    if audit.get("qwen_call_failure_count") != 0:
+        failures.append("qwen_call_failure_count must be 0")
+    if task_status.get("status") != expected:
+        failures.append(f"task_status must be {expected}, got {task_status.get('status')}")
+    if not validation.get("passed", False):
+        failures.append("validation must pass")
+    if failures:
+        return f"{episode_id} strict real failed: " + "; ".join(failures)
+    return ""
+
+
+def _write_real_summary_report(rows: List[Dict[str, Any]]) -> None:
+    report_path = SMOKE_DIR / "real" / "summary_report.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(rows, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"Real smoke summary report written to {report_path}")
 
 
 def _read_json(path: Path) -> Dict[str, Any]:
