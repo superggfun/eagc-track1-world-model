@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.3.1 semantic correctness fixes.
+Current version: v0.4 run audit and CLI controls.
 
 The demo loop:
 
@@ -44,6 +44,8 @@ model: qwen3.6-35b-nvfp4
 temperature: 0.2
 max_tokens: 2048
 episode_id: mock-bedroom-relocated
+use_mock_llm: false
+output_dir: outputs
 ```
 
 The client currently supports text-only chat completions through:
@@ -58,11 +60,31 @@ POST /chat/completions
 python main.py
 ```
 
+Run a specific episode:
+
+```powershell
+python main.py --episode-id mock-bedroom-relocated
+python main.py --episode-id mock-door-locked
+```
+
+Run with validators after the episode:
+
+```powershell
+python main.py --episode-id mock-bedroom-relocated --validate
+```
+
+Run without calling vLLM, using deterministic mock LLM extraction:
+
+```powershell
+python main.py --episode-id mock-bedroom-relocated --validate --use-mock-llm
+```
+
 Expected outputs:
 
 ```text
 outputs/world_model.json
 outputs/episode_log.jsonl
+outputs/run_audit.json
 ```
 
 If the vLLM call fails, the program exits with a clear error containing the endpoint URL, model name, and request exception.
@@ -97,7 +119,43 @@ Run all mock episodes with:
 python tests/smoke_test_all_mock_episodes.py
 ```
 
+By default, the smoke test uses deterministic mock LLM mode, so it does not call vLLM:
+
+```powershell
+python tests/smoke_test_all_mock_episodes.py
+```
+
+Run the same smoke coverage against the real local vLLM:
+
+```powershell
+python tests/smoke_test_all_mock_episodes.py --mode real
+```
+
+Run both modes:
+
+```powershell
+python tests/smoke_test_all_mock_episodes.py --mode both
+```
+
 The smoke test runs all five mock episodes, validates each output, and archives per-episode artifacts under `outputs/smoke/`.
+
+## Run Audit
+
+Each `main.py` run writes:
+
+```text
+outputs/run_audit.json
+```
+
+It records the episode id, model, base URL, mock LLM flag, run timing, Qwen call counts, output paths, and validation status.
+
+Real vLLM calls are appended to:
+
+```text
+outputs/qwen_calls.jsonl
+```
+
+Each line records timestamp, model, base URL, prompt character count, a short prompt summary, decoding settings, latency, success, and error message. Full prompts are not logged.
 
 ## Mock Episodes
 
@@ -159,6 +217,10 @@ wait()
 v0.3.1 replaces generic list merging with entity-aware upserts for objects, states, relations, and affordances. Successful actions now update world-model effects, including held objects, placement relations, open/close state, and lock state. Execution exceptions also write queryable state updates, such as locked doors, unavailable containers, and tool substitution records.
 
 Generated output files are ignored by `.gitignore`; `outputs/.gitkeep` keeps the output directory in the repository.
+
+## v0.4 Notes
+
+v0.4 adds CLI controls, deterministic mock LLM mode, Qwen call audit logging, and per-run audit summaries. The default behavior still calls the configured local vLLM unless `use_mock_llm: true` or `--use-mock-llm` is set.
 
 ## Adapter Layout
 

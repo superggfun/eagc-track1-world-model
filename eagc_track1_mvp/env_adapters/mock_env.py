@@ -138,11 +138,16 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
     },
 }
 
+EPISODE_ALIASES = {
+    "mock-door-locked": "mock-hallway-door-locked",
+}
+
 
 class MockEnv(BaseEnvAdapter):
     """Text-only indoor scenes used until the official EAGC runtime exists."""
 
     def __init__(self, episode_id: str = "mock-bedroom-relocated") -> None:
+        episode_id = EPISODE_ALIASES.get(episode_id, episode_id)
         if episode_id not in MOCK_EPISODES:
             available = ", ".join(sorted(MOCK_EPISODES))
             raise ValueError(f"Unknown mock episode_id={episode_id!r}. Available: {available}")

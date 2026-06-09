@@ -3,3 +3,5 @@ model: qwen3.6-35b-nvfp4
 temperature: 0.2
 max_tokens: 2048
 episode_id: mock-bedroom-relocated
+use_mock_llm: false
+output_dir: outputs
