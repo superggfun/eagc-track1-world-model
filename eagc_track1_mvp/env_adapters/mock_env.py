@@ -73,13 +73,13 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
             "The cup is on the counter. The drawer is visibly jammed. "
             "Task: Place the cup in the drawer."
         ),
-        "fail_action": "place_on(cup, drawer)",
+        "fail_action": "place_in(cup, drawer)",
         "exception": {
             "type": "target_container_unavailable",
             "object": "drawer",
             "state": "jammed",
         },
-        "failure_message": "Attempted place_on(cup, drawer), but the drawer is jammed.",
+        "failure_message": "Attempted place_in(cup, drawer), but the drawer is jammed.",
         "failure_observation": "The drawer cannot be opened far enough to receive the cup.",
     },
     "mock-study-tool-substitution": {
@@ -209,6 +209,8 @@ class MockEnv(BaseEnvAdapter):
         if action_name == "pick_up" and len(args) == 1:
             return self._handle_pick_up(action, args[0])
         if action_name == "place_on" and len(args) == 2:
+            return self._handle_place_on(action, args[0], args[1])
+        if action_name == "place_in" and len(args) == 2:
             return self._handle_place_on(action, args[0], args[1])
         if action_name == "open" and len(args) == 1:
             return self._handle_open(action, args[0])

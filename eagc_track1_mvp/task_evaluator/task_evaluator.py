@@ -3,8 +3,43 @@ from typing import Any, Dict, List
 
 def evaluate_task_status(task: str, world_model: Dict[str, Any], episode_id: str) -> Dict[str, Any]:
     del task
-    if episode_id in {"mock-bedroom-relocated", "visual-bedroom-smoke"}:
+    if episode_id in {"mock-bedroom-relocated", "visual-bedroom-smoke", "local-explore-book-relocated"}:
         return _object_on_support(world_model, "book", "chair")
+    if episode_id == "local-door-locked-route":
+        if _location_support(world_model, "cup") == "counter" and world_model.get("agent_state", {}).get(
+            "current_room"
+        ) == "kitchen":
+            return _status(
+                "complete",
+                True,
+                "Agent reached kitchen and placed the cup on the counter.",
+                ["agent current_room kitchen", "cup support counter"],
+            )
+        return _status("in_progress", False, "Cup is not yet on the kitchen counter.", [])
+    if episode_id == "local-container-unavailable":
+        drawer_unavailable = _has_state(world_model, "drawer", "availability", "unavailable")
+        cup_on_counter = _location_support(world_model, "cup") == "counter"
+        if drawer_unavailable and cup_on_counter:
+            return _status(
+                "blocked_recovered",
+                True,
+                "Drawer is unavailable; cup was placed on the counter as fallback.",
+                ["drawer availability unavailable", "cup support counter"],
+            )
+        if _location_support(world_model, "cup") == "drawer":
+            return _status("complete", True, "Cup is in the drawer.", ["cup support drawer"])
+        return _status("in_progress", False, "Cup has not reached a valid final support.", [])
+    if episode_id == "local-tool-substitution":
+        if _has_state(world_model, "loose_screw", "tightened_by", "coin") or _has_state(
+            world_model, "loose_screw", "status", "tightened"
+        ):
+            return _status(
+                "complete",
+                True,
+                "Loose screw was tightened with the substitute coin.",
+                ["loose_screw tightened_by coin"],
+            )
+        return _status("in_progress", False, "Loose screw is not tightened yet.", [])
     if episode_id == "mock-livingroom-nominal":
         return _object_on_support(world_model, "remote", "coffee_table")
     if episode_id == "mock-hallway-door-locked":

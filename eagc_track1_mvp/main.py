@@ -4,13 +4,15 @@ import shutil
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from env_adapters.ai2thor_adapter import AI2ThorAdapter, AI2ThorAdapterError
 from clients.mock_llm_client import MockLLMClient
 from clients.qwen_client import QwenClient, QwenClientError
+from env_adapters.local_sim_env import LocalSimEnv
 from env_adapters.mock_env import MockEnv
 from env_adapters.visual_mock_env import VisualMockEnv
+from env_adapters.visual_sequence_env import VisualSequenceEnv
 from executor.action_executor import ActionExecutor
 from logging_utils.episode_logger import EpisodeLogger
 from perception.prompts import PROMPT_VERSION
@@ -25,7 +27,7 @@ from validators.validate_vision_extraction import validate as validate_vision_ex
 from validators.validate_world_model import validate as validate_world_model
 from world_model.action_effects import apply_action_effect, apply_exception_effect
 from world_model.store import WorldModelStore
-from world_model.update import apply_environment_context, update_agent_state
+from world_model.update import apply_environment_context, apply_frame_visibility, update_agent_state
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -58,10 +60,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", help="Directory for this run's artifacts.")
     parser.add_argument("--validate", action="store_true", help="Run validators after the episode.")
     parser.add_argument("--use-mock-llm", action="store_true", help="Use deterministic mock LLM instead of vLLM.")
-    parser.add_argument("--env", choices=["mock", "visual_mock", "ai2thor"], default="mock")
+    parser.add_argument(
+        "--env",
+        choices=["mock", "visual_mock", "visual_sequence", "ai2thor", "local_sim"],
+        default="mock",
+    )
     parser.add_argument("--scene", default="FloorPlan1", help="AI2-THOR scene for --env ai2thor.")
     parser.add_argument("--vision", action="store_true", help="Run the visual mock episode with image input.")
     parser.add_argument("--image-path", help="Local image path for --vision runs.")
+    parser.add_argument("--image-dir", help="Local image directory for --env visual_sequence.")
+    parser.add_argument("--max-steps", type=int, help="Maximum visual sequence frames to process.")
     return parser.parse_args()
 
 
@@ -76,18 +84,26 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         scene="FloorPlan1",
         vision=False,
         image_path=None,
+        image_dir=None,
+        max_steps=None,
     )
     config = load_config(PROJECT_ROOT / "config.yaml")
     output_root = _resolve_output_path(str(config.get("output_dir", "outputs")))
 
     env_name = "visual_mock" if args.vision else str(getattr(args, "env", "mock"))
-    vision_mode = env_name in {"visual_mock", "ai2thor"}
+    vision_mode = env_name in {"visual_mock", "visual_sequence", "ai2thor"}
     image_path = _resolve_image_path(args.image_path) if env_name == "visual_mock" else None
+    image_dir = _resolve_image_dir(args.image_dir) if env_name == "visual_sequence" else None
+    max_sequence_steps = int(args.max_steps) if args.max_steps else None
     scene = str(getattr(args, "scene", "FloorPlan1"))
     if env_name == "ai2thor":
         episode_id = f"ai2thor-smoke-{scene}"
+    elif env_name == "visual_sequence":
+        episode_id = f"visual-sequence-{(image_dir or Path('sequence')).name}"
     elif env_name == "visual_mock":
         episode_id = "visual-bedroom-smoke"
+    elif env_name == "local_sim":
+        episode_id = args.episode_id or "local-explore-book-relocated"
     else:
         episode_id = args.episode_id or str(config.get("episode_id", "mock-bedroom-relocated"))
     use_mock_llm = bool(args.use_mock_llm or config.get("use_mock_llm", False))
@@ -107,11 +123,13 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
     validation_status: Dict[str, Any] | str = "not_requested"
     client: QwenClient | MockLLMClient | None = None
     extractor: VLMExtractor | None = None
-    env: MockEnv | VisualMockEnv | AI2ThorAdapter | None = None
+    env: MockEnv | VisualMockEnv | VisualSequenceEnv | AI2ThorAdapter | LocalSimEnv | None = None
     ai2thor_start_success = False
     ai2thor_error_message = ""
     simulator_frame_path: Path | None = None
     simulator_metadata_path: Path | None = None
+    processed_frames: list[str] = []
+    frame_count = 0
 
     try:
         if env_name == "ai2thor":
@@ -120,8 +138,15 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                 scene=scene,
                 oracle_metadata_mode=oracle_metadata_mode,
             )
+        elif env_name == "visual_sequence":
+            env = VisualSequenceEnv(
+                image_dir or PROJECT_ROOT / "assets" / "test_sequences" / "bedroom_sequence",
+                max_steps=max_sequence_steps,
+            )
         elif env_name == "visual_mock":
             env = VisualMockEnv(image_path or PROJECT_ROOT / "assets" / "test_images" / "bedroom.png")
+        elif env_name == "local_sim":
+            env = LocalSimEnv(episode_id)
         else:
             env = MockEnv(episode_id)
         initial = env.reset()
@@ -130,6 +155,8 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             simulator_frame_path = Path(initial.get("image_path", ""))
             simulator_metadata_path = Path(initial.get("metadata_path", ""))
             image_path = simulator_frame_path
+        if env_name == "visual_sequence":
+            frame_count = getattr(env, "frame_count", 0)
         observation_for_log = _render_observation(initial["observation"])
 
         logger = EpisodeLogger(episode_log_path)
@@ -159,6 +186,37 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             debug_output_path=output_dir / "debug_qwen_raw.txt",
             response_summary_path=qwen_response_summary_path,
         )
+
+        if env_name == "visual_sequence":
+            audit = run_visual_sequence_episode(
+                config=config,
+                run_id=run_id,
+                output_dir=output_dir,
+                env=env,
+                initial=initial,
+                logger=logger,
+                store=store,
+                world_model=world_model,
+                extractor=extractor,
+                client=client,
+                started_wall=started_wall,
+                started=started,
+                validation_requested=bool(args.validate),
+                audit_path=audit_path,
+                world_model_path=world_model_path,
+                episode_log_path=episode_log_path,
+                qwen_response_summary_path=qwen_response_summary_path,
+                use_mock_llm=use_mock_llm,
+                image_dir=image_dir or PROJECT_ROOT / "assets" / "test_sequences" / "bedroom_sequence",
+                frame_count=frame_count,
+            )
+            write_latest_artifacts(output_root, world_model_path, episode_log_path, audit_path)
+            print(f"Demo complete. Wrote {world_model_path}")
+            print(f"Demo complete. Wrote {episode_log_path}")
+            print(f"Run audit written to {audit_path}")
+            if args.validate and isinstance(audit.get("validation_status"), dict) and not audit["validation_status"].get("passed", False):
+                raise SystemExit(1)
+            return audit
 
         extraction = extractor.extract(initial["observation"], initial["task"])
         world_model = store.update_from_extraction(extraction)
@@ -209,6 +267,15 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                 notes=result.get("message", ""),
             )
             step += 1
+            if env_name == "local_sim":
+                step = sync_post_action_observation(
+                    result=result,
+                    extractor=extractor,
+                    store=store,
+                    world_model=world_model,
+                    logger=logger,
+                    start_step=step,
+                )
 
             if not result.get("success", False):
                 apply_exception_effect(world_model, result, step)
@@ -241,6 +308,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                     logger=logger,
                     start_step=step,
                     max_recovery_steps=max_recovery_steps,
+                    post_action_hook=_local_sim_sync_hook(env_name, extractor, store, world_model, logger),
                 )
                 if recovery_complete:
                     current_status = update_task_status(world_model, initial["task"], initial["episode_id"])
@@ -251,6 +319,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                             world_model=world_model,
                             logger=logger,
                             start_step=step,
+                            post_action_hook=_local_sim_sync_hook(env_name, extractor, store, world_model, logger),
                         )
                 break
 
@@ -262,6 +331,15 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             result=final_status["status"],
             notes=final_status["reason"],
         )
+        if env_name == "local_sim":
+            step += 1
+            logger.log(
+                step=step,
+                event_type="task_evaluation",
+                model_update=world_model["task_status"],
+                result=final_status["status"],
+                notes=final_status["reason"],
+            )
         store.save()
 
         audit = build_run_audit(
@@ -291,6 +369,9 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             ai2thor_start_success=ai2thor_start_success,
             ai2thor_error_message=ai2thor_error_message,
             oracle_metadata_mode=oracle_metadata_mode,
+            frame_count=frame_count,
+            image_dir=image_dir,
+            processed_frames=processed_frames,
         )
         write_run_audit(audit_path, audit)
         if args.validate:
@@ -333,6 +414,9 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             ai2thor_start_success=ai2thor_start_success,
             ai2thor_error_message=ai2thor_error_message,
             oracle_metadata_mode=oracle_metadata_mode,
+            frame_count=frame_count,
+            image_dir=image_dir,
+            processed_frames=processed_frames,
         )
         audit["error_message"] = ai2thor_error_message
         write_run_audit(audit_path, audit)
@@ -342,6 +426,41 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             "If AI2-THOR is not installed, run: pip install ai2thor\n"
             "If it is installed, check the local Unity/OpenGL/graphics environment.\n"
         ) from exc
+    except ValueError as exc:
+        audit = build_run_audit(
+            config=config,
+            run_id=run_id,
+            episode_id=episode_id,
+            output_dir=output_dir,
+            use_mock_llm=use_mock_llm,
+            started_wall=started_wall,
+            latency_seconds=time.perf_counter() - started,
+            client=client,
+            fallback_used=False,
+            debug_raw_path=output_dir / "debug_qwen_raw.txt",
+            world_model_path=world_model_path,
+            episode_log_path=episode_log_path,
+            validation_status={"status": "not_run", "reason": "environment_error"},
+            prompt_version=PROMPT_VERSION,
+            qwen_response_summary_path=qwen_response_summary_path,
+            env_name=env_name,
+            scene=scene,
+            vision_mode=vision_mode,
+            image_path=image_path,
+            vision_call_success=False,
+            vision_parse_success=False,
+            simulator_frame_path=simulator_frame_path,
+            simulator_metadata_path=simulator_metadata_path,
+            ai2thor_start_success=ai2thor_start_success,
+            ai2thor_error_message=ai2thor_error_message,
+            oracle_metadata_mode=oracle_metadata_mode,
+            frame_count=frame_count,
+            image_dir=image_dir,
+            processed_frames=processed_frames,
+        )
+        audit["error_message"] = str(exc)
+        write_run_audit(audit_path, audit)
+        raise SystemExit(f"\n[ERROR] Environment setup failed.\n{exc}\n") from exc
     except QwenClientError as exc:
         audit = build_run_audit(
             config=config,
@@ -370,6 +489,9 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             ai2thor_start_success=ai2thor_start_success,
             ai2thor_error_message=ai2thor_error_message,
             oracle_metadata_mode=oracle_metadata_mode,
+            frame_count=frame_count,
+            image_dir=image_dir,
+            processed_frames=processed_frames,
         )
         audit["error_message"] = str(exc)
         write_run_audit(audit_path, audit)
@@ -403,6 +525,14 @@ def run_validators(
         from validators.validate_ai2thor_smoke import validate as validate_ai2thor_smoke
 
         checks["ai2thor_smoke"] = validate_ai2thor_smoke(world_model_path, audit_path)
+    if env_name == "visual_sequence" and audit_path is not None:
+        from validators.validate_visual_sequence import validate as validate_visual_sequence
+
+        checks["visual_sequence"] = validate_visual_sequence(world_model_path, audit_path, episode_log_path)
+    if env_name == "local_sim" and audit_path is not None:
+        from validators.validate_local_sim_run import validate as validate_local_sim_run
+
+        checks["local_sim"] = validate_local_sim_run(world_model_path, audit_path, episode_log_path)
     status = {
         name: {"passed": not errors, "errors": errors}
         for name, errors in checks.items()
@@ -416,6 +546,131 @@ def run_validators(
     return status
 
 
+def run_visual_sequence_episode(
+    config: Dict[str, Any],
+    run_id: str,
+    output_dir: Path,
+    env: VisualSequenceEnv,
+    initial: Dict[str, Any],
+    logger: EpisodeLogger,
+    store: WorldModelStore,
+    world_model: Dict[str, Any],
+    extractor: VLMExtractor,
+    client: QwenClient | MockLLMClient,
+    started_wall: datetime,
+    started: float,
+    validation_requested: bool,
+    audit_path: Path,
+    world_model_path: Path,
+    episode_log_path: Path,
+    qwen_response_summary_path: Path,
+    use_mock_llm: bool,
+    image_dir: Path,
+    frame_count: int,
+) -> Dict[str, Any]:
+    packet = initial
+    processed_frames: list[str] = []
+    step = 1
+    frame_index = 0
+    while True:
+        observation_for_log = _render_observation(packet["observation"])
+        if frame_index > 0:
+            logger.log(
+                step=step,
+                event_type="observation",
+                observation=observation_for_log,
+                notes=f"Visual sequence frame {frame_index}.",
+            )
+            step += 1
+
+        extraction = extractor.extract(packet["observation"], packet["task"])
+        world_model = store.update_from_extraction(extraction)
+        world_model = apply_environment_context(world_model, packet)
+        observed_names = _extraction_object_names(extraction)
+        world_model = apply_frame_visibility(world_model, observed_names, frame_index)
+        update_agent_state(world_model, step=step, last_action="", mode="perceiving")
+        processed_frames.append(str(packet["observation"]["image_path"]))
+
+        logger.log(
+            step=step,
+            event_type="perception",
+            observation=observation_for_log,
+            model_update=extraction,
+            notes=f"Vision sequence extraction completed for frame {frame_index}.",
+        )
+        step += 1
+        logger.log(
+            step=step,
+            event_type="world_model_update",
+            observation=observation_for_log,
+            model_update={"frame_index": frame_index, "observed_objects": observed_names},
+            notes=f"Incremental world model update applied for frame {frame_index}.",
+        )
+        step += 1
+
+        result = env.step("next_frame")
+        if not result.get("success"):
+            break
+        packet = result["observation"]
+        frame_index += 1
+
+    planner = RulePlanner()
+    plan = planner.plan(initial["task"], world_model)
+    update_agent_state(world_model, step=step, last_action="", mode="planning")
+    store.add_plan(plan)
+    logger.log(step=step, event_type="planning", model_update=plan, notes="Visual sequence summary plan.")
+    step += 1
+
+    final_status = update_task_status(world_model, initial["task"], initial["episode_id"])
+    logger.log(
+        step=step,
+        event_type="task_status",
+        model_update=world_model["task_status"],
+        result=final_status["status"],
+        notes=final_status["reason"],
+    )
+    store.save()
+
+    validation_status: Dict[str, Any] | str = "not_requested"
+    audit = build_run_audit(
+        config=config,
+        run_id=run_id,
+        episode_id=initial["episode_id"],
+        output_dir=output_dir,
+        use_mock_llm=use_mock_llm,
+        started_wall=started_wall,
+        latency_seconds=time.perf_counter() - started,
+        client=client,
+        fallback_used=extractor.fallback_used,
+        debug_raw_path=output_dir / "debug_qwen_raw.txt",
+        world_model_path=world_model_path,
+        episode_log_path=episode_log_path,
+        validation_status=validation_status,
+        prompt_version=PROMPT_VERSION,
+        qwen_response_summary_path=qwen_response_summary_path,
+        env_name="visual_sequence",
+        scene="",
+        vision_mode=True,
+        image_path=Path(processed_frames[-1]) if processed_frames else None,
+        vision_call_success=bool(processed_frames),
+        vision_parse_success=bool(processed_frames) and not extractor.fallback_used,
+        simulator_frame_path=None,
+        simulator_metadata_path=None,
+        ai2thor_start_success=False,
+        ai2thor_error_message="",
+        oracle_metadata_mode=bool(config.get("oracle_metadata_mode", False)),
+        frame_count=frame_count,
+        image_dir=image_dir,
+        processed_frames=processed_frames,
+    )
+    write_run_audit(audit_path, audit)
+    if validation_requested:
+        validation_status = run_validators(world_model_path, episode_log_path, audit_path, True, "visual_sequence")
+        audit["validation_status"] = validation_status
+        write_run_audit(audit_path, audit)
+    return audit
+
+
 def execute_recovery_plan(
     recovery_plan: Dict[str, Any],
     executor: ActionExecutor,
@@ -423,6 +678,7 @@ def execute_recovery_plan(
     logger: EpisodeLogger,
     start_step: int,
     max_recovery_steps: int,
+    post_action_hook: Callable[[Dict[str, Any], int], int] | None = None,
 ) -> tuple[int, bool]:
     step = start_step
     actions = list(recovery_plan.get("actions", []))[:max_recovery_steps]
@@ -446,6 +702,8 @@ def execute_recovery_plan(
             notes=result.get("message", ""),
         )
         step += 1
+        if post_action_hook is not None:
+            step = post_action_hook(result, step)
         if not result.get("success", False):
             logger.log(
                 step=step,
@@ -476,6 +734,7 @@ def execute_resume_actions(
     world_model: Dict[str, Any],
     logger: EpisodeLogger,
     start_step: int,
+    post_action_hook: Callable[[Dict[str, Any], int], int] | None = None,
 ) -> int:
     step = start_step
     for action in actions:
@@ -498,6 +757,8 @@ def execute_resume_actions(
             notes=result.get("message", ""),
         )
         step += 1
+        if post_action_hook is not None:
+            step = post_action_hook(result, step)
         if not result.get("success", False):
             logger.log(
                 step=step,
@@ -511,6 +772,66 @@ def execute_resume_actions(
             update_agent_state(world_model, step=step, last_action=action, mode="resume_failed")
             return step + 1
     return step
+
+
+def _local_sim_sync_hook(
+    env_name: str,
+    extractor: VLMExtractor | None,
+    store: WorldModelStore,
+    world_model: Dict[str, Any],
+    logger: EpisodeLogger,
+) -> Callable[[Dict[str, Any], int], int] | None:
+    if env_name != "local_sim" or extractor is None:
+        return None
+
+    def _hook(result: Dict[str, Any], start_step: int) -> int:
+        return sync_post_action_observation(result, extractor, store, world_model, logger, start_step)
+
+    return _hook
+
+
+def sync_post_action_observation(
+    result: Dict[str, Any],
+    extractor: VLMExtractor,
+    store: WorldModelStore,
+    world_model: Dict[str, Any],
+    logger: EpisodeLogger,
+    start_step: int,
+) -> int:
+    packet = result.get("observation_packet")
+    if not isinstance(packet, dict):
+        return start_step
+    observation = packet.get("observation", "")
+    task = str(packet.get("task", ""))
+    extraction = extractor.extract(observation, task)
+    store.update_from_extraction(extraction)
+    apply_environment_context(world_model, packet)
+    update_agent_state(
+        world_model,
+        step=start_step,
+        last_action=str(result.get("action", "")),
+        mode="observing",
+        result=str(result.get("result", "")),
+    )
+    logger.log(
+        step=start_step,
+        event_type="perception",
+        observation=_render_observation(observation),
+        model_update=extraction,
+        action=str(result.get("action", "")),
+        result=str(result.get("result", "")),
+        notes="LocalSim post-action observation extraction completed.",
+    )
+    logger.log(
+        step=start_step + 1,
+        event_type="world_model_update",
+        observation=_render_observation(observation),
+        model_update=world_model,
+        action=str(result.get("action", "")),
+        result=str(result.get("result", "")),
+        notes="World model merged LocalSim post-action observation.",
+    )
+    return start_step + 2
 
 
 def update_task_status(world_model: Dict[str, Any], task: str, episode_id: str) -> Dict[str, Any]:
@@ -552,6 +873,9 @@ def build_run_audit(
     ai2thor_start_success: bool,
     ai2thor_error_message: str,
     oracle_metadata_mode: bool,
+    frame_count: int,
+    image_dir: Path | None,
+    processed_frames: list[str],
 ) -> Dict[str, Any]:
     ended = datetime.now(timezone.utc)
     qwen_call_count = 0 if use_mock_llm or client is None else client.call_count
@@ -578,6 +902,9 @@ def build_run_audit(
         "ai2thor_start_success": ai2thor_start_success if env_name == "ai2thor" else False,
         "ai2thor_error_message": ai2thor_error_message,
         "oracle_metadata_mode": oracle_metadata_mode,
+        "frame_count": frame_count,
+        "image_dir": str(image_dir) if image_dir else "",
+        "processed_frames": processed_frames,
         "start_time": started_wall.isoformat(),
         "end_time": ended.isoformat(),
         "latency_seconds": round(latency_seconds, 6),
@@ -633,10 +960,28 @@ def _resolve_image_path(value: str | None) -> Path:
     return path
 
 
+def _resolve_image_dir(value: str | None) -> Path:
+    path = Path(value or "assets/test_sequences/bedroom_sequence")
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    return path
+
+
 def _render_observation(observation: Any) -> str:
     if isinstance(observation, str):
         return observation
     return json.dumps(observation, ensure_ascii=False)
+
+
+def _extraction_object_names(extraction: Dict[str, Any]) -> list[str]:
+    names = []
+    for obj in extraction.get("objects", []):
+        if not isinstance(obj, dict):
+            continue
+        name = obj.get("name") or obj.get("id")
+        if name:
+            names.append(str(name))
+    return names
 
 
 if __name__ == "__main__":

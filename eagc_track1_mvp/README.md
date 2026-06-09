@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.6 AI2-THOR simulator adapter smoke test.
+Current version: v0.6 LocalSim Track 1 MVP environment.
 
 The demo loop:
 
@@ -117,6 +117,31 @@ Run the AI2-THOR simulator smoke episode:
 python main.py --env ai2thor --scene FloorPlan1 --validate
 ```
 
+Run a local multi-image visual sequence:
+
+```powershell
+python main.py --env visual_sequence --image-dir assets/test_sequences/bedroom_sequence --max-steps 3 --validate
+```
+
+Run the LocalSim Track 1 MVP environment:
+
+```powershell
+python main.py --env local_sim --episode-id local-explore-book-relocated --max-steps 50 --validate
+python main.py --env local_sim --episode-id local-door-locked-route --max-steps 50 --validate
+python main.py --env local_sim --episode-id local-container-unavailable --max-steps 50 --validate
+python main.py --env local_sim --episode-id local-tool-substitution --max-steps 50 --validate
+```
+
+Sequence frames should be local files named in deterministic order:
+
+```text
+assets/test_sequences/bedroom_sequence/frame_000.png
+assets/test_sequences/bedroom_sequence/frame_001.png
+assets/test_sequences/bedroom_sequence/frame_002.png
+```
+
+The project does not download sequence images.
+
 Expected outputs:
 
 ```text
@@ -145,6 +170,8 @@ python -m validators.validate_semantic_consistency outputs/world_model.json
 python -m validators.validate_episode_log outputs/episode_log.jsonl
 python -m validators.validate_vision_extraction outputs/world_model.json outputs/run_audit.json
 python -m validators.validate_ai2thor_smoke outputs/world_model.json outputs/run_audit.json
+python -m validators.validate_visual_sequence outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
+python -m validators.validate_local_sim_run outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 ```
 
 The world model validator checks required top-level fields, object identity fields, unique object IDs, plans, and structured exception recovery records.
@@ -187,7 +214,14 @@ pip install ai2thor
 python tools/test_ai2thor_adapter.py --scene FloorPlan1
 ```
 
-The smoke test runs all five mock episodes, validates each output, and archives per-episode artifacts under `outputs/smoke/`.
+Run all LocalSim Track 1 episodes:
+
+```powershell
+python tests/smoke_test_local_sim_episodes.py --mode real
+python tests/smoke_test_local_sim_episodes.py --mode mock
+```
+
+The mock smoke test runs all five mock episodes, validates each output, and archives per-episode artifacts under `outputs/smoke/`.
 It also prints and checks each episode's final `task_status`.
 
 ## Run Audit
@@ -319,7 +353,29 @@ This is not a ProcTHOR adapter and does not train or modify any model. It is onl
 
 ## v0.6 Notes
 
-v0.6 adds a minimal AI2-THOR simulator adapter smoke test:
+v0.6 adds a deterministic LocalSim Track 1 MVP environment:
+
+- `env_adapters/local_sim_env.py` provides a local multi-room simulator with bedroom, hallway, kitchen, and living_room topology.
+- LocalSim tracks agent room, holding state, visited rooms, known frontiers, object states, visibility, pickup/open/container availability, and controlled exceptions.
+- LocalSim episodes cover object relocation, locked-door route recovery, unavailable container fallback, and tool substitution.
+- `main.py --env local_sim --episode-id ... --max-steps 50 --validate` runs the same extraction, world-model update, planner, executor, replanner, task evaluator, logging, and validators as the mock/vision paths.
+- `validators/validate_local_sim_run.py` checks LocalSim audit fields, topology, visited/frontier records, task status, event coverage, and recovery execution.
+- `tests/smoke_test_local_sim_episodes.py --mode real` runs all LocalSim episodes against the configured local vLLM. `--mode mock` uses deterministic mock LLM extraction for fast logic checks.
+
+Expected LocalSim statuses:
+
+```text
+local-explore-book-relocated      -> complete
+local-door-locked-route           -> complete
+local-container-unavailable       -> blocked_recovered
+local-tool-substitution           -> complete
+```
+
+The v0.6 mainline is LocalSimEnv. It does not depend on AI2-THOR, ProcTHOR, or an official EAGC runtime/API.
+
+## AI2-THOR Experimental Notes
+
+The repository keeps an experimental AI2-THOR simulator adapter smoke test:
 
 - `env_adapters/ai2thor_adapter.py` starts an `ai2thor.controller.Controller`, captures one RGB frame, and saves simulator metadata.
 - `tools/test_ai2thor_adapter.py --scene FloorPlan1` verifies that AI2-THOR can start on the local machine and writes `outputs/ai2thor_smoke/frame.png` plus `outputs/ai2thor_smoke/metadata.json`.
@@ -335,7 +391,21 @@ pip install ai2thor
 
 `oracle_metadata_mode: false` is the default. In this mode, world-model extraction should come from Qwen vision, not directly from simulator metadata. Setting `oracle_metadata_mode: true` may write `debug_oracle_objects.json` for development comparison, debugging, or training-data analysis, but oracle metadata should not be treated as a final official evaluation dependency.
 
-v0.6 is not ProcTHOR training, not a navigation benchmark, and not the official EAGC runtime. It is only a one-frame simulator adapter smoke test.
+Windows native and WSL2 CloudRendering checks did not pass in the current local setup, so AI2-THOR remains experimental and no `v0.6-ai2thor` tag is used. Future work can handle AI2-THOR separately in a suitable Docker/Ubuntu graphics environment.
+
+## v0.5.1 Notes
+
+v0.5.1 adds a local multi-image visual sequence smoke path:
+
+- `VisualSequenceEnv` reads `frame_*.png`, `frame_*.jpg`, `frame_*.jpeg`, or `frame_*.webp` from a local directory in filename order.
+- `main.py --env visual_sequence --image-dir ... --max-steps N --validate` calls Qwen vision once per frame.
+- Each frame incrementally updates the same world model; it does not reinitialize or overwrite prior state.
+- If a new frame moves an object to a new active location relation, prior active location relations for that object become `stale`.
+- Objects not visible in the current frame are retained and marked with `visibility=not_observed_current_frame`; uncertainty records note that the object was not visible instead of deleting it.
+- `run_audit.json` records `frame_count`, `image_dir`, and `processed_frames`.
+- `validators/validate_visual_sequence.py` checks multi-frame processing, log coverage, non-empty objects, and active location relation consistency.
+
+This is still a local smoke test over static images, not an official runtime or training setup.
 
 ## Adapter Layout
 

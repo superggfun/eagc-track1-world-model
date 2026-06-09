@@ -20,6 +20,8 @@ def new_world_model(episode_id: str) -> Dict[str, Any]:
                 "frontiers": [],
             }
         ],
+        "visited_rooms": [],
+        "frontiers": [],
         "objects": [],
         "relations": [],
         "states": [],

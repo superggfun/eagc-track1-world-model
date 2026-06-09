@@ -14,6 +14,11 @@ class Replanner:
 
         if exception_type == "object_relocated":
             recovery_actions = _search_actions_for_object(world_model, object_name)
+            for location in exception.get("likely_locations", []):
+                if isinstance(location, str) and location:
+                    for action in [f"navigate_to({location})", f"search({location})"]:
+                        if action not in recovery_actions:
+                            recovery_actions.append(action)
             mark_object_location_unknown(world_model, object_name, reason)
             recovery_actions.extend([f"pick_up({object_name})", _resume_place_action(world_model, object_name)])
             recovery_subgoals = [
@@ -22,10 +27,16 @@ class Replanner:
                 "Resume the original task after finding the relocated object.",
             ]
         elif exception_type == "door_locked":
-            recovery_actions = ["search(key_hook)", "search(under_mat)", "unlock(door)", "open(door)"]
+            door = object_name if object_name != "target object" else "door"
+            if door == "door":
+                recovery_actions = ["search(key_hook)", "search(under_mat)", f"unlock({door})", f"open({door})"]
+            else:
+                recovery_actions = ["search(key)", "pick_up(key)", f"unlock({door})", f"open({door})"]
             recovery_subgoals = ["Identify lock state.", "Search likely key locations.", "Unlock and retry."]
         elif exception_type == "target_container_unavailable":
-            recovery_actions = ["locate(drawer)", "place_on(cup, counter)", "wait()"]
+            object_to_place = exception.get("object_to_place", "cup")
+            fallback_target = exception.get("fallback_target", "counter")
+            recovery_actions = [f"locate({object_name})", f"place_on({object_to_place}, {fallback_target})", "wait()"]
             recovery_subgoals = [
                 "Confirm the target container is unavailable.",
                 "Use a safe temporary placement.",
@@ -33,10 +44,11 @@ class Replanner:
             ]
         elif exception_type == "tool_substitution":
             substitute = exception.get("substitute", "alternative_tool")
+            target = exception.get("target", "loose_screw")
             recovery_actions = [
                 f"substitute_tool({object_name}, {substitute})",
                 f"pick_up({substitute})",
-                "use_tool(coin, loose_screw)",
+                f"use_tool({substitute}, {target})",
             ]
             recovery_subgoals = ["Confirm required tool is unavailable.", "Use a suitable substitute tool."]
         else:
@@ -94,6 +106,8 @@ def _resume_place_action(world_model: Dict[str, Any], object_name: str) -> str:
             continue
         for action in plan.get("actions", []):
             if action.startswith(f"place_on({object_name},"):
+                return action
+            if action.startswith(f"place_in({object_name},"):
                 return action
     return f"place_on({object_name}, chair)"
 

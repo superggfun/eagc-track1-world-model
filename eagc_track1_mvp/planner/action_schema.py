@@ -3,11 +3,13 @@ from typing import Iterable, List, Tuple
 
 
 ACTION_PATTERNS = {
+    "explore": re.compile(r"^explore\([a-zA-Z0-9_]+\)$"),
     "locate": re.compile(r"^locate\([a-zA-Z0-9_]+\)$"),
     "navigate_to": re.compile(r"^navigate_to\([a-zA-Z0-9_]+\)$"),
     "search": re.compile(r"^search\([a-zA-Z0-9_]+\)$"),
     "pick_up": re.compile(r"^pick_up\([a-zA-Z0-9_]+\)$"),
     "place_on": re.compile(r"^place_on\([a-zA-Z0-9_]+,\s*[a-zA-Z0-9_]+\)$"),
+    "place_in": re.compile(r"^place_in\([a-zA-Z0-9_]+,\s*[a-zA-Z0-9_]+\)$"),
     "open": re.compile(r"^open\([a-zA-Z0-9_]+\)$"),
     "close": re.compile(r"^close\([a-zA-Z0-9_]+\)$"),
     "unlock": re.compile(r"^unlock\([a-zA-Z0-9_]+\)$"),

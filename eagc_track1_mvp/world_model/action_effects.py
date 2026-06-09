@@ -11,10 +11,14 @@ def apply_action_effect(
         return world_model
 
     action_name, args = parse_action(action)
-    if action_name == "pick_up" and len(args) == 1:
+    if action_name == "explore" and len(args) == 1:
+        _apply_explore(world_model, args[0])
+    elif action_name == "pick_up" and len(args) == 1:
         _apply_pick_up(world_model, args[0])
     elif action_name == "place_on" and len(args) == 2:
         _apply_place_on(world_model, args[0], args[1], step)
+    elif action_name == "place_in" and len(args) == 2:
+        _apply_place_in(world_model, args[0], args[1], step)
     elif action_name == "open" and len(args) == 1:
         upsert_state(world_model, {"entity": args[0], "attribute": "status", "value": "open"})
     elif action_name == "unlock" and len(args) == 1:
@@ -77,6 +81,19 @@ def apply_exception_effect(
 def _apply_pick_up(world_model: Dict[str, Any], obj_name: str) -> None:
     stale_location_relations(world_model, obj_name)
     agent_state = world_model.setdefault("agent_state", {})
+    previous_holding = agent_state.get("holding")
+    if previous_holding and previous_holding != obj_name:
+        remove_state(world_model, str(previous_holding), "held_by", "agent")
+        previous_obj = _find_object(world_model, str(previous_holding))
+        if previous_obj is not None:
+            previous_obj["location"] = {
+                "room": agent_state.get("current_room", ""),
+                "region": "agent_inventory",
+                "support": "",
+                "status": "inferred",
+                "confidence": 0.6,
+            }
+            previous_obj["state"] = "carried_or_used"
     agent_state["holding"] = obj_name
     obj = _find_object(world_model, obj_name)
     if obj is None:
@@ -118,11 +135,52 @@ def _apply_place_on(world_model: Dict[str, Any], obj_name: str, target: str, ste
     upsert_state(world_model, {"entity": obj_name, "attribute": "location", "value": target})
 
 
+def _apply_place_in(world_model: Dict[str, Any], obj_name: str, target: str, step: int) -> None:
+    stale_location_relations(world_model, obj_name)
+    agent_state = world_model.setdefault("agent_state", {})
+    if agent_state.get("holding") == obj_name:
+        agent_state["holding"] = None
+    obj = _find_object(world_model, obj_name)
+    if obj is not None:
+        current_room = agent_state.get("current_room", "")
+        obj["location"] = {
+            "room": current_room,
+            "region": _region_for_object(world_model, target),
+            "support": target,
+            "status": "known",
+            "confidence": 0.9,
+        }
+        obj["state"] = "placed"
+    upsert_relation(
+        world_model,
+        {
+            "subject": obj_name,
+            "relation": "inside",
+            "object": target,
+            "status": "active",
+            "confidence": 0.9,
+            "observed_at_step": step,
+        },
+    )
+    remove_state(world_model, obj_name, "held_by", "agent")
+    upsert_state(world_model, {"entity": obj_name, "attribute": "location", "value": target})
+
+
+def _apply_explore(world_model: Dict[str, Any], room: str) -> None:
+    if room:
+        world_model["visited_rooms"] = _merge_scalar(world_model.get("visited_rooms", []), [room])
+    upsert_state(world_model, {"entity": "agent", "attribute": "explored", "value": room})
+
+
 def _apply_navigation(world_model: Dict[str, Any], target: str) -> None:
-    if target == "door":
-        upsert_state(world_model, {"entity": "agent", "attribute": "near", "value": "door"})
+    if target == "door" or target.endswith("_door"):
+        upsert_state(world_model, {"entity": "agent", "attribute": "near", "value": target})
         return
     world_model.setdefault("agent_state", {})["current_room"] = target
+    world_model["visited_rooms"] = _merge_scalar(world_model.get("visited_rooms", []), [target])
+    for node in world_model.get("topology", []):
+        if isinstance(node, dict) and node.get("room") == target:
+            node["visited"] = True
     upsert_state(world_model, {"entity": "agent", "attribute": "location", "value": target})
     if target == "next_room":
         upsert_state(world_model, {"entity": "agent", "attribute": "entered", "value": "next_room"})
@@ -158,3 +216,11 @@ def _region_for_object(world_model: Dict[str, Any], name: str) -> str:
     if obj and isinstance(obj.get("location"), dict):
         return str(obj["location"].get("region") or "visible_area")
     return "visible_area"
+
+
+def _merge_scalar(existing: list[Any], incoming: list[Any]) -> list[Any]:
+    merged = list(existing)
+    for item in incoming:
+        if item and item not in merged:
+            merged.append(item)
+    return merged

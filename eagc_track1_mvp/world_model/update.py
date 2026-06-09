@@ -18,20 +18,72 @@ def apply_extraction(world_model: Dict[str, Any], extraction: Dict[str, Any]) ->
     return world_model
 
 
+def apply_frame_visibility(
+    world_model: Dict[str, Any],
+    observed_names: Iterable[str],
+    frame_step: int,
+) -> Dict[str, Any]:
+    observed = {str(name) for name in observed_names if name}
+    for obj in world_model.get("objects", []):
+        if not isinstance(obj, dict):
+            continue
+        name = str(obj.get("name") or obj.get("id") or "")
+        if not name:
+            continue
+        if name in observed or str(obj.get("id", "")) in observed:
+            upsert_state(
+                world_model,
+                {"entity": name, "attribute": "visibility", "value": "observed_current_frame"},
+            )
+            continue
+        location = obj.get("location")
+        if isinstance(location, dict):
+            confidence = float(location.get("confidence", 0.5))
+            location["confidence"] = round(max(0.1, confidence * 0.85), 4)
+        upsert_state(
+            world_model,
+            {"entity": name, "attribute": "visibility", "value": "not_observed_current_frame"},
+        )
+        world_model.setdefault("uncertainty", []).append(
+            {
+                "item": name,
+                "reason": f"Object not visible in current frame {frame_step}; retained from prior frames.",
+                "level": "medium",
+            }
+        )
+    return world_model
+
+
 def apply_environment_context(world_model: Dict[str, Any], env_packet: Dict[str, Any]) -> Dict[str, Any]:
     current_room = env_packet.get("current_room") or env_packet.get("room") or "unknown"
+    packet_agent_state = env_packet.get("agent_state", {})
+    if not isinstance(packet_agent_state, dict):
+        packet_agent_state = {}
+    existing_agent_state = world_model.get("agent_state", {})
     world_model["agent_state"] = {
-        **world_model.get("agent_state", {}),
+        **existing_agent_state,
         "current_room": current_room,
-        "holding": world_model.get("agent_state", {}).get("holding"),
-        "step": world_model.get("agent_state", {}).get("step", 0),
-        "last_action": world_model.get("agent_state", {}).get("last_action", ""),
+        "holding": packet_agent_state.get("holding", existing_agent_state.get("holding")),
+        "step": packet_agent_state.get("step", existing_agent_state.get("step", 0)),
+        "last_action": existing_agent_state.get("last_action", ""),
         "mode": "observing",
     }
     topology = env_packet.get("topology") or [
         {"room": current_room, "node_type": "room", "visited": True, "frontiers": []}
     ]
     world_model["topology"] = topology
+    visited_rooms = list(packet_agent_state.get("visited_rooms", []))
+    if not visited_rooms:
+        visited_rooms = [
+            node.get("room")
+            for node in topology
+            if isinstance(node, dict) and node.get("visited") is True and node.get("room")
+        ]
+    if visited_rooms:
+        world_model["visited_rooms"] = merge_unique(world_model.get("visited_rooms", []), visited_rooms)
+    frontiers = env_packet.get("visible_frontiers") or packet_agent_state.get("known_frontiers", [])
+    if frontiers:
+        world_model["frontiers"] = merge_unique(world_model.get("frontiers", []), frontiers)
 
     object_hints = env_packet.get("object_hints", {})
     for obj in world_model.get("objects", []):
@@ -221,6 +273,8 @@ def upsert_relations(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:
     for item in incoming:
         if not isinstance(item, dict):
             continue
+        if item.get("status") == "active" and item.get("relation") in {"on", "inside", "under", "near", "beside", "at"}:
+            _stale_prior_active_relations(merged, item)
         key = (item.get("subject"), item.get("relation"), item.get("object"))
         for index, current in enumerate(merged):
             if (current.get("subject"), current.get("relation"), current.get("object")) == key:
@@ -229,6 +283,21 @@ def upsert_relations(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:
         else:
             merged.append(dict(item))
     return merged
+
+
+def _stale_prior_active_relations(relations: List[Dict[str, Any]], incoming: Dict[str, Any]) -> None:
+    incoming_key = (incoming.get("subject"), incoming.get("relation"), incoming.get("object"))
+    for relation in relations:
+        current_key = (relation.get("subject"), relation.get("relation"), relation.get("object"))
+        if current_key == incoming_key:
+            continue
+        if (
+            relation.get("subject") == incoming.get("subject")
+            and relation.get("relation") in {"on", "inside", "under", "near", "beside", "at"}
+            and relation.get("status") == "active"
+        ):
+            relation["status"] = "stale"
+            relation["confidence"] = min(float(relation.get("confidence", 0.5)), 0.2)
 
 
 def merge_affordances(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:

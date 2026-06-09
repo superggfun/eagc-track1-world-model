@@ -10,6 +10,10 @@ EXPECTED_STATUS = {
     "mock-hallway-door-locked": "complete",
     "mock-kitchen-container-unavailable": "blocked_recovered",
     "mock-study-tool-substitution": "complete",
+    "local-explore-book-relocated": "complete",
+    "local-door-locked-route": "complete",
+    "local-container-unavailable": "blocked_recovered",
+    "local-tool-substitution": "complete",
 }
 
 
