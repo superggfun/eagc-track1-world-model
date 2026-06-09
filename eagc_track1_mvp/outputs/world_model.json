@@ -1,0 +1,155 @@
+{
+  "episode_id": "mock-bedroom-001",
+  "agent_state": {},
+  "rooms": [
+    "bedroom"
+  ],
+  "topology": [],
+  "objects": [
+    {
+      "name": "bed",
+      "type": "furniture",
+      "room": "bedroom"
+    },
+    {
+      "name": "pillow",
+      "type": "object",
+      "room": "bedroom"
+    },
+    {
+      "name": "book",
+      "type": "object",
+      "room": "bedroom"
+    },
+    {
+      "name": "lamp",
+      "type": "object",
+      "room": "bedroom"
+    },
+    {
+      "name": "chair",
+      "type": "furniture",
+      "room": "bedroom"
+    },
+    {
+      "name": "door",
+      "type": "object",
+      "room": "bedroom"
+    },
+    {
+      "name": "bedside_surface",
+      "type": "furniture",
+      "room": "bedroom"
+    }
+  ],
+  "relations": [
+    {
+      "subject": "book",
+      "relation": "on",
+      "object": "bed"
+    },
+    {
+      "subject": "book",
+      "relation": "near",
+      "object": "pillow"
+    },
+    {
+      "subject": "chair",
+      "relation": "beside",
+      "object": "bed"
+    },
+    {
+      "subject": "lamp",
+      "relation": "on",
+      "object": "bedside_surface"
+    },
+    {
+      "subject": "door",
+      "relation": "closed",
+      "object": "door"
+    }
+  ],
+  "states": [
+    {
+      "entity": "door",
+      "attribute": "state",
+      "value": "closed"
+    },
+    {
+      "entity": "book",
+      "attribute": "location",
+      "value": "unknown"
+    }
+  ],
+  "affordances": [
+    {
+      "object": "book",
+      "actions": [
+        "pick_up",
+        "carry",
+        "place_on"
+      ]
+    },
+    {
+      "object": "chair",
+      "actions": [
+        "place_on"
+      ]
+    }
+  ],
+  "uncertainty": [
+    {
+      "item": "book_location",
+      "reason": "Book is currently on the bed, needs to be moved to chair",
+      "level": "low"
+    },
+    {
+      "item": "book",
+      "reason": "Attempted pick_up(book), but the book is no longer on the bed.",
+      "level": "high"
+    }
+  ],
+  "plans": [
+    {
+      "planner": "RulePlanner",
+      "task": "Find the book and place it on the chair.",
+      "subgoals": [
+        "Confirm the book location.",
+        "Acquire the book.",
+        "Place the book on the chair."
+      ],
+      "actions": [
+        "locate(book)",
+        "pick_up(book)",
+        "place_on(book, chair)"
+      ],
+      "based_on_rooms": [
+        "bedroom"
+      ]
+    },
+    {
+      "planner": "Replanner",
+      "trigger": "Attempted pick_up(book), but the book is no longer on the bed.",
+      "subgoals": [
+        "Mark the book location as unknown.",
+        "Search likely nearby locations.",
+        "Resume the original place-on-chair task after finding the book."
+      ],
+      "actions": [
+        "search(bed)",
+        "search(under_pillow)",
+        "search(beside_bed)",
+        "search(chair)",
+        "pick_up(book)",
+        "place_on(book, chair)"
+      ]
+    }
+  ],
+  "exceptions": [
+    {
+      "type": "object_location_changed",
+      "object": "book",
+      "state": "location unknown"
+    }
+  ]
+}
