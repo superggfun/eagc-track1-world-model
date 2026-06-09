@@ -1,72 +1,168 @@
 {
-  "episode_id": "mock-bedroom-001",
-  "agent_state": {},
+  "episode_id": "mock-bedroom-relocated",
+  "agent_state": {
+    "current_room": "bedroom",
+    "holding": null,
+    "step": 7,
+    "last_action": "pick_up(book)",
+    "mode": "replanning"
+  },
   "rooms": [
     "bedroom"
   ],
-  "topology": [],
+  "topology": [
+    {
+      "room": "bedroom",
+      "node_type": "room",
+      "visited": true,
+      "frontiers": [
+        {
+          "target": "door",
+          "status": "closed",
+          "confidence": 0.8
+        }
+      ]
+    }
+  ],
   "objects": [
     {
       "name": "bed",
-      "type": "furniture",
-      "room": "bedroom"
+      "room": "bedroom",
+      "id": "bed",
+      "category": "furniture",
+      "location": {
+        "room": "bedroom",
+        "region": "bed_area",
+        "support": "",
+        "status": "known",
+        "confidence": 0.95
+      },
+      "state": "observed"
     },
     {
       "name": "pillow",
-      "type": "object",
-      "room": "bedroom"
+      "room": "bedroom",
+      "id": "pillow",
+      "category": "object",
+      "location": {
+        "room": "bedroom",
+        "region": "bed_area",
+        "support": "bed",
+        "status": "known",
+        "confidence": 0.9
+      },
+      "state": "observed"
     },
     {
       "name": "book",
-      "type": "object",
-      "room": "bedroom"
+      "room": "bedroom",
+      "id": "book",
+      "category": "object",
+      "location": {
+        "room": "",
+        "region": "",
+        "support": "",
+        "status": "unknown",
+        "confidence": 0.0
+      },
+      "state": "location_unknown"
     },
     {
       "name": "lamp",
-      "type": "object",
-      "room": "bedroom"
+      "room": "bedroom",
+      "id": "lamp",
+      "category": "object",
+      "location": {
+        "room": "bedroom",
+        "region": "bedside_area",
+        "support": "bedside_surface",
+        "status": "known",
+        "confidence": 0.8
+      },
+      "state": "observed"
     },
     {
       "name": "chair",
-      "type": "furniture",
-      "room": "bedroom"
+      "room": "bedroom",
+      "id": "chair",
+      "category": "furniture",
+      "location": {
+        "room": "bedroom",
+        "region": "bed_area",
+        "support": "",
+        "status": "known",
+        "confidence": 0.9
+      },
+      "state": "observed"
     },
     {
       "name": "door",
-      "type": "object",
-      "room": "bedroom"
+      "room": "bedroom",
+      "id": "door",
+      "category": "object",
+      "location": {
+        "room": "bedroom",
+        "region": "exit",
+        "support": "",
+        "status": "known",
+        "confidence": 0.9
+      },
+      "state": "closed"
     },
     {
-      "name": "bedside_surface",
-      "type": "furniture",
-      "room": "bedroom"
+      "id": "bedside_surface",
+      "name": "bedside surface",
+      "category": "inferred_support",
+      "location": {
+        "room": "bedroom",
+        "region": "visible_area",
+        "support": "",
+        "status": "inferred",
+        "confidence": 0.55
+      },
+      "state": "inferred"
     }
   ],
   "relations": [
     {
       "subject": "book",
       "relation": "on",
-      "object": "bed"
+      "object": "bed",
+      "status": "stale",
+      "confidence": 0.2,
+      "observed_at_step": 1
     },
     {
       "subject": "book",
       "relation": "near",
-      "object": "pillow"
+      "object": "pillow",
+      "status": "stale",
+      "confidence": 0.2,
+      "observed_at_step": 1
     },
     {
       "subject": "chair",
       "relation": "beside",
-      "object": "bed"
+      "object": "bed",
+      "status": "active",
+      "confidence": 0.75,
+      "observed_at_step": 1
     },
     {
       "subject": "lamp",
       "relation": "on",
-      "object": "bedside_surface"
+      "object": "bedside surface",
+      "status": "active",
+      "confidence": 0.75,
+      "observed_at_step": 1
     },
     {
       "subject": "door",
       "relation": "closed",
-      "object": "door"
+      "object": "door",
+      "status": "active",
+      "confidence": 0.75,
+      "observed_at_step": 1
     }
   ],
   "states": [
@@ -85,24 +181,18 @@
     {
       "object": "book",
       "actions": [
-        "pick_up",
-        "carry",
-        "place_on"
+        "pick_up(book)",
+        "place_on(object, book)"
       ]
     },
     {
       "object": "chair",
       "actions": [
-        "place_on"
+        "place_on(object, chair)"
       ]
     }
   ],
   "uncertainty": [
-    {
-      "item": "book_location",
-      "reason": "Book is currently on the bed, needs to be moved to chair",
-      "level": "low"
-    },
     {
       "item": "book",
       "reason": "Attempted pick_up(book), but the book is no longer on the bed.",
@@ -147,9 +237,29 @@
   ],
   "exceptions": [
     {
-      "type": "object_location_changed",
-      "object": "book",
-      "state": "location unknown"
+      "event_type": "execution_exception",
+      "exception": {
+        "type": "object_relocated",
+        "object": "book",
+        "state": "location unknown"
+      },
+      "recovery_plan": {
+        "planner": "Replanner",
+        "trigger": "Attempted pick_up(book), but the book is no longer on the bed.",
+        "subgoals": [
+          "Mark the book location as unknown.",
+          "Search likely nearby locations.",
+          "Resume the original place-on-chair task after finding the book."
+        ],
+        "actions": [
+          "search(bed)",
+          "search(under_pillow)",
+          "search(beside_bed)",
+          "search(chair)",
+          "pick_up(book)",
+          "place_on(book, chair)"
+        ]
+      }
     }
   ]
 }

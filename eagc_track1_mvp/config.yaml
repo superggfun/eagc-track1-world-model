@@ -2,3 +2,4 @@ base_url: http://127.0.0.1:8000/v1
 model: qwen3.6-35b-nvfp4
 temperature: 0.2
 max_tokens: 2048
+episode_id: mock-bedroom-relocated

@@ -9,6 +9,7 @@ from perception.vlm_extractor import VLMExtractor
 from planner.replanner import Replanner
 from planner.rule_planner import RulePlanner
 from world_model.store import WorldModelStore
+from world_model.update import apply_environment_context, update_agent_state
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -34,12 +35,13 @@ def _parse_scalar(value: str) -> Any:
 
 def run_demo() -> None:
     config = load_config(PROJECT_ROOT / "config.yaml")
-    env = MockEnv()
+    env = MockEnv(str(config.get("episode_id", "mock-bedroom-relocated")))
     initial = env.reset()
 
     logger = EpisodeLogger(OUTPUT_DIR / "episode_log.jsonl")
     store = WorldModelStore(OUTPUT_DIR / "world_model.json")
     world_model = store.initialize(initial["episode_id"])
+    world_model = apply_environment_context(world_model, initial)
 
     logger.log(
         step=0,
@@ -54,7 +56,7 @@ def run_demo() -> None:
         temperature=float(config["temperature"]),
         max_tokens=int(config["max_tokens"]),
     )
-    extractor = VLMExtractor(client)
+    extractor = VLMExtractor(client, debug_output_path=OUTPUT_DIR / "debug_qwen_raw.txt")
 
     try:
         extraction = extractor.extract(initial["observation"], initial["task"])
@@ -67,8 +69,16 @@ def run_demo() -> None:
         ) from exc
 
     world_model = store.update_from_extraction(extraction)
+    world_model = apply_environment_context(world_model, initial)
     logger.log(
         step=1,
+        event_type="perception",
+        observation=initial["observation"],
+        model_update=extraction,
+        notes="Text-only perception extraction completed.",
+    )
+    logger.log(
+        step=2,
         event_type="world_model_update",
         observation=initial["observation"],
         model_update=extraction,
@@ -77,33 +87,54 @@ def run_demo() -> None:
 
     planner = RulePlanner()
     plan = planner.plan(initial["task"], world_model)
+    update_agent_state(world_model, step=3, last_action="", mode="planning")
     store.add_plan(plan)
-    logger.log(step=2, event_type="plan", model_update=plan, notes="Initial rule plan.")
+    logger.log(step=3, event_type="planning", model_update=plan, notes="Initial rule plan.")
 
     executor = ActionExecutor(env)
     replanner = Replanner()
 
-    for idx, action in enumerate(planner.next_actions(plan), start=3):
+    step = 4
+    for action in planner.next_actions(plan):
         result = executor.execute(action)
+        update_agent_state(
+            world_model,
+            step=step,
+            last_action=action,
+            mode="executing" if result.get("success", False) else "exception",
+            result=result.get("result", ""),
+        )
         logger.log(
-            step=idx,
-            event_type="action_result",
+            step=step,
+            event_type="action",
             observation=result.get("observation", ""),
             action=action,
             result=result.get("result", ""),
             notes=result.get("message", ""),
         )
+        step += 1
 
         if not result.get("success", False):
-            recovery_plan = replanner.recover(result, world_model)
             logger.log(
-                step=idx + 1,
-                event_type="replan",
+                step=step,
+                event_type="execution_exception",
+                observation=result.get("observation", ""),
+                model_update=result.get("exception", {}),
+                action=action,
+                result=result.get("result", ""),
+                notes=result.get("message", ""),
+            )
+            step += 1
+            recovery_plan = replanner.recover(result, world_model)
+            update_agent_state(world_model, step=step, last_action=action, mode="replanning")
+            logger.log(
+                step=step,
+                event_type="replanning",
                 observation=result.get("observation", ""),
                 model_update=recovery_plan,
                 action=action,
                 result="recovery_plan_created",
-                notes="Book location marked unknown; search likely locations.",
+                notes="Exception handled; recovery plan created.",
             )
             break
 

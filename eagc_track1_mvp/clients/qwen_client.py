@@ -3,6 +3,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from perception.json_utils import extract_json_from_text
+
 
 class QwenClientError(RuntimeError):
     pass
@@ -61,23 +63,9 @@ class QwenClient:
     def chat_json(self, messages: List[Dict[str, str]]) -> Dict[str, Any]:
         content = self.chat(messages)
         try:
-            return json.loads(_extract_json_object(content))
-        except json.JSONDecodeError as exc:
+            return json.loads(extract_json_from_text(content))
+        except (json.JSONDecodeError, ValueError) as exc:
             raise QwenClientError(
                 "Model returned non-JSON content where JSON was required. "
                 f"Raw content preview: {content[:500]}"
             ) from exc
-
-
-def _extract_json_object(text: str) -> str:
-    stripped = text.strip()
-    if stripped.startswith("```"):
-        stripped = stripped.strip("`").strip()
-        if stripped.lower().startswith("json"):
-            stripped = stripped[4:].strip()
-
-    start = stripped.find("{")
-    end = stripped.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        return stripped
-    return stripped[start : end + 1]
