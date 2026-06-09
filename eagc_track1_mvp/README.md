@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.4.3 isolated run outputs and real-vLLM smoke tests.
+Current version: v0.5 vision input smoke test for Qwen vLLM.
 
 The demo loop:
 
@@ -54,6 +54,8 @@ The client currently supports text-only chat completions through:
 POST /chat/completions
 ```
 
+v0.5 also adds a minimal OpenAI-compatible vision chat path using a local image encoded as a base64 data URL.
+
 ## Run
 
 ```powershell
@@ -100,6 +102,14 @@ Run without calling vLLM, using deterministic mock LLM extraction:
 python main.py --episode-id mock-bedroom-relocated --validate --use-mock-llm
 ```
 
+Run the vision smoke episode with a local image:
+
+```powershell
+python main.py --vision --image-path assets/test_images/bedroom.png --validate
+```
+
+If `assets/test_images/bedroom.png` does not exist, place a local bedroom scene image there or pass another local path with `--image-path`.
+
 Expected outputs:
 
 ```text
@@ -126,6 +136,7 @@ Run validators from the project directory:
 python -m validators.validate_world_model outputs/world_model.json
 python -m validators.validate_semantic_consistency outputs/world_model.json
 python -m validators.validate_episode_log outputs/episode_log.jsonl
+python -m validators.validate_vision_extraction outputs/world_model.json outputs/run_audit.json
 ```
 
 The world model validator checks required top-level fields, object identity fields, unique object IDs, plans, and structured exception recovery records.
@@ -152,12 +163,13 @@ Run the same smoke coverage against the real local vLLM:
 python tests/smoke_test_all_mock_episodes.py --mode real
 python tests/smoke_test_all_mock_episodes.py --mode real --episode-id mock-bedroom-relocated
 python tests/smoke_test_all_mock_episodes.py --mode real --all
+python tests/smoke_test_all_mock_episodes.py --mode real --all --strict-real
 ```
 
-Run both modes:
+Run a direct Qwen vision smoke call:
 
 ```powershell
-python tests/smoke_test_all_mock_episodes.py --mode both
+python tools/test_qwen_vision_call.py --image-path assets/test_images/bedroom.png
 ```
 
 The smoke test runs all five mock episodes, validates each output, and archives per-episode artifacts under `outputs/smoke/`.
@@ -276,6 +288,19 @@ v0.4.3 isolates run outputs under `outputs/runs/` by default and records `run_id
 The smoke test now writes each episode to `outputs/smoke/<mode>/<episode_id>/`, runs validators through imported Python functions, and supports targeted real-vLLM checks.
 
 If Qwen returns malformed JSON, the raw output is saved as `debug_qwen_raw.txt` in that run directory. The pipeline can still use fallback extraction, but `run_audit.json` records `fallback_used: true`.
+
+## v0.5 Notes
+
+v0.5 adds a minimal vision interface smoke test:
+
+- `QwenClient.chat_vision(image_path, prompt)` sends text plus `image_url` content to the same OpenAI-compatible chat completions endpoint.
+- `tools/test_qwen_vision_call.py` tests a raw vision call and writes `outputs/vision_smoke/qwen_vision_response.json` plus `outputs/vision_smoke/qwen_vision_raw.txt`.
+- `VisualMockEnv` provides `visual-bedroom-smoke`, which passes `{text, image_path}` into `VLMExtractor`.
+- `main.py --vision --image-path ... --validate` reuses the same world model, planner, executor, task evaluator, and validators.
+- `run_audit.json` records `vision_mode`, image metadata, and vision call/parse status.
+- `qwen_response_summary.json` records `input_mode: "vision"` for vision extraction.
+
+This is not a ProcTHOR adapter and does not train or modify any model. It is only a static local-image interface smoke test that keeps the official runtime adapter boundary unchanged.
 
 ## Adapter Layout
 

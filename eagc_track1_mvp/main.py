@@ -9,6 +9,7 @@ from typing import Any, Dict
 from clients.mock_llm_client import MockLLMClient
 from clients.qwen_client import QwenClient, QwenClientError
 from env_adapters.mock_env import MockEnv
+from env_adapters.visual_mock_env import VisualMockEnv
 from executor.action_executor import ActionExecutor
 from logging_utils.episode_logger import EpisodeLogger
 from perception.prompts import PROMPT_VERSION
@@ -19,6 +20,7 @@ from task_evaluator.task_evaluator import evaluate_task_status
 from validators.validate_episode_log import validate as validate_episode_log
 from validators.validate_semantic_consistency import validate as validate_semantic_consistency
 from validators.validate_task_status import validate as validate_task_status
+from validators.validate_vision_extraction import validate as validate_vision_extraction
 from validators.validate_world_model import validate as validate_world_model
 from world_model.action_effects import apply_action_effect, apply_exception_effect
 from world_model.store import WorldModelStore
@@ -55,6 +57,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", help="Directory for this run's artifacts.")
     parser.add_argument("--validate", action="store_true", help="Run validators after the episode.")
     parser.add_argument("--use-mock-llm", action="store_true", help="Use deterministic mock LLM instead of vLLM.")
+    parser.add_argument("--vision", action="store_true", help="Run the visual mock episode with image input.")
+    parser.add_argument("--image-path", help="Local image path for --vision runs.")
     return parser.parse_args()
 
 
@@ -65,11 +69,15 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         output_dir=None,
         validate=False,
         use_mock_llm=False,
+        vision=False,
+        image_path=None,
     )
     config = load_config(PROJECT_ROOT / "config.yaml")
     output_root = _resolve_output_path(str(config.get("output_dir", "outputs")))
 
-    episode_id = args.episode_id or str(config.get("episode_id", "mock-bedroom-relocated"))
+    vision_mode = bool(args.vision)
+    image_path = _resolve_image_path(args.image_path) if vision_mode else None
+    episode_id = "visual-bedroom-smoke" if vision_mode else args.episode_id or str(config.get("episode_id", "mock-bedroom-relocated"))
     use_mock_llm = bool(args.use_mock_llm or config.get("use_mock_llm", False))
     max_recovery_steps = int(config.get("max_recovery_steps", 6))
     started_wall = datetime.now(timezone.utc)
@@ -85,10 +93,12 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
     qwen_response_summary_path = output_dir / "qwen_response_summary.json"
     validation_status: Dict[str, Any] | str = "not_requested"
     client: QwenClient | MockLLMClient | None = None
+    extractor: VLMExtractor | None = None
 
     try:
-        env = MockEnv(episode_id)
+        env = VisualMockEnv(image_path or PROJECT_ROOT / "assets" / "test_images" / "bedroom.png") if vision_mode else MockEnv(episode_id)
         initial = env.reset()
+        observation_for_log = _render_observation(initial["observation"])
 
         logger = EpisodeLogger(episode_log_path)
         store = WorldModelStore(world_model_path)
@@ -98,7 +108,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         logger.log(
             step=0,
             event_type="observation",
-            observation=initial["observation"],
+            observation=observation_for_log,
             notes=f"Task: {initial['task']}",
         )
 
@@ -124,14 +134,14 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         logger.log(
             step=1,
             event_type="perception",
-            observation=initial["observation"],
+            observation=observation_for_log,
             model_update=extraction,
-            notes="Text-only perception extraction completed.",
+            notes="Vision perception extraction completed." if vision_mode else "Text-only perception extraction completed.",
         )
         logger.log(
             step=2,
             event_type="world_model_update",
-            observation=initial["observation"],
+            observation=observation_for_log,
             model_update=extraction,
             notes="Initial extraction applied.",
         )
@@ -221,8 +231,6 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             notes=final_status["reason"],
         )
         store.save()
-        if args.validate:
-            validation_status = run_validators(world_model_path, episode_log_path)
 
         audit = build_run_audit(
             config=config,
@@ -240,8 +248,16 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             validation_status=validation_status,
             prompt_version=PROMPT_VERSION,
             qwen_response_summary_path=qwen_response_summary_path,
+            vision_mode=vision_mode,
+            image_path=image_path,
+            vision_call_success=bool(extractor.last_call_success) if extractor else False,
+            vision_parse_success=bool(extractor.last_parse_success) if extractor else False,
         )
         write_run_audit(audit_path, audit)
+        if args.validate:
+            validation_status = run_validators(world_model_path, episode_log_path, audit_path, vision_mode)
+            audit["validation_status"] = validation_status
+            write_run_audit(audit_path, audit)
         write_latest_artifacts(output_root, world_model_path, episode_log_path, audit_path)
         print(f"Demo complete. Wrote {world_model_path}")
         print(f"Demo complete. Wrote {episode_log_path}")
@@ -266,6 +282,10 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             validation_status={"status": "not_run", "reason": "qwen_client_error"},
             prompt_version=PROMPT_VERSION,
             qwen_response_summary_path=qwen_response_summary_path,
+            vision_mode=vision_mode,
+            image_path=image_path,
+            vision_call_success=False,
+            vision_parse_success=False,
         )
         audit["error_message"] = str(exc)
         write_run_audit(audit_path, audit)
@@ -277,13 +297,20 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         ) from exc
 
 
-def run_validators(world_model_path: Path, episode_log_path: Path) -> Dict[str, Any]:
+def run_validators(
+    world_model_path: Path,
+    episode_log_path: Path,
+    audit_path: Path | None = None,
+    vision_mode: bool = False,
+) -> Dict[str, Any]:
     checks = {
         "world_model": validate_world_model(world_model_path),
         "semantic_consistency": validate_semantic_consistency(world_model_path),
         "episode_log": validate_episode_log(episode_log_path),
         "task_status": validate_task_status(world_model_path, episode_log_path),
     }
+    if vision_mode and audit_path is not None:
+        checks["vision_extraction"] = validate_vision_extraction(world_model_path, audit_path)
     status = {
         name: {"passed": not errors, "errors": errors}
         for name, errors in checks.items()
@@ -422,6 +449,10 @@ def build_run_audit(
     validation_status: Dict[str, Any] | str,
     prompt_version: str,
     qwen_response_summary_path: Path,
+    vision_mode: bool,
+    image_path: Path | None,
+    vision_call_success: bool,
+    vision_parse_success: bool,
 ) -> Dict[str, Any]:
     ended = datetime.now(timezone.utc)
     qwen_call_count = 0 if use_mock_llm or client is None else client.call_count
@@ -435,6 +466,12 @@ def build_run_audit(
         "base_url": "mock://local" if use_mock_llm else config.get("base_url"),
         "use_mock_llm": use_mock_llm,
         "prompt_version": prompt_version,
+        "vision_mode": vision_mode,
+        "image_path": str(image_path) if image_path else "",
+        "image_exists": bool(image_path and image_path.exists()),
+        "image_size_bytes": image_path.stat().st_size if image_path and image_path.exists() else 0,
+        "vision_call_success": vision_call_success if vision_mode else False,
+        "vision_parse_success": vision_parse_success if vision_mode else False,
         "start_time": started_wall.isoformat(),
         "end_time": ended.isoformat(),
         "latency_seconds": round(latency_seconds, 6),
@@ -481,6 +518,19 @@ def _select_output_dir(output_dir_arg: str | None, output_root: Path, run_id: st
 
 def _default_run_id(started_wall: datetime) -> str:
     return started_wall.strftime("%Y%m%dT%H%M%S%fZ")
+
+
+def _resolve_image_path(value: str | None) -> Path:
+    path = Path(value or "assets/test_images/bedroom.png")
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    return path
+
+
+def _render_observation(observation: Any) -> str:
+    if isinstance(observation, str):
+        return observation
+    return json.dumps(observation, ensure_ascii=False)
 
 
 if __name__ == "__main__":

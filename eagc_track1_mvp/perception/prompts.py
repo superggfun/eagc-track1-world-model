@@ -1,4 +1,4 @@
-PROMPT_VERSION = "v0.4.4"
+PROMPT_VERSION = "v0.5"
 
 EXTRACTOR_SYSTEM_PROMPT = """You are a text-only perception module for an embodied agent.
 Return one valid JSON object only. Do not use markdown fences, prose, explanations, or comments.
@@ -16,6 +16,44 @@ Observation:
 {observation}
 
 Return exactly this JSON shape:
+{{
+  "rooms": ["room_name"],
+  "topology": [
+    {{"room": "room_name", "visited": true, "frontiers": ["frontier_or_exit_name"], "status": "observed", "confidence": 0.0}}
+  ],
+  "objects": [
+    {{
+      "name": "object_name",
+      "category": "object|furniture|door|container|tool|surface|inferred_support",
+      "location": {{"room": "room_name", "region": "region_name", "support": "support_object", "status": "known|unknown|inferred", "confidence": 0.0}},
+      "state": "observed|inferred|unknown"
+    }}
+  ],
+  "relations": [
+    {{"subject": "object", "relation": "on|near|beside|inside|under|at", "object": "object_or_place", "status": "active|stale|inferred|uncertain", "confidence": 0.0, "observed_at_step": 1}}
+  ],
+  "states": [
+    {{"entity": "object_or_agent", "attribute": "attribute_name", "value": "value"}}
+  ],
+  "affordances": [
+    {{"object": "object_name", "affordance": "portable|openable|support|container|usable_tool", "status": "known|inferred|uncertain", "confidence": 0.0}}
+  ],
+  "uncertainty": [
+    {{"item": "object_or_state", "reason": "short reason", "level": "low|medium|high", "status": "uncertain|inferred", "confidence": 0.0}}
+  ]
+}}
+"""
+
+
+def build_vision_extraction_prompt(observation_text: str, task: str) -> str:
+    return f"""
+Task: {task}
+
+Image observation context:
+{observation_text}
+
+Inspect the provided image and return one JSON object only.
+Use the same world-model extraction schema as text mode:
 {{
   "rooms": ["room_name"],
   "topology": [

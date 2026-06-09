@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 
 def evaluate_task_status(task: str, world_model: Dict[str, Any], episode_id: str) -> Dict[str, Any]:
     del task
-    if episode_id == "mock-bedroom-relocated":
+    if episode_id in {"mock-bedroom-relocated", "visual-bedroom-smoke"}:
         return _object_on_support(world_model, "book", "chair")
     if episode_id == "mock-livingroom-nominal":
         return _object_on_support(world_model, "remote", "coffee_table")

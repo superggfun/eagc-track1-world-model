@@ -12,7 +12,7 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
         "object_hints": {
             "bed": {"region": "bed_area", "support": "", "confidence": 0.95, "category": "furniture"},
             "pillow": {"region": "bed_area", "support": "bed", "confidence": 0.9},
-            "book": {"region": "bed_area", "support": "bed", "confidence": 0.9},
+            "book": {"region": "bed_area", "support": "bed", "confidence": 0.9, "category": "object"},
             "lamp": {"region": "bedside_area", "support": "bedside_surface", "confidence": 0.8},
             "chair": {"region": "bed_area", "support": "", "confidence": 0.9, "category": "furniture"},
             "door": {"region": "exit", "support": "", "confidence": 0.9, "category": "door"},
@@ -62,7 +62,7 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
         "frontiers": [{"target": "drawer", "status": "jammed", "confidence": 0.8}],
         "visible_objects": ["cup", "drawer", "counter", "sink"],
         "object_hints": {
-            "cup": {"region": "counter_area", "support": "counter", "confidence": 0.9},
+            "cup": {"region": "counter_area", "support": "counter", "confidence": 0.9, "category": "object"},
             "drawer": {"region": "cabinet_area", "support": "", "confidence": 0.85, "category": "container"},
             "counter": {"region": "counter_area", "support": "", "confidence": 0.9, "category": "surface"},
             "sink": {"region": "sink_area", "support": "", "confidence": 0.8},
@@ -88,7 +88,7 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
         "visible_objects": ["loose_screw", "coin", "desk", "lamp"],
         "object_hints": {
             "loose_screw": {"region": "desk_area", "support": "desk", "confidence": 0.75},
-            "coin": {"region": "desk_area", "support": "desk", "confidence": 0.85},
+            "coin": {"region": "desk_area", "support": "desk", "confidence": 0.85, "category": "object"},
             "screwdriver": {
                 "region": "",
                 "support": "",
@@ -121,7 +121,7 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
         "frontiers": [{"target": "coffee_table", "status": "clear", "confidence": 0.9}],
         "visible_objects": ["remote", "sofa", "coffee_table", "basket"],
         "object_hints": {
-            "remote": {"region": "sofa_area", "support": "sofa", "confidence": 0.9},
+            "remote": {"region": "sofa_area", "support": "sofa", "confidence": 0.9, "category": "object"},
             "sofa": {"region": "sofa_area", "support": "", "confidence": 0.9, "category": "furniture"},
             "coffee_table": {"region": "center_area", "support": "", "confidence": 0.9, "category": "furniture"},
             "basket": {"region": "corner", "support": "floor", "confidence": 0.75},

@@ -3,9 +3,14 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
-from clients.qwen_client import QwenClient
+from clients.qwen_client import QwenClient, QwenClientError
 from perception.json_utils import parse_json_from_text
-from perception.prompts import EXTRACTOR_SYSTEM_PROMPT, PROMPT_VERSION, build_extraction_prompt
+from perception.prompts import (
+    EXTRACTOR_SYSTEM_PROMPT,
+    PROMPT_VERSION,
+    build_extraction_prompt,
+    build_vision_extraction_prompt,
+)
 
 
 REQUIRED_EXTRACTION_KEYS = [
@@ -33,14 +38,16 @@ class VLMExtractor:
         self.response_summary_path = response_summary_path
         self.fallback_used = False
         self.last_parse_summary: Dict[str, Any] = {}
+        self.last_input_mode = "text"
+        self.last_parse_success = False
+        self.last_call_success = False
 
-    def extract(self, observation: str, task: str) -> Dict[str, Any]:
+    def extract(self, observation: str | Dict[str, Any], task: str) -> Dict[str, Any]:
         self.fallback_used = False
-        messages = [
-            {"role": "system", "content": EXTRACTOR_SYSTEM_PROMPT},
-            {"role": "user", "content": build_extraction_prompt(observation, task)},
-        ]
-        raw_text = self.client.chat(messages)
+        self.last_parse_success = False
+        self.last_call_success = False
+        raw_text, observation_text, input_mode = self._call_model(observation, task)
+        self.last_call_success = True
         raw_update: Dict[str, Any]
         parsed_ok = False
         parse_error = ""
@@ -51,9 +58,28 @@ class VLMExtractor:
             parse_error = str(exc)
             self.fallback_used = True
             self._save_raw_output(raw_text)
-            raw_update = fallback_minimal_extraction(observation, note=parse_error)
-        self._save_response_summary(raw_text, raw_update, parsed_ok, parse_error)
+            raw_update = fallback_minimal_extraction(observation_text, note=parse_error)
+        self.last_parse_success = parsed_ok
+        self._save_response_summary(raw_text, raw_update, parsed_ok, parse_error, input_mode)
         return normalize_extraction(raw_update)
+
+    def _call_model(self, observation: str | Dict[str, Any], task: str) -> tuple[str, str, str]:
+        if isinstance(observation, dict) and observation.get("image_path"):
+            self.last_input_mode = "vision"
+            observation_text = str(observation.get("text", ""))
+            prompt = build_vision_extraction_prompt(observation_text, task)
+            if not hasattr(self.client, "chat_vision"):
+                raise QwenClientError("Configured client does not support vision chat completions.")
+            return self.client.chat_vision(str(observation["image_path"]), prompt), observation_text, "vision"
+
+        self.last_input_mode = "text"
+        observation_text = str(observation)
+        messages = [
+            {"role": "system", "content": EXTRACTOR_SYSTEM_PROMPT},
+            {"role": "user", "content": build_extraction_prompt(observation_text, task)},
+        ]
+        chat_text = getattr(self.client, "chat_text", self.client.chat)
+        return chat_text(messages), observation_text, "text"
 
     def _save_raw_output(self, raw_text: str) -> None:
         if self.debug_output_path is None:
@@ -67,10 +93,12 @@ class VLMExtractor:
         raw_update: Dict[str, Any],
         parsed_ok: bool,
         parse_error: str,
+        input_mode: str,
     ) -> None:
         top_level_keys = sorted(raw_update.keys()) if isinstance(raw_update, dict) else []
         summary = {
             "prompt_version": PROMPT_VERSION,
+            "input_mode": input_mode,
             "raw_chars": len(raw_text),
             "parsed_ok": parsed_ok,
             "fallback_used": self.fallback_used,
@@ -236,6 +264,7 @@ def fallback_minimal_extraction(observation: str, note: str = "") -> Dict[str, A
     ]
     return {
         "rooms": [room] if room != "unknown" else [],
+        "topology": [],
         "objects": objects,
         "relations": [],
         "states": [],
