@@ -9,12 +9,12 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
         "frontiers": [{"target": "door", "status": "closed", "confidence": 0.8}],
         "visible_objects": ["bed", "pillow", "book", "lamp", "chair", "door"],
         "object_hints": {
-            "bed": {"region": "bed_area", "support": "", "confidence": 0.95},
+            "bed": {"region": "bed_area", "support": "", "confidence": 0.95, "category": "furniture"},
             "pillow": {"region": "bed_area", "support": "bed", "confidence": 0.9},
             "book": {"region": "bed_area", "support": "bed", "confidence": 0.9},
             "lamp": {"region": "bedside_area", "support": "bedside_surface", "confidence": 0.8},
-            "chair": {"region": "bed_area", "support": "", "confidence": 0.9},
-            "door": {"region": "exit", "support": "", "confidence": 0.9},
+            "chair": {"region": "bed_area", "support": "", "confidence": 0.9, "category": "furniture"},
+            "door": {"region": "exit", "support": "", "confidence": 0.9, "category": "door"},
         },
         "task": "Find the book and place it on the chair.",
         "observation": (
@@ -40,7 +40,7 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
         "frontiers": [{"target": "door", "status": "locked", "confidence": 0.85}],
         "visible_objects": ["door", "key_hook", "mat", "console_table"],
         "object_hints": {
-            "door": {"region": "exit", "support": "", "confidence": 0.9},
+            "door": {"region": "exit", "support": "", "confidence": 0.9, "category": "door"},
             "key_hook": {"region": "wall", "support": "", "confidence": 0.8},
             "mat": {"region": "floor", "support": "floor", "confidence": 0.8},
             "console_table": {"region": "entry_area", "support": "", "confidence": 0.8},
@@ -62,8 +62,8 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
         "visible_objects": ["cup", "drawer", "counter", "sink"],
         "object_hints": {
             "cup": {"region": "counter_area", "support": "counter", "confidence": 0.9},
-            "drawer": {"region": "cabinet_area", "support": "", "confidence": 0.85},
-            "counter": {"region": "counter_area", "support": "", "confidence": 0.9},
+            "drawer": {"region": "cabinet_area", "support": "", "confidence": 0.85, "category": "container"},
+            "counter": {"region": "counter_area", "support": "", "confidence": 0.9, "category": "surface"},
             "sink": {"region": "sink_area", "support": "", "confidence": 0.8},
         },
         "task": "Place the cup in the drawer.",
@@ -88,7 +88,15 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
         "object_hints": {
             "loose_screw": {"region": "desk_area", "support": "desk", "confidence": 0.75},
             "coin": {"region": "desk_area", "support": "desk", "confidence": 0.85},
-            "desk": {"region": "desk_area", "support": "", "confidence": 0.9},
+            "screwdriver": {
+                "region": "",
+                "support": "",
+                "confidence": 0.0,
+                "category": "tool",
+                "status": "unknown",
+                "state": "unavailable",
+            },
+            "desk": {"region": "desk_area", "support": "", "confidence": 0.9, "category": "furniture"},
             "lamp": {"region": "desk_area", "support": "desk", "confidence": 0.8},
         },
         "task": "Tighten the loose screw with a suitable tool.",
@@ -113,8 +121,8 @@ MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
         "visible_objects": ["remote", "sofa", "coffee_table", "basket"],
         "object_hints": {
             "remote": {"region": "sofa_area", "support": "sofa", "confidence": 0.9},
-            "sofa": {"region": "sofa_area", "support": "", "confidence": 0.9},
-            "coffee_table": {"region": "center_area", "support": "", "confidence": 0.9},
+            "sofa": {"region": "sofa_area", "support": "", "confidence": 0.9, "category": "furniture"},
+            "coffee_table": {"region": "center_area", "support": "", "confidence": 0.9, "category": "furniture"},
             "basket": {"region": "corner", "support": "floor", "confidence": 0.75},
         },
         "task": "Move the remote to the coffee table.",

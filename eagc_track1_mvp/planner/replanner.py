@@ -12,20 +12,14 @@ class Replanner:
 
         exception_type = exception.get("type", "unknown_exception")
 
-        if exception_type == "object_relocated" or object_name == "book":
-            mark_object_location_unknown(world_model, "book", reason)
-            recovery_actions = [
-                "search(bed)",
-                "search(under_pillow)",
-                "search(beside_bed)",
-                "search(chair)",
-                "pick_up(book)",
-                "place_on(book, chair)",
-            ]
+        if exception_type == "object_relocated":
+            recovery_actions = _search_actions_for_object(world_model, object_name)
+            mark_object_location_unknown(world_model, object_name, reason)
+            recovery_actions.extend([f"pick_up({object_name})", _resume_place_action(world_model, object_name)])
             recovery_subgoals = [
-                "Mark the book location as unknown.",
+                f"Mark the {object_name} location as unknown.",
                 "Search likely nearby locations.",
-                "Resume the original place-on-chair task after finding the book.",
+                "Resume the original task after finding the relocated object.",
             ]
         elif exception_type == "door_locked":
             recovery_actions = ["search(key_hook)", "search(under_mat)", "unlock(door)", "open(door)"]
@@ -64,3 +58,44 @@ class Replanner:
             }
         )
         return plan
+
+
+def _search_actions_for_object(world_model: Dict[str, Any], object_name: str) -> list[str]:
+    candidates: list[str] = []
+    obj = _find_object(world_model, object_name)
+    location = obj.get("location", {}) if obj else {}
+    if isinstance(location, dict):
+        for key in ["support", "region", "room"]:
+            value = location.get(key)
+            if value:
+                candidates.append(str(value))
+
+    for relation in world_model.get("relations", []):
+        if not isinstance(relation, dict):
+            continue
+        if relation.get("subject") == object_name and relation.get("object"):
+            candidates.append(str(relation["object"]))
+
+    actions = []
+    for candidate in candidates:
+        action = f"search({candidate})"
+        if action not in actions:
+            actions.append(action)
+    return actions or ["search(visible_area)"]
+
+
+def _resume_place_action(world_model: Dict[str, Any], object_name: str) -> str:
+    for plan in world_model.get("plans", []):
+        if not isinstance(plan, dict):
+            continue
+        for action in plan.get("actions", []):
+            if action.startswith(f"place_on({object_name},"):
+                return action
+    return f"place_on({object_name}, chair)"
+
+
+def _find_object(world_model: Dict[str, Any], object_name: str) -> Dict[str, Any] | None:
+    for obj in world_model.get("objects", []):
+        if isinstance(obj, dict) and (obj.get("name") == object_name or obj.get("id") == object_name):
+            return obj
+    return None

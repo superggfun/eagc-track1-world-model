@@ -1,5 +1,5 @@
 import re
-from typing import Iterable, List
+from typing import Iterable, List, Tuple
 
 
 ACTION_PATTERNS = {
@@ -25,3 +25,14 @@ def is_valid_action(action: str) -> bool:
 
 def invalid_actions(actions: Iterable[str]) -> List[str]:
     return [action for action in actions if not is_valid_action(action)]
+
+
+def parse_action(action: str) -> Tuple[str, List[str]]:
+    match = re.match(r"^([a-z_]+)\((.*)\)$", action.strip())
+    if not match:
+        return action, []
+    name = match.group(1)
+    args_text = match.group(2).strip()
+    if not args_text:
+        return name, []
+    return name, [arg.strip() for arg in args_text.split(",")]

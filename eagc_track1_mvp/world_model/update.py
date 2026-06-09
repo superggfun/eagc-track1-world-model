@@ -3,8 +3,18 @@ from typing import Any, Dict, Iterable, List
 
 
 def apply_extraction(world_model: Dict[str, Any], extraction: Dict[str, Any]) -> Dict[str, Any]:
-    for key in ["rooms", "objects", "relations", "states", "affordances", "uncertainty"]:
-        world_model[key] = merge_unique(world_model.get(key, []), extraction.get(key, []))
+    world_model["rooms"] = merge_unique(world_model.get("rooms", []), extraction.get("rooms", []))
+    world_model["objects"] = upsert_objects(world_model.get("objects", []), extraction.get("objects", []))
+    world_model["relations"] = upsert_relations(
+        world_model.get("relations", []), extraction.get("relations", [])
+    )
+    world_model["states"] = upsert_states(world_model.get("states", []), extraction.get("states", []))
+    world_model["affordances"] = merge_affordances(
+        world_model.get("affordances", []), extraction.get("affordances", [])
+    )
+    world_model["uncertainty"] = merge_unique(
+        world_model.get("uncertainty", []), extraction.get("uncertainty", [])
+    )
     return world_model
 
 
@@ -37,6 +47,34 @@ def apply_environment_context(world_model: Dict[str, Any], env_packet: Dict[str,
         location["status"] = location.get("status") or "known"
         location["confidence"] = float(hint.get("confidence", location.get("confidence", 0.75)))
         obj["location"] = location
+        if hint.get("category"):
+            obj["category"] = hint["category"]
+
+    known_names = {
+        obj.get("name")
+        for obj in world_model.get("objects", [])
+        if isinstance(obj, dict) and obj.get("name")
+    }
+    for name, hint in object_hints.items():
+        if name in known_names:
+            continue
+        status = hint.get("status", "inferred")
+        upsert_object(
+            world_model,
+            {
+                "id": slug(name),
+                "name": name,
+                "category": hint.get("category", "inferred_support"),
+                "location": {
+                    "room": current_room if status != "unknown" else "",
+                    "region": hint.get("region", ""),
+                    "support": hint.get("support", ""),
+                    "status": status,
+                    "confidence": float(hint.get("confidence", 0.5)),
+                },
+                "state": hint.get("state", "inferred"),
+            },
+        )
     return world_model
 
 
@@ -49,6 +87,21 @@ def update_agent_state(
     state["mode"] = mode
     if last_action.startswith("pick_up(") and result == "success":
         state["holding"] = last_action.removeprefix("pick_up(").removesuffix(")")
+    return world_model
+
+
+def upsert_object(world_model: Dict[str, Any], obj: Dict[str, Any]) -> Dict[str, Any]:
+    world_model["objects"] = upsert_objects(world_model.get("objects", []), [obj])
+    return world_model
+
+
+def upsert_state(world_model: Dict[str, Any], state: Dict[str, Any]) -> Dict[str, Any]:
+    world_model["states"] = upsert_states(world_model.get("states", []), [state])
+    return world_model
+
+
+def upsert_relation(world_model: Dict[str, Any], relation: Dict[str, Any]) -> Dict[str, Any]:
+    world_model["relations"] = upsert_relations(world_model.get("relations", []), [relation])
     return world_model
 
 
@@ -73,9 +126,7 @@ def mark_object_location_unknown(
         for state in world_model.get("states", [])
         if not (state.get("entity") == object_name and state.get("attribute") == "location")
     ]
-    world_model.setdefault("states", []).append(
-        {"entity": object_name, "attribute": "location", "value": "unknown"}
-    )
+    upsert_state(world_model, {"entity": object_name, "attribute": "location", "value": "unknown"})
     world_model.setdefault("uncertainty", []).append(
         {"item": object_name, "reason": reason, "level": "high"}
     )
@@ -103,10 +154,78 @@ def merge_unique(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:
     return merged
 
 
+def upsert_objects(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:
+    merged = [item for item in existing if isinstance(item, dict)]
+    for item in incoming:
+        if not isinstance(item, dict):
+            continue
+        key = _object_key(item)
+        for index, current in enumerate(merged):
+            if _object_key(current) == key:
+                merged[index] = {**current, **item}
+                break
+        else:
+            merged.append(dict(item))
+    return merged
+
+
+def upsert_states(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:
+    merged = [item for item in existing if isinstance(item, dict)]
+    for item in incoming:
+        if not isinstance(item, dict):
+            continue
+        key = (item.get("entity"), item.get("attribute"))
+        for index, current in enumerate(merged):
+            if (current.get("entity"), current.get("attribute")) == key:
+                merged[index] = {**current, **item}
+                break
+        else:
+            merged.append(dict(item))
+    return merged
+
+
+def upsert_relations(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:
+    merged = [item for item in existing if isinstance(item, dict)]
+    for item in incoming:
+        if not isinstance(item, dict):
+            continue
+        key = (item.get("subject"), item.get("relation"), item.get("object"))
+        for index, current in enumerate(merged):
+            if (current.get("subject"), current.get("relation"), current.get("object")) == key:
+                merged[index] = {**current, **item}
+                break
+        else:
+            merged.append(dict(item))
+    return merged
+
+
+def merge_affordances(existing: List[Any], incoming: Iterable[Any]) -> List[Any]:
+    merged = [item for item in existing if isinstance(item, dict)]
+    for item in incoming:
+        if not isinstance(item, dict):
+            continue
+        obj = item.get("object")
+        actions = list(item.get("actions", [])) if isinstance(item.get("actions"), list) else []
+        for current in merged:
+            if current.get("object") == obj:
+                current_actions = current.setdefault("actions", [])
+                for action in actions:
+                    if action not in current_actions:
+                        current_actions.append(action)
+                break
+        else:
+            merged.append({"object": obj, "actions": actions})
+    return merged
+
+
 def _fingerprint(item: Any) -> str:
     if isinstance(item, dict):
         return repr(sorted(item.items()))
     return repr(item)
+
+
+def _object_key(obj: Dict[str, Any]) -> str:
+    return str(obj.get("id") or obj.get("name") or slug(str(obj)))
 
 
 def _known_location(room: str) -> Dict[str, Any]:

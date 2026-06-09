@@ -3,11 +3,17 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
-from planner.action_schema import is_valid_action
+from planner.action_schema import is_valid_action, parse_action
 
 
 RELATION_STATUSES = {"active", "stale", "inferred", "uncertain"}
 LOCATION_RELATIONS = {"on", "inside", "under", "near", "beside", "at"}
+PLACEHOLDER_ARGS = {"object", "target", "thing", "item", "entity"}
+ALLOWED_SYMBOLIC_REGIONS = {"visible_area", "under_mat", "agent_hand", "next_room"}
+PICKUP_BLOCKED_CATEGORIES = {"furniture", "room", "door", "container", "surface", "inferred_support"}
+INTERACTIVE_NAMES = {"door", "drawer", "cabinet", "container", "box"}
+INTERACTIVE_CATEGORIES = {"door", "drawer", "container", "furniture", "inferred_support"}
+SUPPORT_CATEGORIES = {"furniture", "container", "surface", "inferred_support"}
 
 
 def validate(path: Path) -> List[str]:
@@ -29,9 +35,10 @@ def validate(path: Path) -> List[str]:
     errors.extend(_validate_topology(data.get("topology")))
     errors.extend(_validate_locations(objects))
     errors.extend(_validate_relations(data.get("relations", []), object_names, objects))
-    errors.extend(_validate_actions(data))
+    errors.extend(_validate_actions(data, objects))
     errors.extend(_validate_recovery_links(data))
     errors.extend(_validate_object_relocated(data, objects))
+    errors.extend(_validate_exception_state_effects(data))
     return errors
 
 
@@ -112,20 +119,19 @@ def _validate_relations(relations: Any, object_names: Set[str], objects: Any) ->
     return errors
 
 
-def _validate_actions(data: Dict[str, Any]) -> List[str]:
+def _validate_actions(data: Dict[str, Any], objects: Any) -> List[str]:
     errors: List[str] = []
+    context = _action_context(data, objects)
     for plan_index, plan in enumerate(data.get("plans", [])):
         if not isinstance(plan, dict):
             continue
         for action in plan.get("actions", []):
-            if not is_valid_action(action):
-                errors.append(f"plans[{plan_index}] contains invalid action: {action}")
+            errors.extend(_validate_action(action, context, f"plans[{plan_index}]"))
     for affordance in data.get("affordances", []):
         if not isinstance(affordance, dict):
             continue
         for action in affordance.get("actions", []):
-            if not is_valid_action(action):
-                errors.append(f"affordance for {affordance.get('object')} has invalid action: {action}")
+            errors.extend(_validate_action(action, context, f"affordance for {affordance.get('object')}"))
     return errors
 
 
@@ -170,6 +176,117 @@ def _validate_object_relocated(data: Dict[str, Any], objects: Any) -> List[str]:
         if not any(isinstance(action, str) and action.startswith("search(") for action in recovery_actions):
             errors.append(f"object_relocated for {object_name} must include recovery search actions.")
     return errors
+
+
+def _validate_exception_state_effects(data: Dict[str, Any]) -> List[str]:
+    errors: List[str] = []
+    states = data.get("states", [])
+    for item in data.get("exceptions", []):
+        if not isinstance(item, dict) or not isinstance(item.get("exception"), dict):
+            continue
+        exception = item["exception"]
+        exception_type = exception.get("type")
+        obj = exception.get("object")
+        if exception_type == "door_locked":
+            if not _has_state(states, obj, "lock_state", "locked") and not _has_state(states, obj, "status", "locked"):
+                errors.append("door_locked exception must record a locked state.")
+        elif exception_type == "target_container_unavailable":
+            if not _has_state(states, obj, "availability", "unavailable"):
+                errors.append("target_container_unavailable exception must record unavailable state.")
+        elif exception_type == "tool_substitution":
+            substitute = exception.get("substitute")
+            if not substitute:
+                errors.append("tool_substitution exception must include substitute.")
+            if not _has_state(states, "task", "substitute_tool", substitute):
+                errors.append("tool_substitution must record substitute_tool state.")
+    return errors
+
+
+def _validate_action(action: str, context: Dict[str, Any], source: str) -> List[str]:
+    errors: List[str] = []
+    if not is_valid_action(action):
+        return [f"{source} contains invalid action: {action}"]
+
+    action_name, args = parse_action(action)
+    for arg in args:
+        if arg in PLACEHOLDER_ARGS:
+            errors.append(f"{source} action {action} uses generic placeholder argument: {arg}")
+        if arg not in context["known_args"]:
+            errors.append(f"{source} action {action} references unknown argument: {arg}")
+
+    objects_by_name = context["objects_by_name"]
+    if action_name == "pick_up" and args:
+        obj = objects_by_name.get(args[0])
+        category = str(obj.get("category", "")) if obj else ""
+        if category in PICKUP_BLOCKED_CATEGORIES or args[0] in {"door", "drawer"}:
+            errors.append(f"{source} action {action} tries to pick up non-portable object.")
+    elif action_name in {"open", "unlock", "close"} and args:
+        obj = objects_by_name.get(args[0])
+        category = str(obj.get("category", "")) if obj else ""
+        if args[0] not in INTERACTIVE_NAMES and category not in INTERACTIVE_CATEGORIES:
+            errors.append(f"{source} action {action} targets an object without interactive affordance.")
+    elif action_name == "place_on" and len(args) == 2:
+        target = objects_by_name.get(args[1])
+        if target is None:
+            errors.append(f"{source} action {action} target does not exist.")
+        else:
+            category = str(target.get("category", ""))
+            support_actions = context["affordance_actions"].get(args[1], set())
+            if category not in SUPPORT_CATEGORIES and not any(a.startswith("place_on(") for a in support_actions):
+                errors.append(f"{source} action {action} target is not a known support surface.")
+    return errors
+
+
+def _action_context(data: Dict[str, Any], objects: Any) -> Dict[str, Any]:
+    objects_by_name: Dict[str, Dict[str, Any]] = {}
+    known_args = set(ALLOWED_SYMBOLIC_REGIONS)
+    regions = set()
+    if isinstance(objects, list):
+        for obj in objects:
+            if not isinstance(obj, dict):
+                continue
+            for key in ["id", "name"]:
+                if obj.get(key):
+                    known_args.add(str(obj[key]))
+                    objects_by_name[str(obj[key])] = obj
+            location = obj.get("location")
+            if isinstance(location, dict):
+                for key in ["room", "region", "support"]:
+                    value = location.get(key)
+                    if value:
+                        known_args.add(str(value))
+                        regions.add(str(value))
+
+    for node in data.get("topology", []):
+        if not isinstance(node, dict):
+            continue
+        if node.get("room"):
+            known_args.add(str(node["room"]))
+        for frontier in node.get("frontiers", []):
+            if isinstance(frontier, dict) and frontier.get("target"):
+                known_args.add(str(frontier["target"]))
+
+    affordance_actions: Dict[str, set[str]] = {}
+    for affordance in data.get("affordances", []):
+        if isinstance(affordance, dict) and affordance.get("object"):
+            affordance_actions[str(affordance["object"])] = set(affordance.get("actions", []))
+
+    return {
+        "known_args": known_args | regions,
+        "objects_by_name": objects_by_name,
+        "affordance_actions": affordance_actions,
+    }
+
+
+def _has_state(states: Any, entity: str, attribute: str, value: Any) -> bool:
+    if not isinstance(states, list):
+        return False
+    for state in states:
+        if not isinstance(state, dict):
+            continue
+        if state.get("entity") == entity and state.get("attribute") == attribute and state.get("value") == value:
+            return True
+    return False
 
 
 def _object_names(objects: Any) -> Set[str]:

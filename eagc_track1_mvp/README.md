@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.3 semantic world model consistency.
+Current version: v0.3.1 semantic correctness fixes.
 
 The demo loop:
 
@@ -91,6 +91,14 @@ The semantic consistency validator checks relation endpoints, structured locatio
 
 The episode log validator checks JSONL validity, required fields, increasing steps, audit event coverage, and recovery after a failed `pick_up(book)`.
 
+Run all mock episodes with:
+
+```powershell
+python tests/smoke_test_all_mock_episodes.py
+```
+
+The smoke test runs all five mock episodes, validates each output, and archives per-episode artifacts under `outputs/smoke/`.
+
 ## Mock Episodes
 
 Select the active scenario with `episode_id` in `config.yaml`.
@@ -145,6 +153,12 @@ unlock(object)
 substitute_tool(old_tool, new_tool)
 wait()
 ```
+
+## v0.3.1 Notes
+
+v0.3.1 replaces generic list merging with entity-aware upserts for objects, states, relations, and affordances. Successful actions now update world-model effects, including held objects, placement relations, open/close state, and lock state. Execution exceptions also write queryable state updates, such as locked doors, unavailable containers, and tool substitution records.
+
+Generated output files are ignored by `.gitignore`; `outputs/.gitkeep` keeps the output directory in the repository.
 
 ## Adapter Layout
 

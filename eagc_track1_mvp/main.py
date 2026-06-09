@@ -8,6 +8,7 @@ from logging_utils.episode_logger import EpisodeLogger
 from perception.vlm_extractor import VLMExtractor
 from planner.replanner import Replanner
 from planner.rule_planner import RulePlanner
+from world_model.action_effects import apply_action_effect, apply_exception_effect
 from world_model.store import WorldModelStore
 from world_model.update import apply_environment_context, update_agent_state
 
@@ -97,6 +98,8 @@ def run_demo() -> None:
     step = 4
     for action in planner.next_actions(plan):
         result = executor.execute(action)
+        if result.get("success", False):
+            apply_action_effect(world_model, action, result, step)
         update_agent_state(
             world_model,
             step=step,
@@ -115,6 +118,7 @@ def run_demo() -> None:
         step += 1
 
         if not result.get("success", False):
+            apply_exception_effect(world_model, result, step)
             logger.log(
                 step=step,
                 event_type="execution_exception",

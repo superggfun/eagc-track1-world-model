@@ -245,7 +245,7 @@ def _normalize_affordance_action(obj: str, action: Any) -> str:
     if text.startswith("close"):
         return f"close({_slug(obj)})"
     if text.startswith("place"):
-        return f"place_on(object, {_slug(obj)})"
+        return ""
     if text.startswith("search"):
         return f"search({_slug(obj)})"
     if text.startswith("locate"):
