@@ -7,3 +7,8 @@ use_mock_llm: false
 output_dir: outputs
 max_recovery_steps: 6
 oracle_metadata_mode: false
+track1_budgets:
+  exploration_steps: 12
+  planning_steps: 3
+  execution_steps: 50
+  max_recovery_steps: 8

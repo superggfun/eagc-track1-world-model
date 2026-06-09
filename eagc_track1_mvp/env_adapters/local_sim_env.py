@@ -216,8 +216,9 @@ class LocalSimEnv(BaseEnvAdapter):
         self.doors: Dict[str, Dict[str, Any]] = {}
         self.last_action_result: Dict[str, Any] = {}
         self.book_relocated = False
+        self.task_visible = True
 
-    def reset(self) -> Dict[str, Any]:
+    def reset(self, reveal_task: bool = True) -> Dict[str, Any]:
         self.step_count = 0
         self.current_room = str(self.episode["start_room"])
         self.holding = None
@@ -227,6 +228,7 @@ class LocalSimEnv(BaseEnvAdapter):
         self.doors = deepcopy(DOORS)
         self.last_action_result = {}
         self.book_relocated = False
+        self.task_visible = reveal_task
 
         if self.episode_id == "local-door-locked-route":
             self.doors["kitchen_door"]["locked"] = True
@@ -236,13 +238,20 @@ class LocalSimEnv(BaseEnvAdapter):
             self.objects["drawer"]["state"] = "unavailable"
         return self.observe()
 
-    def observe(self) -> Dict[str, Any]:
+    def reveal_task(self) -> Dict[str, Any]:
+        self.task_visible = True
+        return self.observe()
+
+    def observe(self, reveal_task: bool | None = None) -> Dict[str, Any]:
+        if reveal_task is not None:
+            self.task_visible = reveal_task
         visible_objects = self._visible_object_names()
         visible_frontiers = self._visible_frontiers()
         text = self._render_text(visible_objects, visible_frontiers)
+        task = self.task if self.task_visible else ""
         return {
             "episode_id": self.episode_id,
-            "task": self.task,
+            "task": task,
             "observation": text,
             "text": text,
             "source": "local_sim",
@@ -306,8 +315,6 @@ class LocalSimEnv(BaseEnvAdapter):
     def _navigate_to(self, target: str, action: str) -> Dict[str, Any]:
         if target in self.objects:
             obj = self.objects[target]
-            if not obj.get("available", True):
-                return self._failure(action, "object_unavailable", target, f"{target} is unavailable.")
             target_room = str(obj.get("room", self.current_room))
             self.current_room = target_room
         elif target in TOPOLOGY:
@@ -543,12 +550,13 @@ class LocalSimEnv(BaseEnvAdapter):
                 object_parts.append(f"{name} is visible")
         frontiers = ", ".join(f"{item['target']} via {item['via']} ({item['status']})" for item in visible_frontiers)
         held = self.holding or "none"
+        task_text = f" Task: {self.task}" if self.task_visible else ""
         return (
             f"Room: {self.current_room}. Visible objects: {', '.join(visible_objects)}. "
             f"Observed facts: {'; '.join(object_parts)}. "
             f"Visible frontiers: {frontiers or 'none'}. Agent holding: {held}. "
-            f"Visited rooms: {', '.join(sorted(self.visited_rooms))}. "
-            f"Task: {self.task}"
+            f"Visited rooms: {', '.join(sorted(self.visited_rooms))}."
+            f"{task_text}"
         )
 
     def _agent_state(self) -> Dict[str, Any]:

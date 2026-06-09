@@ -19,7 +19,9 @@ from perception.prompts import PROMPT_VERSION
 from perception.vlm_extractor import VLMExtractor
 from planner.replanner import Replanner
 from planner.rule_planner import RulePlanner
+from scoring.track1_score import compute_track1_score, write_track1_score
 from task_evaluator.task_evaluator import evaluate_task_status
+from track1_runner import Track1ProcedureRunner
 from validators.validate_episode_log import validate as validate_episode_log
 from validators.validate_semantic_consistency import validate as validate_semantic_consistency
 from validators.validate_task_status import validate as validate_task_status
@@ -35,12 +37,28 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 
 def load_config(path: Path) -> Dict[str, Any]:
     config: Dict[str, Any] = {}
+    current_section: str | None = None
     for line in path.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
+        if not line.strip() or line.lstrip().startswith("#"):
             continue
+        if line.startswith((" ", "\t")) and current_section:
+            stripped_child = line.strip()
+            if ":" not in stripped_child:
+                continue
+            child_key, child_value = stripped_child.split(":", 1)
+            section = config.setdefault(current_section, {})
+            if isinstance(section, dict):
+                section[child_key.strip()] = _parse_scalar(child_value.strip())
+            continue
+        stripped = line.strip()
         key, value = stripped.split(":", 1)
-        config[key.strip()] = _parse_scalar(value.strip())
+        key = key.strip()
+        if value.strip() == "":
+            config[key] = {}
+            current_section = key
+        else:
+            config[key] = _parse_scalar(value.strip())
+            current_section = None
     return config
 
 
@@ -70,6 +88,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image-path", help="Local image path for --vision runs.")
     parser.add_argument("--image-dir", help="Local image directory for --env visual_sequence.")
     parser.add_argument("--max-steps", type=int, help="Maximum visual sequence frames to process.")
+    parser.add_argument(
+        "--track1-procedure",
+        action="store_true",
+        help="Run the official-style Track 1 phase procedure for LocalSim.",
+    )
     return parser.parse_args()
 
 
@@ -86,6 +109,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         image_path=None,
         image_dir=None,
         max_steps=None,
+        track1_procedure=False,
     )
     config = load_config(PROJECT_ROOT / "config.yaml")
     output_root = _resolve_output_path(str(config.get("output_dir", "outputs")))
@@ -109,6 +133,10 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
     use_mock_llm = bool(args.use_mock_llm or config.get("use_mock_llm", False))
     oracle_metadata_mode = bool(config.get("oracle_metadata_mode", False))
     max_recovery_steps = int(config.get("max_recovery_steps", 6))
+    track1_procedure = bool(getattr(args, "track1_procedure", False))
+    track1_budgets = config.get("track1_budgets", {})
+    if not isinstance(track1_budgets, dict):
+        track1_budgets = {}
     started_wall = datetime.now(timezone.utc)
     started = time.perf_counter()
     run_id = args.run_id or _default_run_id(started_wall)
@@ -149,6 +177,89 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             env = LocalSimEnv(episode_id)
         else:
             env = MockEnv(episode_id)
+        if track1_procedure:
+            if env_name != "local_sim" or not isinstance(env, LocalSimEnv):
+                raise ValueError("--track1-procedure currently requires --env local_sim.")
+            logger = EpisodeLogger(episode_log_path)
+            store = WorldModelStore(world_model_path)
+            client = create_client(config, use_mock_llm, qwen_calls_path)
+            extractor = VLMExtractor(
+                client,
+                debug_output_path=output_dir / "debug_qwen_raw.txt",
+                response_summary_path=qwen_response_summary_path,
+            )
+            runner = Track1ProcedureRunner(
+                env=env,
+                extractor=extractor,
+                store=store,
+                logger=logger,
+                output_dir=output_dir,
+                budgets=track1_budgets,
+            )
+            result = runner.run_episode(episode_id)
+            audit = build_run_audit(
+                config=config,
+                run_id=run_id,
+                episode_id=episode_id,
+                output_dir=output_dir,
+                use_mock_llm=use_mock_llm,
+                started_wall=started_wall,
+                latency_seconds=time.perf_counter() - started,
+                client=client,
+                fallback_used=extractor.fallback_used,
+                debug_raw_path=output_dir / "debug_qwen_raw.txt",
+                world_model_path=world_model_path,
+                episode_log_path=episode_log_path,
+                validation_status=validation_status,
+                prompt_version=PROMPT_VERSION,
+                qwen_response_summary_path=qwen_response_summary_path,
+                env_name=env_name,
+                scene=scene,
+                vision_mode=False,
+                image_path=None,
+                vision_call_success=False,
+                vision_parse_success=False,
+                simulator_frame_path=None,
+                simulator_metadata_path=None,
+                ai2thor_start_success=False,
+                ai2thor_error_message="",
+                oracle_metadata_mode=oracle_metadata_mode,
+                frame_count=0,
+                image_dir=None,
+                processed_frames=[],
+            )
+            audit.update(result["audit_updates"])
+            audit["track1_score_path"] = str(result["track1_score_path"])
+            audit["track1_total_score"] = result["track1_score"]["total_score"]
+            write_run_audit(audit_path, audit)
+            if args.validate:
+                validation_status = run_validators(
+                    world_model_path,
+                    episode_log_path,
+                    audit_path,
+                    False,
+                    env_name,
+                    track1_procedure=True,
+                )
+                audit["validation_status"] = validation_status
+                score = compute_track1_score(
+                    json.loads(world_model_path.read_text(encoding="utf-8")),
+                    read_episode_rows(episode_log_path),
+                    audit,
+                    validation_status=validation_status,
+                )
+                score_path = Path(audit["track1_score_path"])
+                write_track1_score(score_path, score)
+                audit["track1_total_score"] = score["total_score"]
+                write_run_audit(audit_path, audit)
+            write_latest_artifacts(output_root, world_model_path, episode_log_path, audit_path)
+            print(f"Demo complete. Wrote {world_model_path}")
+            print(f"Demo complete. Wrote {episode_log_path}")
+            print(f"Run audit written to {audit_path}")
+            print(f"Track 1 score written to {audit.get('track1_score_path')}")
+            if args.validate and isinstance(validation_status, dict) and not validation_status.get("passed", False):
+                raise SystemExit(1)
+            return audit
         initial = env.reset()
         ai2thor_start_success = bool(getattr(env, "start_success", False))
         if env_name == "ai2thor":
@@ -171,16 +282,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
             notes=f"Task: {initial['task']}",
         )
 
-        if use_mock_llm:
-            client = MockLLMClient(model="deterministic-mock-llm", base_url="mock://local")
-        else:
-            client = QwenClient(
-                base_url=str(config["base_url"]),
-                model=str(config["model"]),
-                temperature=float(config["temperature"]),
-                max_tokens=int(config["max_tokens"]),
-                audit_path=qwen_calls_path,
-            )
+        client = create_client(config, use_mock_llm, qwen_calls_path)
         extractor = VLMExtractor(
             client,
             debug_output_path=output_dir / "debug_qwen_raw.txt",
@@ -512,6 +614,7 @@ def run_validators(
     audit_path: Path | None = None,
     vision_mode: bool = False,
     env_name: str = "mock",
+    track1_procedure: bool = False,
 ) -> Dict[str, Any]:
     checks = {
         "world_model": validate_world_model(world_model_path),
@@ -533,6 +636,10 @@ def run_validators(
         from validators.validate_local_sim_run import validate as validate_local_sim_run
 
         checks["local_sim"] = validate_local_sim_run(world_model_path, audit_path, episode_log_path)
+    if track1_procedure and audit_path is not None:
+        from validators.validate_track1_procedure import validate as validate_track1_procedure
+
+        checks["track1_procedure"] = validate_track1_procedure(world_model_path, audit_path, episode_log_path)
     status = {
         name: {"passed": not errors, "errors": errors}
         for name, errors in checks.items()
@@ -544,6 +651,28 @@ def run_validators(
             for error in item["errors"]:
                 print(f"- {error}")
     return status
+
+
+def create_client(config: Dict[str, Any], use_mock_llm: bool, qwen_calls_path: Path) -> QwenClient | MockLLMClient:
+    if use_mock_llm:
+        return MockLLMClient(model="deterministic-mock-llm", base_url="mock://local")
+    return QwenClient(
+        base_url=str(config["base_url"]),
+        model=str(config["model"]),
+        temperature=float(config["temperature"]),
+        max_tokens=int(config["max_tokens"]),
+        audit_path=qwen_calls_path,
+    )
+
+
+def read_episode_rows(path: Path) -> list[Dict[str, Any]]:
+    rows: list[Dict[str, Any]] = []
+    if not path.exists():
+        return rows
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            rows.append(json.loads(line))
+    return rows
 
 
 def run_visual_sequence_episode(

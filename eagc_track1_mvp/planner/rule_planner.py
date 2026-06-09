@@ -34,11 +34,16 @@ class RulePlanner:
             actions = ["navigate_to(door)", "open(door)", "navigate_to(next_room)"]
             subgoals = ["Reach the door.", "Open the door.", "Move through the doorway."]
         elif "cup" in task_lower and "drawer" in task_lower:
-            actions = ["locate(cup)", "pick_up(cup)", "place_in(cup, drawer)"]
-            subgoals = ["Find the cup.", "Acquire the cup.", "Place the cup in the drawer."]
+            actions = ["navigate_to(cup)", "locate(cup)", "pick_up(cup)", "place_in(cup, drawer)"]
+            subgoals = ["Navigate to the cup.", "Acquire the cup.", "Place the cup in the drawer."]
         elif "screw" in task_lower:
-            actions = ["locate(screwdriver)", "pick_up(screwdriver)", "use_tool(screwdriver, loose_screw)"]
-            subgoals = ["Find a suitable tool.", "Acquire the tool.", "Use the tool on the loose screw."]
+            actions = [
+                "navigate_to(screwdriver)",
+                "locate(screwdriver)",
+                "pick_up(screwdriver)",
+                "use_tool(screwdriver, loose_screw)",
+            ]
+            subgoals = ["Navigate to a suitable tool.", "Acquire the tool.", "Use the tool on the loose screw."]
         elif "remote" in task_lower and "coffee table" in task_lower:
             actions = ["locate(remote)", "pick_up(remote)", "place_on(remote, coffee_table)"]
             subgoals = ["Find the remote.", "Acquire the remote.", "Place it on the coffee table."]

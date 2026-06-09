@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.6 LocalSim Track 1 MVP environment.
+Current version: v0.7 official-style Track 1 procedure runner.
 
 The demo loop:
 
@@ -47,6 +47,11 @@ episode_id: mock-bedroom-relocated
 use_mock_llm: false
 output_dir: outputs
 oracle_metadata_mode: false
+track1_budgets:
+  exploration_steps: 12
+  planning_steps: 3
+  execution_steps: 50
+  max_recovery_steps: 8
 ```
 
 The client currently supports text-only chat completions through:
@@ -132,6 +137,14 @@ python main.py --env local_sim --episode-id local-container-unavailable --max-st
 python main.py --env local_sim --episode-id local-tool-substitution --max-steps 50 --validate
 ```
 
+Run the official-style Track 1 procedure on LocalSim:
+
+```powershell
+python main.py --env local_sim --episode-id local-explore-book-relocated --track1-procedure --validate
+```
+
+This mode separates exploration, task reception, planning, execution/recovery, and final evaluation. The task is hidden during exploration and is only written into the world model after `exploration_end`.
+
 Sequence frames should be local files named in deterministic order:
 
 ```text
@@ -172,6 +185,7 @@ python -m validators.validate_vision_extraction outputs/world_model.json outputs
 python -m validators.validate_ai2thor_smoke outputs/world_model.json outputs/run_audit.json
 python -m validators.validate_visual_sequence outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 python -m validators.validate_local_sim_run outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
+python -m validators.validate_track1_procedure outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 ```
 
 The world model validator checks required top-level fields, object identity fields, unique object IDs, plans, and structured exception recovery records.
@@ -221,6 +235,13 @@ python tests/smoke_test_local_sim_episodes.py --mode real
 python tests/smoke_test_local_sim_episodes.py --mode mock
 ```
 
+Run all official-style Track 1 procedure episodes:
+
+```powershell
+python tests/smoke_test_track1_procedure.py --mode real
+python tests/smoke_test_track1_procedure.py --mode mock
+```
+
 The mock smoke test runs all five mock episodes, validates each output, and archives per-episode artifacts under `outputs/smoke/`.
 It also prints and checks each episode's final `task_status`.
 
@@ -233,6 +254,12 @@ outputs/run_audit.json
 ```
 
 It records the episode id, model, base URL, mock LLM flag, run timing, Qwen call counts, output paths, and validation status.
+
+For `--track1-procedure`, it also records phase budgets, phase step usage, `phase_budget_exceeded`, `track1_score_path`, and `track1_total_score`. The local score is written to:
+
+```text
+outputs/track1_score.json
+```
 
 Real vLLM calls are appended to:
 
@@ -372,6 +399,19 @@ local-tool-substitution           -> complete
 ```
 
 The v0.6 mainline is LocalSimEnv. It does not depend on AI2-THOR, ProcTHOR, or an official EAGC runtime/API.
+
+## v0.7 Notes
+
+v0.7 adds `Track1ProcedureRunner`, an official-style local Track 1 procedure runner:
+
+- `track1_runner/procedure_runner.py` runs `exploration_start -> exploration_end -> task_received -> planning -> execution_start -> task_evaluation`.
+- Exploration uses only `explore`, `navigate_to`, and `search` actions, and LocalSim hides the natural-language task until task reception.
+- `config.yaml` includes `track1_budgets` for exploration, planning, execution, and recovery step budgets.
+- `scoring/track1_score.py` writes `track1_score.json` with a 100-point heuristic score over task completion, world-model quality, exception recovery, efficiency, and robustness/safety.
+- `validators/validate_track1_procedure.py` checks phase order, task leakage, exploration action constraints, required audit fields, and score file validity.
+- `tests/smoke_test_track1_procedure.py --mode real` runs all LocalSim episodes through the procedure runner.
+
+This is an official-style local procedure, not the official EAGC runtime/API. `official_adapter.py` remains a reserved interface stub.
 
 ## AI2-THOR Experimental Notes
 
