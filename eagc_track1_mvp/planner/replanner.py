@@ -33,7 +33,11 @@ class Replanner:
             ]
         elif exception_type == "tool_substitution":
             substitute = exception.get("substitute", "alternative_tool")
-            recovery_actions = [f"substitute_tool({object_name}, {substitute})", f"pick_up({substitute})"]
+            recovery_actions = [
+                f"substitute_tool({object_name}, {substitute})",
+                f"pick_up({substitute})",
+                "use_tool(coin, loose_screw)",
+            ]
             recovery_subgoals = ["Confirm required tool is unavailable.", "Use a suitable substitute tool."]
         else:
             recovery_actions = ["wait()"]

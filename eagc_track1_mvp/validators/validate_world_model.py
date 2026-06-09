@@ -16,6 +16,7 @@ REQUIRED_FIELDS = [
     "uncertainty",
     "plans",
     "exceptions",
+    "task_status",
 ]
 
 

@@ -1,6 +1,7 @@
 from typing import Any, Dict, List
 
 from env_adapters.base import BaseEnvAdapter
+from planner.action_schema import parse_action
 
 
 MOCK_EPISODES: Dict[str, Dict[str, Any]] = {
@@ -155,10 +156,32 @@ class MockEnv(BaseEnvAdapter):
         self.episode = MOCK_EPISODES[episode_id]
         self.step_count = 0
         self.failed_once = False
+        self.holding: str | None = None
+        self.object_available: Dict[str, bool] = {}
+        self.object_locations: Dict[str, str] = {}
+        self.current_room = self.episode["room"]
+        self.door_locked = episode_id == "mock-hallway-door-locked"
+        self.door_open = False
+        self.drawer_available = episode_id != "mock-kitchen-container-unavailable"
 
     def reset(self) -> Dict[str, Any]:
         self.step_count = 0
         self.failed_once = False
+        self.holding = None
+        self.current_room = self.episode["room"]
+        self.door_locked = self.episode_id == "mock-hallway-door-locked"
+        self.door_open = False
+        self.drawer_available = self.episode_id != "mock-kitchen-container-unavailable"
+        self.object_available = {
+            name: self.episode["object_hints"].get(name, {}).get("status") != "unknown"
+            for name in self.episode["object_hints"]
+        }
+        for name in self.episode["visible_objects"]:
+            self.object_available[name] = True
+        self.object_locations = {
+            name: self.episode["object_hints"].get(name, {}).get("support", "")
+            for name in self.episode["object_hints"]
+        }
         return {
             "episode_id": self.episode_id,
             "task": self.episode["task"],
@@ -179,21 +202,106 @@ class MockEnv(BaseEnvAdapter):
 
     def step(self, action: str) -> Dict[str, Any]:
         self.step_count += 1
-        fail_action = self.episode.get("fail_action", "")
+        action_name, args = parse_action(action)
 
-        if fail_action and action == fail_action and not self.failed_once:
+        if action_name in {"locate", "search"}:
+            return self._handle_locate_or_search(action, args)
+        if action_name == "pick_up" and len(args) == 1:
+            return self._handle_pick_up(action, args[0])
+        if action_name == "place_on" and len(args) == 2:
+            return self._handle_place_on(action, args[0], args[1])
+        if action_name == "open" and len(args) == 1:
+            return self._handle_open(action, args[0])
+        if action_name == "unlock" and len(args) == 1:
+            return self._handle_unlock(action, args[0])
+        if action_name == "navigate_to" and len(args) == 1:
+            return self._handle_navigate(action, args[0])
+        if action_name == "enter" and len(args) == 1:
+            return self._handle_navigate(action, args[0])
+        if action_name == "substitute_tool" and len(args) == 2:
+            return self._success(action, f"Substituted {args[0]} with {args[1]}.")
+        if action_name == "use_tool" and len(args) == 2:
+            return self._handle_use_tool(action, args[0], args[1])
+        if action_name == "wait":
+            return self._success(action, "Waited and kept the scene stable.")
+        return self._success(action, f"Executed {action}.")
+
+    def _handle_locate_or_search(self, action: str, args: List[str]) -> Dict[str, Any]:
+        if self.episode_id == "mock-bedroom-relocated" and args:
+            self.object_available["book"] = True
+            self.object_locations["book"] = args[0]
+        return self._success(action, f"Executed {action}.")
+
+    def _handle_pick_up(self, action: str, obj: str) -> Dict[str, Any]:
+        if self.episode_id == "mock-bedroom-relocated" and obj == "book" and not self.failed_once:
             self.failed_once = True
-            return {
-                "success": False,
-                "result": "failure",
-                "message": self.episode["failure_message"],
-                "exception": dict(self.episode["exception"]),
-                "observation": self.episode["failure_observation"],
-            }
+            self.object_available["book"] = False
+            return self._failure()
+        if self.episode_id == "mock-study-tool-substitution" and obj == "screwdriver":
+            self.failed_once = True
+            return self._failure()
+        if not self.object_available.get(obj, False):
+            return self._failure_message(action, f"Attempted {action}, but {obj} is not available.")
+        self.holding = obj
+        self.object_locations[obj] = "agent_hand"
+        return self._success(action, f"Executed {action}.")
 
+    def _handle_place_on(self, action: str, obj: str, target: str) -> Dict[str, Any]:
+        if target == "drawer" and not self.drawer_available:
+            self.failed_once = True
+            return self._failure()
+        if self.holding != obj:
+            return self._failure_message(action, f"Attempted {action}, but the agent is not holding {obj}.")
+        self.holding = None
+        self.object_locations[obj] = target
+        return self._success(action, f"Executed {action}.")
+
+    def _handle_open(self, action: str, obj: str) -> Dict[str, Any]:
+        if obj == "door" and self.door_locked:
+            self.failed_once = True
+            return self._failure()
+        if obj == "door":
+            self.door_open = True
+        return self._success(action, f"Executed {action}.")
+
+    def _handle_unlock(self, action: str, obj: str) -> Dict[str, Any]:
+        if obj == "door":
+            self.door_locked = False
+        return self._success(action, f"Executed {action}.")
+
+    def _handle_navigate(self, action: str, target: str) -> Dict[str, Any]:
+        if target == "next_room" and not self.door_open:
+            return self._failure_message(action, "Cannot navigate to next_room because the door is not open.")
+        self.current_room = target
+        return self._success(action, f"Executed {action}.")
+
+    def _handle_use_tool(self, action: str, tool: str, target: str) -> Dict[str, Any]:
+        if self.holding != tool:
+            return self._failure_message(action, f"Attempted {action}, but the agent is not holding {tool}.")
+        return self._success(action, f"Executed {action}.")
+
+    def _success(self, action: str, message: str) -> Dict[str, Any]:
         return {
             "success": True,
             "result": "success",
-            "message": f"Executed {action}.",
+            "message": message,
+            "observation": self.episode["observation"],
+        }
+
+    def _failure(self) -> Dict[str, Any]:
+        return {
+            "success": False,
+            "result": "failure",
+            "message": self.episode["failure_message"],
+            "exception": dict(self.episode["exception"]),
+            "observation": self.episode["failure_observation"],
+        }
+
+    def _failure_message(self, action: str, message: str) -> Dict[str, Any]:
+        return {
+            "success": False,
+            "result": "failure",
+            "message": message,
+            "exception": {"type": "constraint_violation", "object": action, "state": "blocked"},
             "observation": self.episode["observation"],
         }

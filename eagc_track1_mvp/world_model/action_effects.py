@@ -21,6 +21,18 @@ def apply_action_effect(
         upsert_state(world_model, {"entity": args[0], "attribute": "lock_state", "value": "unlocked"})
     elif action_name == "close" and len(args) == 1:
         upsert_state(world_model, {"entity": args[0], "attribute": "status", "value": "closed"})
+    elif action_name == "navigate_to" and len(args) == 1:
+        _apply_navigation(world_model, args[0])
+    elif action_name == "enter" and len(args) == 1:
+        _apply_navigation(world_model, args[0])
+    elif action_name == "substitute_tool" and len(args) == 2:
+        upsert_state(world_model, {"entity": "task", "attribute": "active_tool", "value": args[1]})
+        upsert_state(
+            world_model,
+            {"entity": "task", "attribute": "substituted", "value": f"{args[0]}->{args[1]}"},
+        )
+    elif action_name == "use_tool" and len(args) == 2:
+        _apply_use_tool(world_model, args[0], args[1])
     return world_model
 
 
@@ -104,6 +116,23 @@ def _apply_place_on(world_model: Dict[str, Any], obj_name: str, target: str, ste
     )
     remove_state(world_model, obj_name, "held_by", "agent")
     upsert_state(world_model, {"entity": obj_name, "attribute": "location", "value": target})
+
+
+def _apply_navigation(world_model: Dict[str, Any], target: str) -> None:
+    if target == "door":
+        upsert_state(world_model, {"entity": "agent", "attribute": "near", "value": "door"})
+        return
+    world_model.setdefault("agent_state", {})["current_room"] = target
+    upsert_state(world_model, {"entity": "agent", "attribute": "location", "value": target})
+    if target == "next_room":
+        upsert_state(world_model, {"entity": "agent", "attribute": "entered", "value": "next_room"})
+
+
+def _apply_use_tool(world_model: Dict[str, Any], tool: str, target: str) -> None:
+    upsert_state(world_model, {"entity": target, "attribute": "status", "value": "completed_or_modified"})
+    if target == "loose_screw" and tool == "coin":
+        upsert_state(world_model, {"entity": "loose_screw", "attribute": "tightened_by", "value": "coin"})
+        upsert_state(world_model, {"entity": "loose_screw", "attribute": "status", "value": "tightened"})
 
 
 def _find_object(world_model: Dict[str, Any], name: str) -> Dict[str, Any] | None:

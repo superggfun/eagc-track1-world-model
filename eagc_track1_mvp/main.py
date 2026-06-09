@@ -13,8 +13,10 @@ from logging_utils.episode_logger import EpisodeLogger
 from perception.vlm_extractor import VLMExtractor
 from planner.replanner import Replanner
 from planner.rule_planner import RulePlanner
+from task_evaluator.task_evaluator import evaluate_task_status
 from validators.validate_episode_log import validate as validate_episode_log
 from validators.validate_semantic_consistency import validate as validate_semantic_consistency
+from validators.validate_task_status import validate as validate_task_status
 from validators.validate_world_model import validate as validate_world_model
 from world_model.action_effects import apply_action_effect, apply_exception_effect
 from world_model.store import WorldModelStore
@@ -127,7 +129,8 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         replanner = Replanner()
 
         step = 4
-        for action in planner.next_actions(plan):
+        plan_actions = planner.next_actions(plan)
+        for action_index, action in enumerate(plan_actions):
             result = executor.execute(action)
             if result.get("success", False):
                 apply_action_effect(world_model, action, result, step)
@@ -172,7 +175,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                     notes="Exception handled; recovery plan created.",
                 )
                 step += 1
-                step = execute_recovery_plan(
+                step, recovery_complete = execute_recovery_plan(
                     recovery_plan=recovery_plan,
                     executor=executor,
                     world_model=world_model,
@@ -180,8 +183,26 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                     start_step=step,
                     max_recovery_steps=max_recovery_steps,
                 )
+                if recovery_complete:
+                    current_status = update_task_status(world_model, initial["task"], initial["episode_id"])
+                    if current_status["status"] not in {"complete", "blocked_recovered"}:
+                        step = execute_resume_actions(
+                            actions=plan_actions[action_index + 1 :],
+                            executor=executor,
+                            world_model=world_model,
+                            logger=logger,
+                            start_step=step,
+                        )
                 break
 
+        final_status = update_task_status(world_model, initial["task"], initial["episode_id"])
+        logger.log(
+            step=step,
+            event_type="task_status",
+            model_update=world_model["task_status"],
+            result=final_status["status"],
+            notes=final_status["reason"],
+        )
         store.save()
         if args.validate:
             validation_status = run_validators(world_model_path, episode_log_path)
@@ -231,6 +252,7 @@ def run_validators(world_model_path: Path, episode_log_path: Path) -> Dict[str, 
         "world_model": validate_world_model(world_model_path),
         "semantic_consistency": validate_semantic_consistency(world_model_path),
         "episode_log": validate_episode_log(episode_log_path),
+        "task_status": validate_task_status(world_model_path, episode_log_path),
     }
     status = {
         name: {"passed": not errors, "errors": errors}
@@ -252,7 +274,7 @@ def execute_recovery_plan(
     logger: EpisodeLogger,
     start_step: int,
     max_recovery_steps: int,
-) -> int:
+) -> tuple[int, bool]:
     step = start_step
     actions = list(recovery_plan.get("actions", []))[:max_recovery_steps]
     for action in actions:
@@ -286,7 +308,7 @@ def execute_recovery_plan(
                 notes=result.get("message", ""),
             )
             update_agent_state(world_model, step=step, last_action=action, mode="recovery_failed")
-            return step + 1
+            return step + 1, False
 
     logger.log(
         step=step,
@@ -296,7 +318,62 @@ def execute_recovery_plan(
         notes=f"Executed {len(actions)} recovery actions.",
     )
     update_agent_state(world_model, step=step, last_action="", mode="recovery_complete")
-    return step + 1
+    return step + 1, True
+
+
+def execute_resume_actions(
+    actions: list[str],
+    executor: ActionExecutor,
+    world_model: Dict[str, Any],
+    logger: EpisodeLogger,
+    start_step: int,
+) -> int:
+    step = start_step
+    for action in actions:
+        result = executor.execute(action)
+        if result.get("success", False):
+            apply_action_effect(world_model, action, result, step)
+        update_agent_state(
+            world_model,
+            step=step,
+            last_action=action,
+            mode="resuming" if result.get("success", False) else "resume_failed",
+            result=result.get("result", ""),
+        )
+        logger.log(
+            step=step,
+            event_type="resume_action",
+            observation=result.get("observation", ""),
+            action=action,
+            result=result.get("result", ""),
+            notes=result.get("message", ""),
+        )
+        step += 1
+        if not result.get("success", False):
+            logger.log(
+                step=step,
+                event_type="resume_failed",
+                observation=result.get("observation", ""),
+                model_update=result.get("exception", {}),
+                action=action,
+                result=result.get("result", ""),
+                notes=result.get("message", ""),
+            )
+            update_agent_state(world_model, step=step, last_action=action, mode="resume_failed")
+            return step + 1
+    return step
+
+
+def update_task_status(world_model: Dict[str, Any], task: str, episode_id: str) -> Dict[str, Any]:
+    evaluated = evaluate_task_status(task, world_model, episode_id)
+    status = {
+        "status": evaluated["task_status"],
+        "success": evaluated["success"],
+        "reason": evaluated["reason"],
+        "evidence": evaluated["evidence"],
+    }
+    world_model["task_status"] = status
+    return status
 
 
 def build_run_audit(

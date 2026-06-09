@@ -12,6 +12,8 @@ ACTION_PATTERNS = {
     "close": re.compile(r"^close\([a-zA-Z0-9_]+\)$"),
     "unlock": re.compile(r"^unlock\([a-zA-Z0-9_]+\)$"),
     "substitute_tool": re.compile(r"^substitute_tool\([a-zA-Z0-9_]+,\s*[a-zA-Z0-9_]+\)$"),
+    "use_tool": re.compile(r"^use_tool\([a-zA-Z0-9_]+,\s*[a-zA-Z0-9_]+\)$"),
+    "enter": re.compile(r"^enter\([a-zA-Z0-9_]+\)$"),
     "wait": re.compile(r"^wait\(\)$"),
 }
 

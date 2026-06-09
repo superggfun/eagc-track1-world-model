@@ -25,6 +25,9 @@ AUDIT_EVENT_TYPES = {
     "recovery_action",
     "recovery_complete",
     "recovery_failed",
+    "resume_action",
+    "resume_failed",
+    "task_status",
 }
 
 
@@ -53,6 +56,7 @@ def validate(path: Path) -> List[str]:
     errors.extend(_validate_steps(rows))
     errors.extend(_validate_event_coverage(rows))
     errors.extend(_validate_exception_recovery(rows))
+    errors.extend(_validate_recovery_task_closure(rows))
     return errors
 
 
@@ -67,6 +71,25 @@ def _validate_steps(rows: List[Dict[str, Any]]) -> List[str]:
         if previous_step is not None and step <= previous_step:
             errors.append(f"Step values must be strictly increasing near row {index + 1}.")
         previous_step = step
+    return errors
+
+
+def _validate_recovery_task_closure(rows: List[Dict[str, Any]]) -> List[str]:
+    errors: List[str] = []
+    event_types = [row.get("event_type") for row in rows]
+    if "recovery_complete" not in event_types:
+        return errors
+    if "task_status" not in event_types:
+        errors.append("recovery_complete occurred but no final task_status event was logged.")
+        return errors
+
+    final_status = next((row for row in reversed(rows) if row.get("event_type") == "task_status"), {})
+    status = final_status.get("result")
+    if status not in {"complete", "blocked_recovered"} and "resume_action" not in event_types:
+        errors.append(
+            "recovery_complete occurred while task was not complete or blocked_recovered, "
+            "but no resume_action was logged."
+        )
     return errors
 
 

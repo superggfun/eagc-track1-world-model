@@ -27,4 +27,10 @@ def new_world_model(episode_id: str) -> Dict[str, Any]:
         "uncertainty": [],
         "plans": [],
         "exceptions": [],
+        "task_status": {
+            "status": "in_progress",
+            "success": False,
+            "reason": "",
+            "evidence": [],
+        },
     }

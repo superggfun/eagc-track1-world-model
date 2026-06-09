@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.4.1 closed-loop recovery and state consistency.
+Current version: v0.4.2 task completion evaluator and stateful mock environment.
 
 The demo loop:
 
@@ -138,6 +138,7 @@ python tests/smoke_test_all_mock_episodes.py --mode both
 ```
 
 The smoke test runs all five mock episodes, validates each output, and archives per-episode artifacts under `outputs/smoke/`.
+It also prints and checks each episode's final `task_status`.
 
 ## Run Audit
 
@@ -229,6 +230,21 @@ v0.4.1 executes recovery plans after replanning instead of stopping at plan gene
 Action effects now stale old active location relations before `pick_up` and `place_on`, clear stale `held_by=agent` state after placement, and keep `agent_state.holding` consistent with `agent_hand` support.
 
 Semantic and episode-log validators now check closed-loop recovery execution, single active location relation per object, location support consistency, and generic failure-to-replanning behavior.
+
+## v0.4.2 Notes
+
+v0.4.2 adds `TaskEvaluator`, writes `task_status` into `world_model.json`, and distinguishes completed tasks from fallback recovery such as `blocked_recovered` for unavailable containers.
+
+After recovery completes, `main.py` evaluates the task. If the task is still in progress, it resumes the original plan actions after the failed action. For example, the door-locked episode unlocks and opens the door, then resumes `navigate_to(next_room)`.
+
+`MockEnv` is now stateful: it tracks holding, object availability and locations, door lock/open state, drawer availability, and current room. This makes invalid actions fail instead of succeeding unconditionally.
+
+The action ontology now includes:
+
+```text
+use_tool(tool, target)
+enter(room)
+```
 
 ## Adapter Layout
 
