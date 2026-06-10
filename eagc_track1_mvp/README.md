@@ -2,7 +2,17 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.8.2 medium failure replay and recoverable door-locked planner repair.
+Current version: v0.8.4 technical report and demo package.
+
+Current stable tag: `v0.8.3-test-guardrails-frontier-exploration`
+
+Current status:
+
+- LocalSim Track 1 MVP
+- Real Qwen3.6 vLLM integration
+- Randomized LocalSim robustness evaluation
+- No training yet
+- ProcTHOR/AI2-THOR not integrated yet
 
 The demo loop:
 
@@ -73,6 +83,12 @@ Run a specific episode:
 ```powershell
 python main.py --episode-id mock-bedroom-relocated
 python main.py --episode-id mock-door-locked
+```
+
+Demo command recipes are collected in:
+
+```powershell
+docs/demo_commands.md
 ```
 
 Run with validators after the episode:
@@ -170,6 +186,14 @@ python tools/run_test_suite.py --tier targeted --seed 6 --difficulty medium
 python tools/run_test_suite.py --tier standard
 python tools/run_test_suite.py --tier full
 ```
+
+The fast tier compiles only source directories, equivalent to:
+
+```powershell
+python -m compileall clients env_adapters perception world_model planner executor logging_utils validators task_evaluator track1_runner scoring diagnostics tools tests
+```
+
+For documentation, README, report, demo command, and small script edits, run only the fast tier and any related report-generation script. Run `targeted` after core planner/replanner/task evaluator/LocalSim/validator changes. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
 
 Replay a single randomized LocalSim seed with diagnostics:
 
@@ -514,6 +538,21 @@ v0.8.3 adds test runtime guardrails and makes Track 1 exploration frontier-based
 - `tools/run_test_suite.py` provides `fast`, `targeted`, `standard`, and `full` test tiers.
 - `Track1ProcedureRunner` chooses exploration actions from observed frontiers/topology instead of hardcoded room names.
 - `validators/validate_track1_procedure.py` checks that exploration `navigate_to(room)` actions come from observed frontiers or discovered topology.
+
+## v0.8.4 Notes
+
+v0.8.4 adds a technical report and demo package:
+
+- `reports/v0.8.4_technical_report.md` summarizes the project overview, architecture, Track 1 procedure, world-model schema, evaluation setup, results, limitations, and next steps.
+- `reports/architecture_overview.md`, `reports/experiment_summary.md`, and `reports/limitations_and_next_steps.md` provide shorter reference docs.
+- `docs/demo_commands.md` lists fast, targeted, standard, random LocalSim, Track 1 procedure, and vision smoke demo commands.
+- `tools/generate_project_report.py` reads existing robustness summaries and git metadata, then regenerates the v0.8.4 technical report.
+
+Generate the report with:
+
+```powershell
+python tools/generate_project_report.py
+```
 
 ## v0.7.1 Notes
 

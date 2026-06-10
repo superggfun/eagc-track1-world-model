@@ -9,6 +9,22 @@ from typing import List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 GUARDRAILS = ["--episode-timeout-seconds", "600", "--max-qwen-calls-per-episode", "40"]
+SOURCE_DIRS = [
+    "clients",
+    "env_adapters",
+    "perception",
+    "world_model",
+    "planner",
+    "executor",
+    "logging_utils",
+    "validators",
+    "task_evaluator",
+    "track1_runner",
+    "scoring",
+    "diagnostics",
+    "tools",
+    "tests",
+]
 
 
 def main() -> int:
@@ -31,7 +47,7 @@ def main() -> int:
 
 def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
     py = sys.executable
-    compileall = [py, "-m", "compileall", "."]
+    compileall = [py, "-m", "compileall", *SOURCE_DIRS]
     smoke_mock = [py, "tests/smoke_test_all_mock_episodes.py", "--mode", "mock", "--all"]
     smoke_real = [py, "tests/smoke_test_all_mock_episodes.py", "--mode", "real", "--all", "--strict-real"]
     local_sim = [py, "tests/smoke_test_local_sim_episodes.py", "--mode", "real"]
@@ -122,4 +138,3 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
