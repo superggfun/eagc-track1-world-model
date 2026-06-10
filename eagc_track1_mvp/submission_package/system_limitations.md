@@ -1,0 +1,22 @@
+# System Limitations
+
+This project is a local MVP and should not be presented as a final official EAGC Track 1 system.
+
+Known limitations:
+
+- LocalSim is not official hidden evaluation.
+- LocalSim is a self-built environment and is simpler than realistic embodied simulators.
+- The visual-local hybrid module is symbolic and does not perform physical manipulation.
+- Physical actions in visual-only mode are intentionally unsupported.
+- AI2-THOR / ProcTHOR environment integration remains blocked and is not part of the validated path.
+- There is no trained student model.
+- No model fine-tuning or distillation has been performed.
+- Performance is not yet optimized.
+- No full benchmark-scale evaluation has been completed.
+- `local_heuristic_score` is a local debugging metric, not an official score.
+- Visual evidence depends on real Qwen vision extraction, so object/relation counts may vary across runs.
+- The source package is not a final Docker submission.
+
+Current safest claim:
+
+The system is a local Track 1 MVP and readiness baseline that demonstrates auditable world-model construction, planning, exception recovery, visual evidence reporting, and reproducible local testing.

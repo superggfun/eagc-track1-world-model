@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.10.2 standard test suite, demo snapshot, and report package.
+Current version: v0.10.3 pre-submission readiness package.
 
-Current stable tag: `v0.10.1-visual-evidence-reporting`
+Current stable tag: `v0.10.2-demo-report-package`
 
 Current status:
 
@@ -25,6 +25,20 @@ The demo loop:
 7. `Replanner` creates a recovery plan when an execution exception occurs.
 8. `EpisodeLogger` writes `outputs/episode_log.jsonl`.
 9. `validators/` checks output structure and auditability.
+
+## Pre-Submission Package
+
+The pre-submission readiness materials are in `submission_package/`:
+
+- `README_submission.md`
+- `technical_report_draft.md`
+- `training_resource_disclosure.md`
+- `reproducibility_statement.md`
+- `system_limitations.md`
+- `demo_commands.md`
+- `checklist.md`
+
+This package is for qualification-submission preparation, teacher review, and technical report drafting. It does not claim official EAGC results. LocalSim remains a self-built local environment, visual-local hybrid remains symbolic, and no model training has been performed.
 
 ## Requirements
 
