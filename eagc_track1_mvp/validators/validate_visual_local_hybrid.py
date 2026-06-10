@@ -45,9 +45,46 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
     if not isinstance(task_status, dict):
         errors.append("world_model.task_status must exist.")
     else:
-        for field in ["status", "success", "answer", "evidence"]:
+        for field in [
+            "status",
+            "success",
+            "answer",
+            "confidence",
+            "supporting_evidence",
+            "contradicting_evidence",
+            "missing_evidence",
+            "evidence_summary",
+            "queried_entities",
+            "queried_relations",
+            "evidence",
+        ]:
             if field not in task_status:
                 errors.append(f"visual task_status missing field: {field}")
+        if task_status.get("status") not in {"complete", "uncertain", "failed"}:
+            errors.append(f"visual task_status has invalid status: {task_status.get('status')!r}")
+        if task_status.get("status") == "complete" and not task_status.get("supporting_evidence"):
+            errors.append("complete visual task_status requires supporting_evidence.")
+        if task_status.get("status") == "uncertain" and not task_status.get("missing_evidence") and float(task_status.get("confidence", 0.0)) >= 0.6:
+            errors.append("uncertain visual task_status requires missing_evidence or confidence < 0.6.")
+
+    result_path_value = audit.get("visual_task_result_path")
+    if not result_path_value:
+        errors.append("run_audit.visual_task_result_path is required.")
+    else:
+        result_path = Path(str(result_path_value))
+        if not result_path.exists():
+            errors.append(f"visual_task_result_path does not exist: {result_path}")
+        else:
+            try:
+                result = json.loads(result_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                errors.append(f"visual_task_result_path is not valid JSON: {exc}")
+            else:
+                if isinstance(task_status, dict) and result.get("status") != task_status.get("status"):
+                    errors.append("visual_task_result.status does not match world_model.task_status.status.")
+                for field in ["supporting_evidence_count", "contradicting_evidence_count", "missing_evidence_count"]:
+                    if field not in audit:
+                        errors.append(f"run_audit missing field: {field}")
 
     task = str(audit.get("visual_task", "")).lower()
     if any(token in task for token in ["find", "identify", " is "]):

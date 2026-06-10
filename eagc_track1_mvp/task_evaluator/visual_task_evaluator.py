@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List
 
 
 RELATION_ALIASES = {
@@ -12,11 +12,12 @@ RELATION_ALIASES = {
     "under": {"under", "below"},
 }
 OBJECT_ALIASES = {
-    "book": ["book", "notebook", "booklet", "magazine"],
+    "book": ["book", "books", "notebook", "booklet", "magazine"],
     "laptop": ["laptop", "computer"],
-    "chair": ["chair", "armchair"],
+    "chair": ["chair", "armchair", "white_chair"],
     "bed": ["bed"],
 }
+ACTIVE_STATUSES = {"active"}
 
 
 def evaluate_visual_task(task: str, world_model: Dict[str, Any], confidence_threshold: float = 0.45) -> Dict[str, Any]:
@@ -28,50 +29,114 @@ def evaluate_visual_task(task: str, world_model: Dict[str, Any], confidence_thre
 
     if relation_query:
         subject, relation, target = relation_query
-        return _evaluate_relation(world_model, subject, relation, target)
+        return _evaluate_relation(task, world_model, subject, relation, target, confidence_threshold)
     if near_query:
         subject, target = near_query
-        return _evaluate_relation(world_model, subject, "near", target)
+        return _evaluate_relation(task, world_model, subject, "near", target, confidence_threshold)
     if identify:
-        return _evaluate_location(world_model, identify, confidence_threshold)
+        return _evaluate_location(task, world_model, identify, confidence_threshold)
     if find:
-        return _evaluate_find(world_model, find, confidence_threshold)
-    return _status(
-        "in_progress",
-        False,
-        f"Unsupported visual task form: {task}",
-        "The visual task evaluator could not classify this request.",
-        [],
+        return _evaluate_find(task, world_model, find, confidence_threshold)
+    return _result(
+        task=task,
+        status="failed",
+        success=False,
+        answer=f"Unsupported visual task form: {task}",
+        confidence=0.0,
+        supporting_evidence=[],
+        contradicting_evidence=[],
+        missing_evidence=[
+            _missing_evidence("task_form", task, "The visual task evaluator could not classify this request.")
+        ],
+        queried_entities=[],
+        queried_relations=[],
+        reason="unsupported_visual_task",
     )
 
 
-def _evaluate_find(world_model: Dict[str, Any], object_name: str, confidence_threshold: float) -> Dict[str, Any]:
+def _evaluate_find(
+    task: str,
+    world_model: Dict[str, Any],
+    object_name: str,
+    confidence_threshold: float,
+) -> Dict[str, Any]:
     obj = _find_object(world_model, object_name)
     if not obj:
-        return _status("in_progress", False, f"{object_name} not found.", f"I do not see {object_name}.", [])
-    confidence = _object_confidence(obj)
-    evidence = [f"object={obj.get('name')}", f"confidence={confidence}"]
-    if confidence >= confidence_threshold:
-        return _status(
-            "complete",
-            True,
-            f"{object_name} found as {obj.get('name')}.",
-            f"Found {obj.get('name')} in the visual world model.",
-            evidence,
+        return _result(
+            task=task,
+            status="failed",
+            success=False,
+            answer=f"I do not see {object_name}.",
+            confidence=0.0,
+            supporting_evidence=[],
+            contradicting_evidence=[],
+            missing_evidence=[_missing_evidence("object", object_name, "Target object is absent from world_model.objects.")],
+            queried_entities=[object_name],
+            queried_relations=[],
+            reason=f"{object_name} not found.",
         )
-    return _status(
-        "uncertain",
-        False,
-        f"{object_name} exists but confidence is low.",
-        f"{object_name} may be present, but confidence is below threshold.",
-        evidence,
+
+    confidence = _object_confidence(obj)
+    supporting = [_object_evidence(obj)]
+    if confidence >= confidence_threshold:
+        return _result(
+            task=task,
+            status="complete",
+            success=True,
+            answer=f"Found {obj.get('name') or object_name} in the visual world model.",
+            confidence=confidence,
+            supporting_evidence=supporting,
+            contradicting_evidence=[],
+            missing_evidence=[],
+            queried_entities=[object_name],
+            queried_relations=[],
+            reason=f"{object_name} found as {obj.get('name') or object_name}.",
+        )
+
+    return _result(
+        task=task,
+        status="uncertain",
+        success=False,
+        answer=f"{object_name} may be present, but confidence is below threshold.",
+        confidence=confidence,
+        supporting_evidence=supporting,
+        contradicting_evidence=[],
+        missing_evidence=[
+            _missing_evidence(
+                "object_confidence",
+                object_name,
+                f"Object confidence {confidence:.2f} is below threshold {confidence_threshold:.2f}.",
+            )
+        ],
+        queried_entities=[object_name],
+        queried_relations=[],
+        reason=f"{object_name} exists but confidence is low.",
     )
 
 
-def _evaluate_location(world_model: Dict[str, Any], object_name: str, confidence_threshold: float) -> Dict[str, Any]:
+def _evaluate_location(
+    task: str,
+    world_model: Dict[str, Any],
+    object_name: str,
+    confidence_threshold: float,
+) -> Dict[str, Any]:
     obj = _find_object(world_model, object_name)
     if not obj:
-        return _status("in_progress", False, f"{object_name} not found.", f"I cannot identify where {object_name} is.", [])
+        return _result(
+            task=task,
+            status="failed",
+            success=False,
+            answer=f"I cannot identify where {object_name} is.",
+            confidence=0.0,
+            supporting_evidence=[],
+            contradicting_evidence=[],
+            missing_evidence=[_missing_evidence("object", object_name, "Target object is absent from world_model.objects.")],
+            queried_entities=[object_name],
+            queried_relations=[],
+            reason=f"{object_name} not found.",
+        )
+
+    object_actual_name = str(obj.get("name") or object_name)
     location = obj.get("location", {})
     if not isinstance(location, dict):
         location = {}
@@ -79,80 +144,283 @@ def _evaluate_location(world_model: Dict[str, Any], object_name: str, confidence
     room = str(location.get("room") or "")
     status = str(location.get("status") or "")
     confidence = float(location.get("confidence", _object_confidence(obj)))
-    active_relation = _best_location_relation(world_model, str(obj.get("name") or object_name))
-    evidence = [
-        f"object={obj.get('name')}",
-        f"location.status={status}",
-        f"room={room or 'unknown'}",
-        f"support={support or 'unknown'}",
-        f"confidence={confidence}",
-    ]
+    supporting = [_object_evidence(obj)]
+    active_relation = _best_location_relation(world_model, object_actual_name)
     if active_relation:
-        evidence.append(
-            f"relation={active_relation.get('subject')} {active_relation.get('relation')} {active_relation.get('object')}"
+        supporting.append(_relation_evidence(active_relation, source="world_model.relations"))
+    missing = []
+    if not (support or room or active_relation):
+        missing.append(_missing_evidence("location", object_name, "No room, support, or active location relation is known."))
+    if status == "unknown":
+        missing.append(_missing_evidence("location_status", object_name, "Object location.status is unknown."))
+    if confidence < confidence_threshold:
+        missing.append(
+            _missing_evidence(
+                "location_confidence",
+                object_name,
+                f"Location confidence {confidence:.2f} is below threshold {confidence_threshold:.2f}.",
+            )
         )
-    if (support or room or active_relation) and status != "unknown" and confidence >= confidence_threshold:
-        answer = _location_answer(str(obj.get("name") or object_name), room, support, active_relation)
-        return _status("complete", True, answer, answer, evidence)
-    return _status(
-        "uncertain",
-        False,
-        f"{object_name} location is uncertain.",
-        f"I found {obj.get('name')}, but its location is uncertain.",
-        evidence,
+
+    if supporting and not missing:
+        answer = _location_answer(object_actual_name, room, support, active_relation)
+        return _result(
+            task=task,
+            status="complete",
+            success=True,
+            answer=answer,
+            confidence=confidence,
+            supporting_evidence=supporting,
+            contradicting_evidence=[],
+            missing_evidence=[],
+            queried_entities=[object_name],
+            queried_relations=["location"],
+            reason=answer,
+        )
+
+    return _result(
+        task=task,
+        status="uncertain",
+        success=False,
+        answer=f"I found {object_actual_name}, but its location is uncertain.",
+        confidence=confidence,
+        supporting_evidence=supporting,
+        contradicting_evidence=[],
+        missing_evidence=missing,
+        queried_entities=[object_name],
+        queried_relations=["location"],
+        reason=f"{object_name} location is uncertain.",
     )
 
 
-def _evaluate_relation(world_model: Dict[str, Any], subject: str, relation: str, target: str) -> Dict[str, Any]:
+def _evaluate_relation(
+    task: str,
+    world_model: Dict[str, Any],
+    subject: str,
+    relation: str,
+    target: str,
+    confidence_threshold: float,
+) -> Dict[str, Any]:
     subject_obj = _find_object(world_model, subject)
     target_obj = _find_object(world_model, target)
-    if not subject_obj or not target_obj:
-        missing = [name for name, obj in [(subject, subject_obj), (target, target_obj)] if not obj]
-        return _status(
-            "in_progress",
-            False,
-            f"Missing objects: {', '.join(missing)}.",
-            f"I cannot answer because {', '.join(missing)} is not in the visual world model.",
-            [],
+    queried_relation = f"{subject} {relation} {target}"
+    supporting: List[Dict[str, Any]] = []
+    missing: List[Dict[str, Any]] = []
+    contradicting: List[Dict[str, Any]] = []
+
+    if subject_obj:
+        supporting.append(_object_evidence(subject_obj))
+    else:
+        missing.append(_missing_evidence("object", subject, "Subject object is absent from world_model.objects."))
+    if target_obj:
+        supporting.append(_object_evidence(target_obj))
+    else:
+        missing.append(_missing_evidence("object", target, "Target object is absent from world_model.objects."))
+    if missing:
+        return _result(
+            task=task,
+            status="failed",
+            success=False,
+            answer=f"I cannot answer because required entities are missing: {', '.join(_missing_labels(missing))}.",
+            confidence=0.0,
+            supporting_evidence=supporting,
+            contradicting_evidence=[],
+            missing_evidence=missing,
+            queried_entities=[subject, target],
+            queried_relations=[queried_relation],
+            reason="missing_entities",
         )
+
     subject_name = str(subject_obj.get("name") or subject)
     target_name = str(target_obj.get("name") or target)
-    matched = _find_relation(world_model, subject_name, relation, target_name)
-    if not matched:
-        matched = _relation_from_location(subject_obj, subject_name, relation, target_name)
-    if matched:
-        evidence = [
-            f"relation={matched.get('subject')} {matched.get('relation')} {matched.get('object')}",
-            f"status={matched.get('status')}",
-            f"confidence={matched.get('confidence')}",
-        ]
-        if matched.get("status") in {"active", "inferred"} and float(matched.get("confidence", 0.0)) >= 0.45:
-            answer = f"Yes, {subject_name} is {matched.get('relation')} {target_name}."
-            return _status("complete", True, answer, answer, evidence)
-        return _status(
-            "uncertain",
-            False,
-            f"Relation is {matched.get('status')}.",
-            f"The relation between {subject_name} and {target_name} is uncertain or stale.",
-            evidence,
+    matched = _find_relation(world_model, subject_name, relation, target_name, require_active=False)
+    active_match = matched if matched and matched.get("status") in ACTIVE_STATUSES else None
+    if active_match and float(active_match.get("confidence", 0.0)) >= confidence_threshold:
+        relation_evidence = _relation_evidence(active_match, source="world_model.relations")
+        return _result(
+            task=task,
+            status="complete",
+            success=True,
+            answer=f"Yes, {subject_name} is {active_match.get('relation')} {target_name}.",
+            confidence=float(active_match.get("confidence", 0.0)),
+            supporting_evidence=supporting + [relation_evidence],
+            contradicting_evidence=[],
+            missing_evidence=[],
+            queried_entities=[subject, target],
+            queried_relations=[queried_relation],
+            reason="active_relation_found",
         )
-    return _status(
-        "uncertain",
-        False,
-        f"No active relation found for {subject} {relation} {target}.",
-        f"I found both objects, but not a reliable {relation} relation.",
-        [f"subject={subject_name}", f"target={target_name}"],
+
+    if matched:
+        if matched.get("status") in {"stale", "uncertain"}:
+            missing.append(
+                _missing_evidence(
+                    "active_relation",
+                    queried_relation,
+                    f"A matching relation exists but its status is {matched.get('status')}, not active.",
+                    related_content=matched,
+                )
+            )
+        else:
+            missing.append(
+                _missing_evidence(
+                    "relation_confidence",
+                    queried_relation,
+                    f"Matching relation confidence {float(matched.get('confidence', 0.0)):.2f} is below threshold.",
+                    related_content=matched,
+                )
+            )
+    else:
+        missing.append(
+            _missing_evidence(
+                "active_relation",
+                queried_relation,
+                "Both objects are present, but no explicit active relation supports the requested relation.",
+            )
+        )
+
+    contradicting = _contradicting_relations(world_model, subject_name, relation, target_name)
+    confidence = _aggregate_confidence(supporting, default=0.35)
+    answer = f"I cannot confirm that {subject_name} is {relation} {target_name} from the current visual world model."
+    return _result(
+        task=task,
+        status="uncertain",
+        success=False,
+        answer=answer,
+        confidence=confidence,
+        supporting_evidence=supporting,
+        contradicting_evidence=contradicting,
+        missing_evidence=missing,
+        queried_entities=[subject, target],
+        queried_relations=[queried_relation],
+        reason="relation_not_confirmed",
     )
 
 
-def _status(status: str, success: bool, reason: str, answer: str, evidence: List[str]) -> Dict[str, Any]:
+def _result(
+    *,
+    task: str,
+    status: str,
+    success: bool,
+    answer: str,
+    confidence: float,
+    supporting_evidence: List[Dict[str, Any]],
+    contradicting_evidence: List[Dict[str, Any]],
+    missing_evidence: List[Dict[str, Any]],
+    queried_entities: List[str],
+    queried_relations: List[str],
+    reason: str,
+) -> Dict[str, Any]:
+    confidence = max(0.0, min(1.0, float(confidence)))
+    summary = _evidence_summary(status, confidence, supporting_evidence, contradicting_evidence, missing_evidence)
+    all_evidence = supporting_evidence + contradicting_evidence + missing_evidence
     return {
+        "task": task,
         "status": status,
         "success": success,
         "reason": reason,
         "answer": answer,
-        "evidence": evidence,
+        "confidence": confidence,
+        "supporting_evidence": supporting_evidence,
+        "contradicting_evidence": contradicting_evidence,
+        "missing_evidence": missing_evidence,
+        "evidence_summary": summary,
+        "queried_entities": queried_entities,
+        "queried_relations": queried_relations,
+        "evidence": [_legacy_evidence_text(item) for item in all_evidence],
     }
+
+
+def _object_evidence(obj: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "type": "object",
+        "source": "world_model.objects",
+        "content": obj,
+        "frame_ids": _frame_ids(obj),
+        "confidence": _object_confidence(obj),
+    }
+
+
+def _relation_evidence(relation: Dict[str, Any], source: str = "world_model.relations") -> Dict[str, Any]:
+    return {
+        "type": "relation",
+        "source": source,
+        "content": relation,
+        "frame_ids": _frame_ids(relation),
+        "confidence": float(relation.get("confidence", 0.0)),
+    }
+
+
+def _missing_evidence(
+    missing_type: str,
+    label: str,
+    reason: str,
+    related_content: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    content: Dict[str, Any] = {"missing_type": missing_type, "label": label, "reason": reason}
+    if related_content:
+        content["related_content"] = related_content
+    return {
+        "type": "uncertainty",
+        "source": "visual_task_evaluator",
+        "content": content,
+        "frame_ids": _frame_ids(related_content or {}),
+        "confidence": 0.0,
+    }
+
+
+def _frame_ids(item: Dict[str, Any]) -> List[int]:
+    frame_values: List[int] = []
+    for key in ("frame_id", "frame_index", "observed_at_step", "last_observed_step"):
+        value = item.get(key)
+        if isinstance(value, int):
+            frame_values.append(value)
+    if isinstance(item.get("frame_ids"), list):
+        frame_values.extend(value for value in item["frame_ids"] if isinstance(value, int))
+    return sorted(set(frame_values))
+
+
+def _evidence_summary(
+    status: str,
+    confidence: float,
+    supporting: List[Dict[str, Any]],
+    contradicting: List[Dict[str, Any]],
+    missing: List[Dict[str, Any]],
+) -> str:
+    support_text = f"{len(supporting)} supporting"
+    contradiction_text = f"{len(contradicting)} contradicting"
+    missing_text = f"{len(missing)} missing"
+    if status == "complete":
+        return f"Complete with confidence {confidence:.2f}: {support_text} evidence item(s), no required evidence missing."
+    if status == "uncertain":
+        return (
+            f"Uncertain with confidence {confidence:.2f}: {support_text} evidence item(s), "
+            f"{contradiction_text} evidence item(s), and {missing_text} evidence item(s)."
+        )
+    return f"Failed with confidence {confidence:.2f}: {missing_text} evidence item(s)."
+
+
+def _legacy_evidence_text(evidence: Dict[str, Any]) -> str:
+    content = evidence.get("content", {})
+    if evidence.get("type") == "object" and isinstance(content, dict):
+        return f"object={content.get('name') or content.get('id')} confidence={evidence.get('confidence', 0.0)}"
+    if evidence.get("type") == "relation" and isinstance(content, dict):
+        return (
+            f"relation={content.get('subject')} {content.get('relation')} {content.get('object')} "
+            f"status={content.get('status')} confidence={evidence.get('confidence', 0.0)}"
+        )
+    if evidence.get("type") == "uncertainty" and isinstance(content, dict):
+        return f"missing={content.get('label')} reason={content.get('reason')}"
+    return str(content)
+
+
+def _missing_labels(missing: Iterable[Dict[str, Any]]) -> List[str]:
+    labels = []
+    for item in missing:
+        content = item.get("content", {})
+        if isinstance(content, dict):
+            labels.append(str(content.get("label", "unknown")))
+    return labels
 
 
 def _parse_find_object(task_lower: str) -> str:
@@ -201,6 +469,8 @@ def _find_object(world_model: Dict[str, Any], object_name: str) -> Dict[str, Any
         values = {_normalize_object(str(obj.get("name") or "")), _normalize_object(str(obj.get("id") or ""))}
         if values & normalized_candidates:
             return obj
+        if any(_matches_alias(value, normalized_candidates) for value in values):
+            return obj
     return None
 
 
@@ -215,16 +485,24 @@ def _best_location_relation(world_model: Dict[str, Any], subject: str) -> Dict[s
     for relation in world_model.get("relations", []):
         if not isinstance(relation, dict):
             continue
-        if relation.get("subject") == subject and relation.get("status") in {"active", "inferred"}:
+        if not _matches_alias(_normalize_object(str(relation.get("subject", ""))), {_normalize_object(subject)}):
+            continue
+        if relation.get("status") in ACTIVE_STATUSES:
             return relation
     return None
 
 
-def _find_relation(world_model: Dict[str, Any], subject: str, relation_name: str, target: str) -> Dict[str, Any] | None:
+def _find_relation(
+    world_model: Dict[str, Any],
+    subject: str,
+    relation_name: str,
+    target: str,
+    require_active: bool = True,
+) -> Dict[str, Any] | None:
     accepted_relations = RELATION_ALIASES.get(relation_name, {relation_name})
-    target_aliases = {_normalize_object(value) for value in OBJECT_ALIASES.get(target, [target])}
-    subject_aliases = {_normalize_object(value) for value in OBJECT_ALIASES.get(subject, [subject])}
-    best_stale = None
+    target_aliases = {_normalize_object(value) for value in OBJECT_ALIASES.get(_normalize_object(target), [target])}
+    subject_aliases = {_normalize_object(value) for value in OBJECT_ALIASES.get(_normalize_object(subject), [subject])}
+    best_non_active = None
     for relation in world_model.get("relations", []):
         if not isinstance(relation, dict):
             continue
@@ -234,32 +512,44 @@ def _find_relation(world_model: Dict[str, Any], subject: str, relation_name: str
             continue
         if relation.get("relation") not in accepted_relations:
             continue
-        if relation.get("status") in {"active", "inferred"}:
+        if relation.get("status") in ACTIVE_STATUSES:
             return relation
-        best_stale = best_stale or relation
-    return best_stale
+        best_non_active = best_non_active or relation
+    return None if require_active else best_non_active
 
 
-def _relation_from_location(
-    subject_obj: Dict[str, Any],
-    subject_name: str,
+def _contradicting_relations(
+    world_model: Dict[str, Any],
+    subject: str,
     relation_name: str,
-    target_name: str,
-) -> Dict[str, Any] | None:
-    location = subject_obj.get("location", {})
-    if not isinstance(location, dict):
-        return None
-    support = _normalize_object(str(location.get("support", "")))
-    target_aliases = {_normalize_object(value) for value in OBJECT_ALIASES.get(target_name, [target_name])}
-    if relation_name == "on" and _matches_alias(support, target_aliases):
-        return {
-            "subject": subject_name,
-            "relation": "on",
-            "object": target_name,
-            "status": location.get("status", "active") if location.get("status") != "unknown" else "uncertain",
-            "confidence": float(location.get("confidence", 0.5)),
-        }
-    return None
+    target: str,
+) -> List[Dict[str, Any]]:
+    accepted_relations = RELATION_ALIASES.get(relation_name, {relation_name})
+    subject_aliases = {_normalize_object(value) for value in OBJECT_ALIASES.get(_normalize_object(subject), [subject])}
+    target_aliases = {_normalize_object(value) for value in OBJECT_ALIASES.get(_normalize_object(target), [target])}
+    contradictions: List[Dict[str, Any]] = []
+    for relation in world_model.get("relations", []):
+        if not isinstance(relation, dict):
+            continue
+        if relation.get("status") not in ACTIVE_STATUSES:
+            continue
+        if relation.get("relation") not in accepted_relations:
+            continue
+        rel_subject = _normalize_object(str(relation.get("subject", "")))
+        rel_object = _normalize_object(str(relation.get("object", "")))
+        if not _matches_alias(rel_subject, subject_aliases):
+            continue
+        if _matches_alias(rel_object, target_aliases):
+            continue
+        contradictions.append(_relation_evidence(relation, source="world_model.relations"))
+    return contradictions
+
+
+def _aggregate_confidence(evidence: List[Dict[str, Any]], default: float = 0.0) -> float:
+    values = [float(item.get("confidence", 0.0)) for item in evidence if item.get("confidence") is not None]
+    if not values:
+        return default
+    return sum(values) / len(values)
 
 
 def _matches_alias(value: str, aliases: set[str]) -> bool:

@@ -97,6 +97,7 @@ Use the visual sequence world model for symbolic planning and task evaluation:
 ```powershell
 python main.py --env visual_sequence --image-dir assets/test_sequences/bedroom_sequence --max-frames 3 --visual-local-hybrid --visual-task "Find the laptop." --validate
 python -m validators.validate_visual_local_hybrid outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
+python -m validators.validate_visual_task_evidence outputs/visual_task_result.json outputs/run_audit.json
 python tests/smoke_test_visual_local_hybrid.py --image-dir assets/test_sequences/bedroom_sequence --max-frames 3
 ```
 
@@ -108,3 +109,13 @@ The smoke test runs:
 - `Find the chair near the bed.`
 
 This path performs symbolic plan-level execution only. It does not perform real physical manipulation, does not represent ProcTHOR or the official runtime, and does not train a model.
+
+v0.10.1 adds evidence-based task explanations. Each run writes `visual_task_result.json` with:
+
+- `supporting_evidence`
+- `contradicting_evidence`
+- `missing_evidence`
+- `evidence_summary`
+- `confidence`
+
+For relation questions, the evaluator only returns `complete` when an explicit active relation supports the query. If the objects are visible but the relation is missing or stale, the result is `uncertain` with missing evidence. This is a conservative visual judgment, not a failed run.

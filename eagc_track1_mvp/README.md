@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.10 visual-local hybrid Track 1 prototype.
+Current version: v0.10.1 visual task evidence and uncertainty reporting.
 
-Current stable tag: `v0.9.1-visual-sequence-smoke-validated`
+Current stable tag: `v0.10-visual-local-hybrid-prototype`
 
 Current status:
 
@@ -151,6 +151,7 @@ Run the visual-local hybrid prototype:
 ```powershell
 python main.py --env visual_sequence --image-dir assets/test_sequences/bedroom_sequence --max-frames 3 --visual-local-hybrid --visual-task "Find the laptop." --validate
 python -m validators.validate_visual_local_hybrid outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
+python -m validators.validate_visual_task_evidence outputs/visual_task_result.json outputs/run_audit.json
 python tests/smoke_test_visual_local_hybrid.py --image-dir assets/test_sequences/bedroom_sequence --max-frames 3
 ```
 
@@ -642,6 +643,18 @@ v0.10 adds a visual-local hybrid Track 1 prototype:
 - `SymbolicVisualExecutor` performs plan-level checks against the visual world model. It does not call a physical environment step and does not pretend that `pick_up` or `place_on` succeeded.
 - `visual_task_evaluator.py` supports find-object, identify-location, relation-query, and near-relation tasks.
 - `run_audit.json` records `visual_local_hybrid`, `visual_task`, `visual_task_status`, `symbolic_action_count`, `unsupported_physical_action_count`, and `evidence_count`.
+
+## v0.10.1 Notes
+
+v0.10.1 upgrades visual task evaluation from a simple status result to evidence-based explanation:
+
+- Each visual task result is saved to `visual_task_result.json`.
+- The result includes `status`, `success`, `answer`, `confidence`, `supporting_evidence`, `contradicting_evidence`, `missing_evidence`, `evidence_summary`, `queried_entities`, and `queried_relations`.
+- `complete` requires supporting evidence; the system does not mark a visual task complete without evidence.
+- Relation queries such as `Is the laptop on the chair?` require an explicit active relation in the world model. If both objects exist but the active relation is missing, the result is `uncertain`.
+- `uncertain` is a conservative visual judgment, not a program failure. It reports what evidence is present, what evidence is missing, and whether any contradictory relation was observed.
+- `run_audit.json` records `visual_task_result_path`, `visual_task_confidence`, `supporting_evidence_count`, `contradicting_evidence_count`, and `missing_evidence_count`.
+- `validators/validate_visual_task_evidence.py` checks that the result schema and evidence counts are valid.
 - `validators/validate_visual_local_hybrid.py` checks task ordering, symbolic answer coverage, plans, task status, and that no physical action is reported as successful.
 
 This is still a local prototype that connects visual world-model construction to planning and task evaluation. It is not real physical execution, not ProcTHOR/AI2-THOR, not the official EAGC runtime, and not model training.

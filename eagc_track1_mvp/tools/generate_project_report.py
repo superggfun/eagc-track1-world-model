@@ -193,6 +193,20 @@ v0.10 connects the visual sequence world model to symbolic planning and visual t
 
 The smoke task set covers finding an object, identifying object location, answering a relation query, and finding an object near another object. This is plan-level symbolic execution only; physical actions are unsupported in visual mode and must not be reported as successful.
 
+### Visual Task Evidence Reporting
+
+v0.10.1 writes a dedicated `visual_task_result.json` for each visual-local hybrid run. The result includes `confidence`, `supporting_evidence`, `contradicting_evidence`, `missing_evidence`, and an `evidence_summary`.
+
+Complete example:
+
+- `Find the laptop.` can complete when a matching laptop object exists in `world_model.objects` with sufficient confidence.
+
+Uncertain example:
+
+- `Is the laptop on the chair?` remains uncertain unless there is an explicit active `laptop on chair` relation. If both objects exist but the relation is missing or stale, the evaluator records missing evidence and avoids claiming success.
+
+This makes uncertainty visible in demos and reports. `uncertain` is a conservative visual judgment, not a program failure.
+
 ## 7. Failure Replay Case
 
 The seed 6 medium case previously exposed a recoverable `door_locked` failure. The original failure involved a locked door plus a mismatch between the target room route and object location. The root cause was that the planner could try to reach the task target before collecting the required object, leaving the task in progress after door recovery.

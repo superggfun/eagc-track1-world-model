@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any, Dict
 
@@ -140,6 +141,8 @@ class VisualLocalHybridRunner:
             task_status["answer"] = last_answer
         if last_evidence and not task_status.get("evidence"):
             task_status["evidence"] = last_evidence
+        result_path = self.output_dir / "visual_task_result.json"
+        result_path.write_text(json.dumps(task_status, ensure_ascii=False, indent=2), encoding="utf-8")
         world_model["task_status"] = task_status
         self.logger.log(
             step=step,
@@ -155,9 +158,13 @@ class VisualLocalHybridRunner:
             "processed_frames": processed_frames,
             "plan": plan,
             "task_status": task_status,
+            "visual_task_result_path": str(result_path),
             "symbolic_action_count": executor.symbolic_action_count,
             "unsupported_physical_action_count": executor.unsupported_physical_action_count,
             "evidence_count": len(task_status.get("evidence", [])),
+            "supporting_evidence_count": len(task_status.get("supporting_evidence", [])),
+            "contradicting_evidence_count": len(task_status.get("contradicting_evidence", [])),
+            "missing_evidence_count": len(task_status.get("missing_evidence", [])),
         }
 
 

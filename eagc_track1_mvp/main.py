@@ -383,10 +383,15 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                     {
                         "visual_local_hybrid": True,
                         "visual_task": visual_task,
+                        "visual_task_result_path": result["visual_task_result_path"],
                         "visual_task_status": result["task_status"],
+                        "visual_task_confidence": result["task_status"].get("confidence", 0.0),
                         "symbolic_action_count": result["symbolic_action_count"],
                         "unsupported_physical_action_count": result["unsupported_physical_action_count"],
                         "evidence_count": result["evidence_count"],
+                        "supporting_evidence_count": result["supporting_evidence_count"],
+                        "contradicting_evidence_count": result["contradicting_evidence_count"],
+                        "missing_evidence_count": result["missing_evidence_count"],
                     }
                 )
                 write_run_audit(audit_path, audit)
@@ -402,6 +407,9 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
                     audit["validation_status"] = validation_status
                     write_run_audit(audit_path, audit)
                 write_latest_artifacts(output_root, world_model_path, episode_log_path, audit_path)
+                visual_result_path = Path(result["visual_task_result_path"])
+                if visual_result_path.exists():
+                    shutil.copy2(visual_result_path, output_root / "visual_task_result.json")
                 print(f"Demo complete. Wrote {world_model_path}")
                 print(f"Demo complete. Wrote {episode_log_path}")
                 print(f"Run audit written to {audit_path}")
@@ -758,8 +766,10 @@ def run_validators(
         checks["visual_sequence"] = validate_visual_sequence(world_model_path, audit_path, episode_log_path)
     if visual_local_hybrid and audit_path is not None:
         from validators.validate_visual_local_hybrid import validate as validate_visual_local_hybrid
+        from validators.validate_visual_task_evidence import validate as validate_visual_task_evidence
 
         checks["visual_local_hybrid"] = validate_visual_local_hybrid(world_model_path, audit_path, episode_log_path)
+        checks["visual_task_evidence"] = validate_visual_task_evidence(world_model_path.parent / "visual_task_result.json", audit_path)
     if env_name in {"local_sim", "local_sim_random"} and audit_path is not None:
         from validators.validate_local_sim_run import validate as validate_local_sim_run
 

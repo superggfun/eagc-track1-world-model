@@ -62,3 +62,21 @@ Supported smoke tasks:
 - `Find the chair near the bed.`
 
 The symbolic executor does not perform physical manipulation and must not report physical actions such as `pick_up` or `place_on` as successful. This remains a local visual planning smoke test, not an official environment or training result.
+
+## Visual Task Evidence Reporting
+
+v0.10.1 adds evidence-based visual task results. Each visual-local hybrid run writes `visual_task_result.json` with `supporting_evidence`, `contradicting_evidence`, `missing_evidence`, `confidence`, and `evidence_summary`.
+
+Example complete result:
+
+- Task: `Find the laptop.`
+- Expected status: `complete`
+- Explanation: the task can complete only when `world_model.objects` contains a matching laptop object with sufficient confidence.
+
+Example uncertain result:
+
+- Task: `Is the laptop on the chair?`
+- Expected status: `uncertain`
+- Explanation: seeing both the laptop and chair is not enough. The evaluator requires an explicit active `laptop on chair` relation. If the relation is missing or stale, the result remains uncertain and records missing evidence.
+
+This conservative handling is intentional. The system should not turn an uncertain visual relation into a successful task result just to make a demo look cleaner.
