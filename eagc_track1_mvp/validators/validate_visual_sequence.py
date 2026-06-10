@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -27,6 +28,18 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
         )
     if audit.get("env") != "visual_sequence":
         errors.append(f"run_audit.env must be visual_sequence, got {audit.get('env')!r}.")
+    frame_paths = audit.get("frame_paths", [])
+    if not isinstance(frame_paths, list):
+        errors.append("run_audit.frame_paths must be a list.")
+        frame_paths = []
+    elif frame_paths and frame_paths != processed_frames:
+        errors.append("run_audit.frame_paths must match run_audit.processed_frames.")
+    if not audit.get("use_mock_llm") and int(audit.get("qwen_call_count", 0)) < len(processed_frames):
+        errors.append(
+            f"run_audit.qwen_call_count={audit.get('qwen_call_count')} must be >= processed_frames={len(processed_frames)}."
+        )
+    if not audit.get("image_dir"):
+        errors.append("run_audit.image_dir is required for visual_sequence.")
 
     perception_count = sum(1 for row in rows if row.get("event_type") == "perception")
     update_count = sum(1 for row in rows if row.get("event_type") == "world_model_update")
@@ -36,21 +49,96 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
     objects = world_model.get("objects", [])
     if not isinstance(objects, list) or not objects:
         errors.append("world_model.objects must be non-empty for visual_sequence.")
+        objects = []
+
+    object_ids: set[str] = set()
+    object_names: set[str] = set()
+    for obj in objects:
+        if not isinstance(obj, dict):
+            continue
+        object_id = str(obj.get("id") or "")
+        object_name = str(obj.get("name") or object_id)
+        if object_id:
+            if object_id in object_ids:
+                errors.append(f"Duplicate object id in world_model.objects: {object_id}")
+            object_ids.add(object_id)
+        if object_name:
+            object_names.add(object_name)
 
     active_by_subject: Dict[str, List[Dict[str, Any]]] = {}
+    all_location_by_subject: Dict[str, List[Dict[str, Any]]] = {}
     for relation in world_model.get("relations", []):
         if (
             isinstance(relation, dict)
-            and relation.get("status") == "active"
             and relation.get("relation") in LOCATION_RELATIONS
         ):
-            active_by_subject.setdefault(str(relation.get("subject")), []).append(relation)
+            subject = str(relation.get("subject"))
+            all_location_by_subject.setdefault(subject, []).append(relation)
+            if relation.get("status") == "active":
+                active_by_subject.setdefault(subject, []).append(relation)
     for subject, relations in active_by_subject.items():
         if len(relations) > 1:
             rendered = [f"{rel.get('relation')} {rel.get('object')}" for rel in relations]
             errors.append(f"{subject} has multiple active location relations: {rendered}")
+    for subject, relations in all_location_by_subject.items():
+        unique_targets = {
+            (relation.get("relation"), relation.get("object"))
+            for relation in relations
+            if relation.get("relation") in LOCATION_RELATIONS
+        }
+        if len(unique_targets) > 1 and not any(relation.get("status") == "stale" for relation in relations):
+            errors.append(f"{subject} has changed location relations but no stale prior relation.")
+
+    frame_observations = _frame_observations(rows)
+    if len(frame_observations) >= 2:
+        ever_observed: set[str] = set()
+        for _, observed in frame_observations:
+            ever_observed.update(observed)
+        missing = sorted(name for name in ever_observed if name not in object_names and _slug(name) not in object_ids)
+        for name in missing:
+            errors.append(f"Object observed in an earlier frame was deleted from world_model.objects: {name}")
+
+        final_observed = frame_observations[-1][1]
+        not_currently_visible = sorted(name for name in ever_observed - final_observed)
+        visibility_states = {
+            str(state.get("entity"))
+            for state in world_model.get("states", [])
+            if isinstance(state, dict)
+            and state.get("attribute") == "visibility"
+            and state.get("value") == "not_observed_current_frame"
+        }
+        uncertainty_items = {
+            str(item.get("item"))
+            for item in world_model.get("uncertainty", [])
+            if isinstance(item, dict) and "not visible" in str(item.get("reason", "")).lower()
+        }
+        for name in not_currently_visible:
+            if name in object_names or _slug(name) in object_ids:
+                if name not in visibility_states and name not in uncertainty_items:
+                    errors.append(f"{name} is not visible in final frame but lacks visibility/uncertainty marker.")
 
     return errors
+
+
+def _frame_observations(rows: List[Dict[str, Any]]) -> List[tuple[int, set[str]]]:
+    frames: List[tuple[int, set[str]]] = []
+    for row in rows:
+        if row.get("event_type") != "world_model_update":
+            continue
+        update = row.get("model_update", {})
+        if not isinstance(update, dict) or "frame_index" not in update:
+            continue
+        observed = {
+            str(name)
+            for name in update.get("observed_objects", [])
+            if str(name).strip()
+        }
+        frames.append((int(update.get("frame_index", len(frames))), observed))
+    return sorted(frames, key=lambda item: item[0])
+
+
+def _slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
 
 
 def _read_json(path: Path, errors: List[str], label: str) -> Dict[str, Any]:

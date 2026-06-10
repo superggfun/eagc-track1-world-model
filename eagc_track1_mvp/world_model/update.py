@@ -32,11 +32,18 @@ def apply_frame_visibility(
         if not name:
             continue
         if name in observed or str(obj.get("id", "")) in observed:
+            obj["visibility"] = "observed_current_frame"
+            obj["last_observed_step"] = frame_step
+            location = obj.get("location")
+            if isinstance(location, dict):
+                confidence = float(location.get("confidence", 0.75))
+                location["confidence"] = round(min(1.0, max(confidence, confidence + 0.05)), 4)
             upsert_state(
                 world_model,
                 {"entity": name, "attribute": "visibility", "value": "observed_current_frame"},
             )
             continue
+        obj["visibility"] = "not_observed_current_frame"
         location = obj.get("location")
         if isinstance(location, dict):
             confidence = float(location.get("confidence", 0.5))

@@ -37,7 +37,7 @@ Run this only when explicitly requested before a release gate. It calls real Qwe
 ## One Random LocalSim Episode
 
 ```powershell
-python main.py --env local_sim --episode-id random-local-sim --random-seed 6 --difficulty medium --track1-procedure --validate
+python main.py --env local_sim_random --seed 6 --difficulty medium --track1-procedure --validate
 ```
 
 ## Track 1 Procedure Demo
@@ -56,3 +56,23 @@ python main.py --vision --image-path assets/test_images/bedroom.png --validate
 ```
 
 The vision smoke path is an interface test only. It is not ProcTHOR, AI2-THOR, or official EAGC runtime integration.
+
+## Visual Sequence Smoke Demo
+
+Place local frames in `assets/test_sequences/bedroom_sequence/`:
+
+```text
+frame_000.jpg
+frame_001.jpg
+frame_002.jpg
+```
+
+Then run:
+
+```powershell
+python main.py --env visual_sequence --image-dir assets/test_sequences/bedroom_sequence --max-frames 3 --validate
+python -m validators.validate_visual_sequence outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
+python tests/smoke_test_visual_sequence.py --image-dir assets/test_sequences/bedroom_sequence --max-frames 3
+```
+
+The visual sequence path tests incremental world-model updates over local static images. It is not ProcTHOR, AI2-THOR, official EAGC runtime integration, or training.

@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.8.4 technical report and demo package.
+Current version: v0.9 multi-frame visual sequence world model update.
 
-Current stable tag: `v0.8.3-test-guardrails-frontier-exploration`
+Current stable tag: `v0.8.4-technical-report-demo-package`
 
 Current status:
 
@@ -141,7 +141,9 @@ python main.py --env ai2thor --scene FloorPlan1 --validate
 Run a local multi-image visual sequence:
 
 ```powershell
-python main.py --env visual_sequence --image-dir assets/test_sequences/bedroom_sequence --max-steps 3 --validate
+python main.py --env visual_sequence --image-dir assets/test_sequences/bedroom_sequence --max-frames 3 --validate
+python -m validators.validate_visual_sequence outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
+python tests/smoke_test_visual_sequence.py --image-dir assets/test_sequences/bedroom_sequence --max-frames 3
 ```
 
 Run the LocalSim Track 1 MVP environment:
@@ -585,19 +587,22 @@ pip install ai2thor
 
 Windows native and WSL2 CloudRendering checks did not pass in the current local setup, so AI2-THOR remains experimental and no `v0.6-ai2thor` tag is used. Future work can handle AI2-THOR separately in a suitable Docker/Ubuntu graphics environment.
 
-## v0.5.1 Notes
+## v0.9 Notes
 
-v0.5.1 adds a local multi-image visual sequence smoke path:
+v0.9 adds a local multi-frame visual sequence world-model update path:
 
 - `VisualSequenceEnv` reads `frame_*.png`, `frame_*.jpg`, `frame_*.jpeg`, or `frame_*.webp` from a local directory in filename order.
-- `main.py --env visual_sequence --image-dir ... --max-steps N --validate` calls Qwen vision once per frame.
+- `main.py --env visual_sequence --image-dir ... --max-frames N --validate` calls Qwen vision once per frame.
 - Each frame incrementally updates the same world model; it does not reinitialize or overwrite prior state.
+- Same-name or same-id objects persist across frames and update `last_observed_step`.
 - If a new frame moves an object to a new active location relation, prior active location relations for that object become `stale`.
 - Objects not visible in the current frame are retained and marked with `visibility=not_observed_current_frame`; uncertainty records note that the object was not visible instead of deleting it.
-- `run_audit.json` records `frame_count`, `image_dir`, and `processed_frames`.
-- `validators/validate_visual_sequence.py` checks multi-frame processing, log coverage, non-empty objects, and active location relation consistency.
+- Simple confidence decay lowers location confidence when an object is not observed in the current frame.
+- `run_audit.json` records `env=visual_sequence`, `image_dir`, `processed_frames`, `frame_paths`, Qwen call counts, fallback use, and vision parse status.
+- `validators/validate_visual_sequence.py` checks multi-frame processing, log coverage, object persistence, duplicate ids, stale/active relation consistency, and run audit fields.
+- `tests/smoke_test_visual_sequence.py` runs the visual sequence path and validator when local test images are present.
 
-This is still a local smoke test over static images, not an official runtime or training setup.
+You need to provide local test images under `assets/test_sequences/bedroom_sequence/` or another directory. This is still a local smoke test over static images, not an official runtime, not ProcTHOR, not AI2-THOR, and not a training setup.
 
 ## Adapter Layout
 

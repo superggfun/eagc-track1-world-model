@@ -90,7 +90,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vision", action="store_true", help="Run the visual mock episode with image input.")
     parser.add_argument("--image-path", help="Local image path for --vision runs.")
     parser.add_argument("--image-dir", help="Local image directory for --env visual_sequence.")
-    parser.add_argument("--max-steps", type=int, help="Maximum visual sequence frames to process.")
+    parser.add_argument("--max-steps", type=int, help="Maximum LocalSim steps or legacy visual sequence frames.")
+    parser.add_argument("--max-frames", type=int, help="Maximum visual sequence frames to process.")
     parser.add_argument(
         "--track1-procedure",
         action="store_true",
@@ -112,6 +113,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         image_path=None,
         image_dir=None,
         max_steps=None,
+        max_frames=None,
         track1_procedure=False,
         seed=1,
         difficulty="easy",
@@ -123,7 +125,7 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
     vision_mode = env_name in {"visual_mock", "visual_sequence", "ai2thor"}
     image_path = _resolve_image_path(args.image_path) if env_name == "visual_mock" else None
     image_dir = _resolve_image_dir(args.image_dir) if env_name == "visual_sequence" else None
-    max_sequence_steps = int(args.max_steps) if args.max_steps else None
+    max_sequence_steps = int(args.max_frames or args.max_steps) if (args.max_frames or args.max_steps) else None
     scene = str(getattr(args, "scene", "FloorPlan1"))
     if env_name == "ai2thor":
         episode_id = f"ai2thor-smoke-{scene}"
@@ -784,7 +786,12 @@ def run_visual_sequence_episode(
             step=step,
             event_type="world_model_update",
             observation=observation_for_log,
-            model_update={"frame_index": frame_index, "observed_objects": observed_names},
+            model_update={
+                "frame_index": frame_index,
+                "observed_objects": observed_names,
+                "world_model_object_count": len(world_model.get("objects", [])),
+                "world_model_relation_count": len(world_model.get("relations", [])),
+            },
             notes=f"Incremental world model update applied for frame {frame_index}.",
         )
         step += 1
@@ -1091,6 +1098,7 @@ def build_run_audit(
         "frame_count": frame_count,
         "image_dir": str(image_dir) if image_dir else "",
         "processed_frames": processed_frames,
+        "frame_paths": processed_frames,
         "start_time": started_wall.isoformat(),
         "end_time": ended.isoformat(),
         "latency_seconds": round(latency_seconds, 6),
