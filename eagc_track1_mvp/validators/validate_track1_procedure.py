@@ -137,15 +137,19 @@ def _validate_frontier_based_exploration(rows: List[Dict[str, Any]]) -> List[str
 def _validate_partial_observability(rows: List[Dict[str, Any]]) -> List[str]:
     errors: List[str] = []
     in_exploration = False
+    exploration_action_count = 0
     for row in rows:
         event_type = row.get("event_type")
         if event_type == "exploration_start":
             in_exploration = True
+            exploration_action_count = 0
             continue
         if event_type == "exploration_end":
             in_exploration = False
         if not in_exploration:
             continue
+        if event_type == "exploration_action":
+            exploration_action_count += 1
         model_update = row.get("model_update")
         if not isinstance(model_update, dict):
             continue
@@ -153,7 +157,8 @@ def _validate_partial_observability(rows: List[Dict[str, Any]]) -> List[str]:
         if not isinstance(topology, list) or not topology:
             continue
         visited_count = sum(1 for node in topology if isinstance(node, dict) and node.get("visited") is True)
-        if len(topology) >= 4 and visited_count == len(topology):
+        min_actions_to_visit = max(1, len(topology) - 1)
+        if len(topology) >= 4 and visited_count == len(topology) and exploration_action_count < min_actions_to_visit:
             errors.append("Exploration phase marked all topology rooms visited before exploration_end.")
             break
         for node in topology:

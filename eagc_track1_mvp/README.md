@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.10.1 visual task evidence and uncertainty reporting.
+Current version: v0.10.2 standard test suite, demo snapshot, and report package.
 
-Current stable tag: `v0.10-visual-local-hybrid-prototype`
+Current stable tag: `v0.10.1-visual-evidence-reporting`
 
 Current status:
 
@@ -153,6 +153,19 @@ python main.py --env visual_sequence --image-dir assets/test_sequences/bedroom_s
 python -m validators.validate_visual_local_hybrid outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 python -m validators.validate_visual_task_evidence outputs/visual_task_result.json outputs/run_audit.json
 python tests/smoke_test_visual_local_hybrid.py --image-dir assets/test_sequences/bedroom_sequence --max-frames 3
+```
+
+Create a reproducible demo snapshot:
+
+```powershell
+python tools/create_demo_snapshot.py
+```
+
+Generate the technical report and source package:
+
+```powershell
+python tools/generate_project_report.py
+python tools/package_source.py
 ```
 
 Run the LocalSim Track 1 MVP environment:
@@ -655,6 +668,16 @@ v0.10.1 upgrades visual task evaluation from a simple status result to evidence-
 - `uncertain` is a conservative visual judgment, not a program failure. It reports what evidence is present, what evidence is missing, and whether any contradictory relation was observed.
 - `run_audit.json` records `visual_task_result_path`, `visual_task_confidence`, `supporting_evidence_count`, `contradicting_evidence_count`, and `missing_evidence_count`.
 - `validators/validate_visual_task_evidence.py` checks that the result schema and evidence counts are valid.
+
+## v0.10.2 Notes
+
+v0.10.2 packages the current project as a more reproducible stage demo:
+
+- `tools/run_test_suite.py` supports `fast`, `targeted`, `standard`, and `full` tiers.
+- `tools/create_demo_snapshot.py` creates `outputs/demo_snapshot/` with a LocalSim Track 1 demo and a visual evidence demo.
+- `tools/package_source.py` creates `dist/eagc_track1_mvp_source.zip` from git-tracked source files only and verifies that outputs, local images, `.venv-ai2thor`, `source_pack`, zip files, and `__pycache__` are excluded.
+- `docs/submission_readiness_checklist.md` summarizes current artifacts, dependencies, hardware, training disclosure, and known limitations.
+- The project remains a local MVP. LocalSim results are not official EAGC results, visual-local hybrid is symbolic, and no model training is performed.
 - `validators/validate_visual_local_hybrid.py` checks task ordering, symbolic answer coverage, plans, task status, and that no physical action is reported as successful.
 
 This is still a local prototype that connects visual world-model construction to planning and task evaluation. It is not real physical execution, not ProcTHOR/AI2-THOR, not the official EAGC runtime, and not model training.

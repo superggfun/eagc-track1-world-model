@@ -52,6 +52,23 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
     smoke_real = [py, "tests/smoke_test_all_mock_episodes.py", "--mode", "real", "--all", "--strict-real"]
     local_sim = [py, "tests/smoke_test_local_sim_episodes.py", "--mode", "real"]
     track1 = [py, "tests/smoke_test_track1_procedure.py", "--mode", "real"]
+    visual_local_hybrid = [
+        py,
+        "tests/smoke_test_visual_local_hybrid.py",
+        "--image-dir",
+        "assets/test_sequences/bedroom_sequence",
+        "--max-frames",
+        "3",
+    ]
+    visual_sequence = [
+        py,
+        "tests/smoke_test_visual_sequence.py",
+        "--image-dir",
+        "assets/test_sequences/bedroom_sequence",
+        "--max-frames",
+        "3",
+    ]
+    generate_report = [py, "tools/generate_project_report.py"]
     targeted_replay = [
         py,
         "tools/replay_random_local_sim_failure.py",
@@ -73,6 +90,30 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         str(seed),
         "--difficulty",
         difficulty,
+        "--strict-leakage-check",
+        *GUARDRAILS,
+    ]
+    easy20_mock = [
+        py,
+        "tests/robustness_test_random_local_sim.py",
+        "--mode",
+        "mock",
+        "--num-episodes",
+        "20",
+        "--difficulty",
+        "easy",
+        "--strict-leakage-check",
+        *GUARDRAILS,
+    ]
+    easy20_real = [
+        py,
+        "tests/robustness_test_random_local_sim.py",
+        "--mode",
+        "real",
+        "--num-episodes",
+        "20",
+        "--difficulty",
+        "easy",
         "--strict-leakage-check",
         *GUARDRAILS,
     ]
@@ -100,18 +141,6 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         "--strict-leakage-check",
         *GUARDRAILS,
     ]
-    easy20_real = [
-        py,
-        "tests/robustness_test_random_local_sim.py",
-        "--mode",
-        "real",
-        "--num-episodes",
-        "20",
-        "--difficulty",
-        "easy",
-        "--strict-leakage-check",
-        *GUARDRAILS,
-    ]
     medium10_real = [
         py,
         "tests/robustness_test_random_local_sim.py",
@@ -126,14 +155,29 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
     ]
 
     if tier == "fast":
-        return [compileall, smoke_mock]
+        commands = [compileall, smoke_mock]
+        if _visual_sequence_available():
+            commands.append(visual_local_hybrid)
+        return commands
     if tier == "targeted":
-        return [targeted_replay, targeted_robustness]
+        return [*_commands("fast", seed, difficulty), local_sim, track1, targeted_replay, targeted_robustness]
     if tier == "standard":
-        return [compileall, smoke_real, local_sim, track1, medium5]
+        return [compileall, smoke_real, local_sim, track1, easy20_mock, visual_sequence, generate_report]
     if tier == "full":
-        return [easy100_mock, easy20_real, medium10_real]
+        return [*_commands("standard", seed, difficulty), easy100_mock, easy20_real, medium5, medium10_real]
     raise ValueError(f"Unknown tier: {tier}")
+
+
+def _visual_sequence_available() -> bool:
+    image_dir = PROJECT_ROOT / "assets" / "test_sequences" / "bedroom_sequence"
+    if not image_dir.exists():
+        return False
+    return any(
+        path.is_file()
+        and path.name.lower().startswith("frame_")
+        and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
+        for path in image_dir.iterdir()
+    )
 
 
 if __name__ == "__main__":

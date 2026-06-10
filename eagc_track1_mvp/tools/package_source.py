@@ -14,6 +14,12 @@ EXCLUDED_DIR_PARTS = {
     "source_pack",
 }
 EXCLUDED_SUFFIXES = {".jpg", ".jpeg", ".png", ".zip"}
+FORBIDDEN_MARKERS = {
+    "/outputs/",
+    "/.venv-ai2thor/",
+    "/source_pack/",
+    "/__pycache__/",
+}
 
 
 def main() -> int:
@@ -42,8 +48,15 @@ def main() -> int:
             archive.write(abs_path, rel_path.as_posix())
             packaged.append(rel_path.as_posix())
 
+    violations = _find_violations(packaged)
+    if violations:
+        print("Source package contains excluded paths:")
+        for violation in violations:
+            print(f"- {violation}")
+        return 1
     print(f"Wrote {output_path}")
     print(f"Packaged tracked source files: {len(packaged)}")
+    print("Verified exclusions: outputs, .venv-ai2thor, source_pack, __pycache__, zip files, and local images.")
     return 0
 
 
@@ -51,6 +64,18 @@ def _is_excluded(path: Path) -> bool:
     if any(part in EXCLUDED_DIR_PARTS for part in path.parts):
         return True
     return path.suffix.lower() in EXCLUDED_SUFFIXES
+
+
+def _find_violations(paths: list[str]) -> list[str]:
+    violations = []
+    for path in paths:
+        normalized = "/" + path.replace("\\", "/")
+        if any(marker in normalized for marker in FORBIDDEN_MARKERS):
+            violations.append(path)
+            continue
+        if Path(path).suffix.lower() in EXCLUDED_SUFFIXES:
+            violations.append(path)
+    return violations
 
 
 if __name__ == "__main__":

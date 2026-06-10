@@ -80,3 +80,26 @@ Example uncertain result:
 - Explanation: seeing both the laptop and chair is not enough. The evaluator requires an explicit active `laptop on chair` relation. If the relation is missing or stale, the result remains uncertain and records missing evidence.
 
 This conservative handling is intentional. The system should not turn an uncertain visual relation into a successful task result just to make a demo look cleaner.
+
+## v0.10.2 Demo And Packaging
+
+v0.10.2 adds a standard test-suite gate plus reproducible demo and reporting artifacts:
+
+- `tools/run_test_suite.py --tier targeted`
+- `tools/run_test_suite.py --tier standard`
+- `tools/create_demo_snapshot.py`
+- `tools/generate_project_report.py`
+- `tools/package_source.py`
+
+The demo snapshot contains a LocalSim Track 1 procedure run and a visual evidence run. The source package is generated from git-tracked files and excludes outputs, local image resources, `.venv-ai2thor`, `source_pack`, zip files, and `__pycache__`.
+
+Current capabilities represented in the package:
+
+- exploration-style LocalSim
+- `world_model.json`
+- structured `episode_log.jsonl`
+- replanning and task status
+- visual evidence explanation
+- uncertainty handling for relation queries
+
+Current limitations remain unchanged: AI2-THOR/ProcTHOR are not integrated, no training is performed, visual-local hybrid is symbolic, and LocalSim is not the official hidden evaluation.

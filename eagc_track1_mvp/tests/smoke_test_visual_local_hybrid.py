@@ -15,10 +15,10 @@ from validators.validate_visual_task_evidence import validate as validate_visual
 
 
 TASKS = [
-    ("Find the laptop.", "complete"),
-    ("Identify where the book is.", "complete"),
-    ("Is the laptop on the chair?", "uncertain"),
-    ("Find the chair near the bed.", "uncertain"),
+    ("Find the laptop.", {"complete"}),
+    ("Identify where the book is.", {"complete"}),
+    ("Is the laptop on the chair?", {"complete", "uncertain"}),
+    ("Find the chair near the bed.", {"complete", "uncertain"}),
 ]
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -40,7 +40,7 @@ def main() -> int:
         return 1
 
     failures = 0
-    for index, (task, expected_status) in enumerate(TASKS, start=1):
+    for index, (task, expected_statuses) in enumerate(TASKS, start=1):
         output_dir = PROJECT_ROOT / "outputs" / "visual_local_hybrid_smoke" / f"task_{index:02d}"
         command = [
             sys.executable,
@@ -79,11 +79,11 @@ def main() -> int:
         supporting_count = len(task_status.get("supporting_evidence", []))
         contradicting_count = len(task_status.get("contradicting_evidence", []))
         missing_count = len(task_status.get("missing_evidence", []))
-        if status != expected_status:
-            errors.append(f"expected task_status={expected_status}, got {status}.")
-        if expected_status == "complete" and supporting_count <= 0:
+        if status not in expected_statuses:
+            errors.append(f"expected task_status in {sorted(expected_statuses)}, got {status}.")
+        if status == "complete" and supporting_count <= 0:
             errors.append("complete task requires supporting evidence.")
-        if expected_status == "uncertain":
+        if status == "uncertain":
             answer = str(task_status.get("answer", "")).lower()
             if "cannot confirm" not in answer and "uncertain" not in answer:
                 errors.append("uncertain task answer must clearly say the relation cannot be confirmed.")

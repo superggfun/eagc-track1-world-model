@@ -207,6 +207,23 @@ Uncertain example:
 
 This makes uncertainty visible in demos and reports. `uncertain` is a conservative visual judgment, not a program failure.
 
+### v0.10.2 Demo Snapshot And Packaging
+
+v0.10.2 adds a reproducible demo snapshot and source package workflow:
+
+- `tools/run_test_suite.py --tier targeted`
+- `tools/run_test_suite.py --tier standard`
+- `tools/create_demo_snapshot.py`
+- `tools/generate_project_report.py`
+- `tools/package_source.py`
+
+The demo snapshot contains:
+
+- a LocalSim Track 1 run with `world_model.json`, `episode_log.jsonl`, `run_audit.json`, and `track1_score.json`
+- a visual evidence run with `world_model.json`, `episode_log.jsonl`, `run_audit.json`, `visual_task_result.json`, and `qwen_response_summary.json`
+
+The source package is generated from git-tracked files only and excludes outputs, local images, `.venv-ai2thor`, `source_pack`, zip files, and `__pycache__`.
+
 ## 7. Failure Replay Case
 
 The seed 6 medium case previously exposed a recoverable `door_locked` failure. The original failure involved a locked door plus a mismatch between the target room route and object location. The root cause was that the planner could try to reach the task target before collecting the required object, leaving the task in progress after door recovery.

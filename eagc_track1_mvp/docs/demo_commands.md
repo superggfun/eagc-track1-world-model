@@ -34,6 +34,27 @@ python tools/run_test_suite.py --tier standard
 
 Run this only when explicitly requested before a release gate. It calls real Qwen and can take longer than routine documentation checks.
 
+## Demo Snapshot
+
+```powershell
+python tools/create_demo_snapshot.py
+```
+
+This writes:
+
+- `outputs/demo_snapshot/local_sim_track1_demo/`
+- `outputs/demo_snapshot/visual_evidence_demo/`
+- `outputs/demo_snapshot/README_demo.md`
+
+## Report And Source Package
+
+```powershell
+python tools/generate_project_report.py
+python tools/package_source.py
+```
+
+The source package is built from git-tracked files only and excludes outputs, local images, `.venv-ai2thor`, `source_pack`, zip files, and `__pycache__`.
+
 ## One Random LocalSim Episode
 
 ```powershell
