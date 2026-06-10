@@ -691,7 +691,7 @@ v0.10.2 packages the current project as a more reproducible stage demo:
 - `tools/run_test_suite.py` supports `fast`, `targeted`, `standard`, and `full` tiers.
 - `tools/create_demo_snapshot.py` creates `outputs/demo_snapshot/` with a LocalSim Track 1 demo and a visual evidence demo.
 - `tools/package_source.py` creates `dist/eagc_track1_mvp_source.zip` from git-tracked source files only and verifies that outputs, local images, `.venv-ai2thor`, `source_pack`, zip files, and `__pycache__` are excluded.
-- `tools/check_source_package_repro.py` extracts the source zip into `dist/repro_check/`, verifies required files and exclusions, then runs `python -m compileall .` and `python tools/run_test_suite.py --tier fast` in the clean extracted project.
+- `tools/check_source_package_repro.py` extracts the source zip into `dist/repro_check/`, verifies required files and exclusions, then compiles source directories and runs `python tools/run_test_suite.py --tier fast` in the clean extracted project.
 - `docs/submission_readiness_checklist.md` summarizes current artifacts, dependencies, hardware, training disclosure, and known limitations.
 - The project remains a local MVP. LocalSim results are not official EAGC results, visual-local hybrid is symbolic, and no model training is performed.
 
@@ -708,6 +708,31 @@ The check confirms that the source archive excludes runtime outputs, local image
 - `validators/validate_visual_local_hybrid.py` checks task ordering, symbolic answer coverage, plans, task status, and that no physical action is reported as successful.
 
 This is still a local prototype that connects visual world-model construction to planning and task evaluation. It is not real physical execution, not ProcTHOR/AI2-THOR, not the official EAGC runtime, and not model training.
+
+## v0.11 Docker Notes
+
+v0.11 adds Docker submission-readiness packaging for the executable local agent:
+
+- `Dockerfile` builds a Python 3.11 slim image with the inference client, world-model update modules, planner/replanner, task evaluator, validators, diagnostics, and demo/test commands.
+- The Docker image does **not** include Qwen3.6-35B-A3B-NVFP4 model weights.
+- Runtime model access is configured through `QWEN_BASE_URL`, `QWEN_MODEL`, `QWEN_TEMPERATURE`, and `QWEN_MAX_TOKENS`, which override `config.yaml`.
+- `tools/run_test_suite.py --tier docker-smoke` runs a mock-only container smoke check that does not require real Qwen, local images, AI2-THOR, or ProcTHOR.
+- `tools/check_docker_context.py` verifies that Docker build context rules exclude outputs, dist, source packs, local images, zip files, virtual environments, and caches.
+
+Build and run mock-only smoke:
+
+```powershell
+docker build -t eagc-track1-agent:v0.11 .
+docker run --rm eagc-track1-agent:v0.11 python tools/run_test_suite.py --tier docker-smoke
+```
+
+Run against host vLLM on Windows Docker Desktop:
+
+```powershell
+docker run --rm -e QWEN_BASE_URL=http://host.docker.internal:8000/v1 -e QWEN_MODEL=qwen3.6-35b-nvfp4 eagc-track1-agent:v0.11 python main.py --env local_sim --episode-id local-explore-book-relocated --track1-procedure --validate
+```
+
+See `docker/README_DOCKER.md` and `docker/docker_run_examples.md` for more details.
 
 ## Adapter Layout
 

@@ -44,6 +44,12 @@ Full tier is available but not required for this readiness package:
 python tools/run_test_suite.py --tier full
 ```
 
+Docker smoke tier:
+
+```powershell
+python tools/run_test_suite.py --tier docker-smoke
+```
+
 ## Demo Snapshot Reproduction
 
 ```powershell
@@ -77,6 +83,40 @@ Expected output:
 - `dist/eagc_track1_mvp_source.zip`
 
 The package is generated from git-tracked source files and excludes outputs, local images, `.venv-ai2thor`, `source_pack`, zip files, and `__pycache__`.
+
+Clean source package check:
+
+```powershell
+python tools/check_source_package_repro.py --zip-path dist/eagc_track1_mvp_source.zip
+```
+
+## Docker Reproducibility
+
+The Docker image packages only the local agent code. It does not include Qwen3.6-35B-A3B-NVFP4 model weights.
+
+Build:
+
+```powershell
+docker build -t eagc-track1-agent:v0.11 .
+```
+
+Mock-only Docker smoke:
+
+```powershell
+docker run --rm eagc-track1-agent:v0.11 python tools/run_test_suite.py --tier docker-smoke
+```
+
+Windows Docker Desktop host vLLM example:
+
+```powershell
+docker run --rm -e QWEN_BASE_URL=http://host.docker.internal:8000/v1 -e QWEN_MODEL=qwen3.6-35b-nvfp4 eagc-track1-agent:v0.11 python main.py --env local_sim --episode-id local-explore-book-relocated --track1-procedure --validate
+```
+
+Linux host-network example:
+
+```bash
+docker run --rm --network host -e QWEN_BASE_URL=http://127.0.0.1:8000/v1 -e QWEN_MODEL=qwen3.6-35b-nvfp4 eagc-track1-agent:v0.11 python main.py --env local_sim --episode-id local-explore-book-relocated --track1-procedure --validate
+```
 
 ## Visual Test Images
 

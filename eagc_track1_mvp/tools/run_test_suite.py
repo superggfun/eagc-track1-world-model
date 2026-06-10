@@ -29,7 +29,7 @@ SOURCE_DIRS = [
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run tiered EAGC Track 1 local test suites.")
-    parser.add_argument("--tier", choices=["fast", "targeted", "standard", "full"], required=True)
+    parser.add_argument("--tier", choices=["fast", "targeted", "standard", "full", "docker-smoke"], required=True)
     parser.add_argument("--seed", type=int, default=6)
     parser.add_argument("--difficulty", choices=["easy", "medium"], default="medium")
     args = parser.parse_args()
@@ -69,6 +69,7 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         "3",
     ]
     generate_report = [py, "tools/generate_project_report.py"]
+    docker_smoke = [py, "tools/docker_smoke_check.py"]
     targeted_replay = [
         py,
         "tools/replay_random_local_sim_failure.py",
@@ -159,6 +160,8 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         if _visual_sequence_available():
             commands.append(visual_local_hybrid)
         return commands
+    if tier == "docker-smoke":
+        return [compileall, docker_smoke, smoke_mock]
     if tier == "targeted":
         return [*_commands("fast", seed, difficulty), local_sim, track1, targeted_replay, targeted_robustness]
     if tier == "standard":

@@ -20,11 +20,30 @@ REQUIRED_FILES = [
     "README.md",
     "requirements.txt",
     "main.py",
+    "Dockerfile",
+    "docker/README_DOCKER.md",
+    "docker/docker_run_examples.md",
     "tools/run_test_suite.py",
     "submission_package/README_submission.md",
     "submission_package/training_resource_disclosure.md",
     "submission_package/reproducibility_statement.md",
     "submission_package/system_limitations.md",
+]
+SOURCE_DIRS = [
+    "clients",
+    "env_adapters",
+    "perception",
+    "world_model",
+    "planner",
+    "executor",
+    "logging_utils",
+    "validators",
+    "task_evaluator",
+    "track1_runner",
+    "scoring",
+    "diagnostics",
+    "tools",
+    "tests",
 ]
 
 
@@ -65,7 +84,7 @@ def main() -> int:
         if missing:
             raise CheckError("Extracted source is missing required files.")
 
-        report["commands"].append(_run([sys.executable, "-m", "compileall", "."], project_dir))
+        report["commands"].append(_run([sys.executable, "-m", "compileall", *SOURCE_DIRS], project_dir))
         report["commands"].append(_run([sys.executable, "tools/run_test_suite.py", "--tier", "fast"], project_dir))
         failed = [command for command in report["commands"] if command["returncode"] != 0]
         if failed:

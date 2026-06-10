@@ -16,6 +16,10 @@ Known limitations:
 - `local_heuristic_score` is a local debugging metric, not an official score.
 - Visual evidence depends on real Qwen vision extraction, so object/relation counts may vary across runs.
 - The source package is not a final Docker submission.
+- The Docker image packages the agent code only and does not include Qwen model weights.
+- The final model endpoint, mounted model, or organizer-hosted inference strategy requires organizer clarification.
+- The official submission portal and official runtime schema are not available yet.
+- Docker has been prepared for mock-mode agent smoke testing; real vLLM access depends on host/container networking.
 
 Current safest claim:
 

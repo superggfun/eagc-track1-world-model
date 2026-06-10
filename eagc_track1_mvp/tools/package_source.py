@@ -6,17 +6,20 @@ from pathlib import Path
 
 
 EXCLUDED_DIR_PARTS = {
+    ".git",
     ".venv",
     ".venv-ai2thor",
     "__pycache__",
     ".pytest_cache",
+    "dist",
     "outputs",
     "source_pack",
 }
-EXCLUDED_SUFFIXES = {".jpg", ".jpeg", ".png", ".zip"}
+EXCLUDED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".zip"}
 FORBIDDEN_MARKERS = {
     "/outputs/",
     "/.venv-ai2thor/",
+    "/dist/",
     "/source_pack/",
     "/__pycache__/",
 }
@@ -56,7 +59,7 @@ def main() -> int:
         return 1
     print(f"Wrote {output_path}")
     print(f"Packaged tracked source files: {len(packaged)}")
-    print("Verified exclusions: outputs, .venv-ai2thor, source_pack, __pycache__, zip files, and local images.")
+    print("Verified exclusions: outputs, dist, .venv-ai2thor, source_pack, __pycache__, zip files, and local images.")
     return 0
 
 

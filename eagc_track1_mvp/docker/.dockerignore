@@ -1,0 +1,17 @@
+.git/
+outputs/
+dist/
+source_pack/
+.venv*/
+.pytest_cache/
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.zip
+pexels-readymade-4008334.jpg
+assets/test_sequences/bedroom_sequence/frame_*.*

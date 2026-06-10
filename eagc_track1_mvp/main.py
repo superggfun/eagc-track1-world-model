@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import shutil
 import time
 from datetime import datetime, timezone
@@ -61,7 +62,25 @@ def load_config(path: Path) -> Dict[str, Any]:
         else:
             config[key] = _parse_scalar(value.strip())
             current_section = None
+    _apply_env_overrides(config)
     return config
+
+
+def _apply_env_overrides(config: Dict[str, Any]) -> None:
+    overrides: dict[str, tuple[str, Callable[[str], Any]]] = {
+        "QWEN_BASE_URL": ("base_url", str),
+        "QWEN_MODEL": ("model", str),
+        "QWEN_TEMPERATURE": ("temperature", float),
+        "QWEN_MAX_TOKENS": ("max_tokens", int),
+    }
+    for env_name, (config_key, caster) in overrides.items():
+        raw_value = os.environ.get(env_name)
+        if raw_value is None or raw_value == "":
+            continue
+        try:
+            config[config_key] = caster(raw_value)
+        except ValueError as exc:
+            raise ValueError(f"Invalid value for {env_name}: {raw_value!r}") from exc
 
 
 def _parse_scalar(value: str) -> Any:
