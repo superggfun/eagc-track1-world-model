@@ -196,6 +196,79 @@ outputs/habitat_spike/status.json
 
 The WSL2 attempt therefore did not reach the Habitat rendering layer. The immediate blocker is missing conda/mamba in WSL2, not a Habitat renderer crash.
 
+## v0.13.3 WSL2 Miniforge / Habitat-Sim RGB Smoke
+
+The v0.13.3 follow-up installed Miniforge/Mamba inside WSL2 and retried Habitat-Sim on Linux `x86_64`.
+
+Commands executed:
+
+```powershell
+wsl bash -lc "curl -L --fail -o /tmp/Miniforge3-Linux-x86_64.sh https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh"
+wsl bash -lc "bash /tmp/Miniforge3-Linux-x86_64.sh -b -p ~/miniforge3"
+wsl bash -lc "source ~/miniforge3/etc/profile.d/conda.sh && mamba create -n habitat python=3.9 cmake=3.14.0 -y"
+wsl bash -lc "source ~/miniforge3/etc/profile.d/conda.sh && conda activate habitat && mamba install habitat-sim withbullet headless -c conda-forge -c aihabitat -y"
+```
+
+Observed installation results:
+
+- Miniforge installed successfully under `~/miniforge3`.
+- `mamba` is available from the Miniforge base environment.
+- The isolated `habitat` environment was created successfully.
+- `habitat-sim` installed successfully from `aihabitat` / `conda-forge`.
+- Installed Habitat-Sim version: `0.3.3`.
+- Initial import failed because `libOpenGL.so.0` was missing.
+- Installing `libopengl` into the isolated conda environment fixed the import:
+
+  ```bash
+  mamba install -y -c conda-forge libopengl
+  ```
+
+Validation commands:
+
+```bash
+source ~/miniforge3/etc/profile.d/conda.sh
+conda activate habitat
+python tools/check_habitat_env.py
+python tools/download_habitat_test_scenes.py
+python tools/test_habitat_sim_spike.py
+```
+
+Observed diagnostic results:
+
+- `tools/check_habitat_env.py`: `habitat_sim` import succeeded, version `0.3.3`.
+- Habitat-Lab `habitat` is still not installed; this is expected because this spike only targets Habitat-Sim.
+- `nvidia-smi` is available inside WSL2.
+- `habitat_test_scenes` downloaded successfully.
+- Scene files found:
+  - `apartment_1.glb`
+  - `skokloster-castle.glb`
+  - `van-gogh-room.glb`
+  - `van-gogh-room.mesh.ply`
+- The downloader wrapper now skips repeated downloads when scene files already exist, avoiding Habitat-Sim's interactive replacement prompt.
+- The RGB smoke selected `apartment_1.glb`.
+- Habitat-Sim reached the headless EGL context creation step but failed before rendering:
+
+  ```text
+  Platform::WindowlessEglApplication::tryCreateContext(): unable to find CUDA device 0 among 1 EGL devices in total
+  WindowlessContext: Unable to create windowless context
+  ```
+
+- `outputs/habitat_spike/status.json` was written by the parent process with:
+  - `success=false`
+  - `error_type=WorkerProcessFailed`
+  - `reason=worker_process_failed`
+  - `rgb_saved=false`
+  - `action_step_success=false`
+
+Script robustness changes:
+
+- `tools/test_habitat_sim_spike.py` now runs Habitat-Sim in a worker subprocess by default.
+- If the C++/EGL layer exits the worker before Python can catch an exception, the parent process still writes `status.json`.
+- The smoke script now attempts a minimal action step and records `action_step_success`, `rgb_step_path`, and `step_frame_shape` when rendering succeeds.
+- `tools/download_habitat_test_scenes.py` now follows symlinks and scans both `data/scene_datasets/` and `data/versioned_data/`.
+
+The v0.13.3 result is therefore a partial success: Habitat-Sim installation and official test-scene acquisition work in WSL2, but RGB rendering is still blocked by WSL2 headless EGL / CUDA device mapping.
+
 ## Latest Results
 
 | Check | Result | Notes |
@@ -203,14 +276,15 @@ The WSL2 attempt therefore did not reach the Habitat rendering layer. The immedi
 | Separate conda env | created | `habitat` env exists and uses Python 3.9.25. |
 | `habitat-sim` install | failed | No `win-64` package was available from configured conda channels. |
 | WSL2 Ubuntu | available | `Ubuntu-24.04` is running as WSL2 and can see the RTX 5090 through `nvidia-smi`. |
-| WSL2 conda/mamba | missing | No WSL2 Habitat environment was created because neither `conda` nor `mamba` is installed in WSL2. |
-| `habitat_sim` import | failed gracefully | `ModuleNotFoundError: No module named 'habitat_sim'` in `outputs/habitat_spike/habitat_env_status.json`. |
-| Habitat-Lab `habitat` import | failed gracefully | `ModuleNotFoundError: No module named 'habitat'` in env status. |
-| `habitat_test_scenes` download | failed gracefully | Blocked because `habitat_sim` is unavailable. |
-| Scene assets | missing | No `data/scene_datasets/` directory and no `.glb` / `.ply` / `.obj` scene files found. |
-| Minimal scene load | not attempted | Blocked before simulator creation because no package and no scene asset are available. |
-| RGB observation | not available | No simulator was created; `rgb.png` was not generated. |
-| Simple action | not available | No simulator was created, so no action step was executed. |
+| WSL2 Miniforge/Mamba | installed | Miniforge installed under `~/miniforge3`; mamba available. |
+| WSL2 `habitat` env | created | Python 3.9 conda env created outside the main project environment. |
+| WSL2 `habitat-sim` install | succeeded | `habitat_sim` import succeeded after adding `libopengl`; version `0.3.3`. |
+| Habitat-Lab `habitat` import | not installed | Expected for this spike; Habitat-Lab was not required. |
+| `habitat_test_scenes` download | succeeded | Scene files are present under ignored `data/` paths. |
+| Scene assets | available | Test scenes include `apartment_1.glb`, `skokloster-castle.glb`, and `van-gogh-room.glb`. |
+| Minimal scene load | failed in renderer | Worker reached EGL context creation and failed with CUDA/EGL device mapping error. |
+| RGB observation | failed | `rgb.png` was not generated. |
+| Simple action | failed | No action frame was generated because renderer initialization failed. |
 
 Generated status files:
 
@@ -236,48 +310,45 @@ Observed failure reasons in this run:
 
 1. Habitat packages are not installed in the active project Python environment, by design.
 2. The isolated Windows conda environment could be created, but `habitat-sim` was unavailable for `win-64` from the configured channels.
-3. WSL2 Ubuntu is available and GPU-visible, but no WSL2 conda/mamba installation is present.
-4. No local Habitat scene assets are present under `data/scene_datasets/`.
-5. Because the package and scene prerequisites are missing, RGB/depth observation and action stepping were not evaluated.
+3. WSL2 Ubuntu is available and GPU-visible.
+4. WSL2 Miniforge/Mamba and `habitat-sim` installation now work.
+5. Official lightweight scene assets are present under ignored `data/` paths.
+6. RGB/depth observation and action stepping are blocked by WSL2 headless EGL / CUDA device mapping:
+
+   ```text
+   Platform::WindowlessEglApplication::tryCreateContext(): unable to find CUDA device 0 among 1 EGL devices in total
+   WindowlessContext: Unable to create windowless context
+   ```
 
 ## Recommendation
 
-Habitat is not yet validated on this machine because the Windows conda route did not provide a usable `habitat-sim` package, and the WSL2 route currently lacks conda/mamba. Unlike the AI2-THOR spike, this run did not reach a renderer crash or Unity hang; it stopped cleanly at missing prerequisites.
+Habitat is not yet fully validated on this machine. The Windows conda route did not provide a usable `habitat-sim` package. The WSL2 route now installs and imports Habitat-Sim and downloads official test scenes, but headless RGB rendering fails at EGL context creation.
 
 Recommended next steps:
 
-1. Install Miniconda/Mambaforge inside WSL2, or use a remote/native Linux GPU host that already has conda/mamba.
-2. Create a separate Habitat environment there:
-
-   ```bash
-   conda create -n habitat python=3.9 cmake=3.14.0 -y
-   conda activate habitat
-   conda install habitat-sim withbullet headless -c conda-forge -c aihabitat -y
-   ```
-
-3. Download the lightweight `habitat_test_scenes` into the ignored local `data/` directory:
-
-   ```bash
-   python tools/download_habitat_test_scenes.py
-   ```
-
-4. Add a minimal legal scene asset under `data/scene_datasets/` or pass it with `--scene-path`.
-5. Re-run:
+1. Treat WSL2 Habitat-Sim as partially validated: install/import/data acquisition work; rendering does not yet.
+2. For the next rendering attempt, test one of:
+   - WSL2 EGL device configuration / `EGL_DEVICE_ID` style environment controls.
+   - A native Linux GPU host.
+   - A remote Linux GPU instance.
+   - A Docker GPU route with known-good EGL/OpenGL libraries.
+3. Re-run:
 
    ```powershell
    python tools/check_habitat_env.py
-   python tools/test_habitat_sim_spike.py --scene-path data/scene_datasets/<scene>.glb
-   python tools/test_habitat_lab_spike.py
+   python tools/download_habitat_test_scenes.py
+   python tools/test_habitat_sim_spike.py
    ```
 
-6. If `habitat_sim` can save `rgb.png` and execute a simple action, proceed to a small Habitat adapter smoke test.
-7. If Habitat install/rendering remains blocked locally, use a remote/native Linux GPU host.
+4. If `habitat_sim` can save `rgb.png` and execute a simple action, proceed to a small Habitat adapter smoke test.
+5. If WSL2 rendering remains blocked locally, use a remote/native Linux GPU host.
 
 Do not add Habitat to `requirements.txt`, the main Docker image, or the standard test tiers until the minimal sim spike succeeds.
 
 Current direction assessment:
 
 - Habitat remains a plausible public simulator direction, but this Windows machine has not yet reached the rendering layer.
-- The most likely viable next route is WSL2 after installing a separate conda/mamba distribution, or a native/remote Linux GPU machine with conda packages and official test scenes.
+- WSL2 has now reached the rendering layer and fails specifically at headless EGL context creation.
+- The most likely viable next route is either WSL2 EGL device configuration, Docker GPU with EGL libraries, or native/remote Linux GPU.
 - For near-term EAGC Track 1 work, keep LocalSim and visual-local hybrid as the stable baseline.
 - `data/`, scene files, and generated outputs are ignored and must not be committed.
