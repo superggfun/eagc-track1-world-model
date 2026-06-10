@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.10.3 pre-submission readiness package.
+Current version: v0.11.2 technical report submission docs.
 
-Current stable tag: `v0.10.2-demo-report-package`
+Current stable tag: `v0.11.2-technical-report-submission-docs`
 
 Current status:
 

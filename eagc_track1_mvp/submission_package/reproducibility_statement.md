@@ -72,6 +72,8 @@ Expected output:
 
 - `reports/v0.8.4_technical_report.md`
 
+Note: this is the current report generator output path and uses a legacy filename from the first technical-report milestone. The current submission-facing technical report draft is `submission_package/technical_report_draft.md`, and `tools/build_report_pdf.py` writes HTML/PDF-status artifacts under `submission_bundle/reports/`.
+
 ## Source Package Generation
 
 ```powershell

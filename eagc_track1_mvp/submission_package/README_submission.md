@@ -2,7 +2,7 @@
 
 This folder contains a pre-submission readiness package for the current EAGC Track 1 local MVP. It is intended for internal review, teacher discussion, technical report drafting, and future qualification submission preparation.
 
-Current project stage: `v0.11.1` qualification submission bundle readiness package.
+Current project stage: `v0.11.2` submission readiness baseline with technical report document polish.
 
 Current system scope:
 
