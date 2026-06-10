@@ -142,12 +142,68 @@ outputs/habitat_spike/habitat_sim_status.json
 
 The scripts behaved as intended: failure was recorded as structured JSON instead of being treated as a fake pass.
 
+## v0.13.2 WSL2 Attempt
+
+The v0.13.2 follow-up attempted to move the Habitat-Sim test-scene smoke from Windows `win-64` to WSL2 Ubuntu / Linux.
+
+Commands run from Windows PowerShell:
+
+```powershell
+wsl -l -v
+wsl bash -lc "uname -a"
+wsl bash -lc "nvidia-smi"
+wsl bash -lc "command -v conda || true; command -v mamba || true"
+```
+
+Observed WSL2 environment:
+
+- WSL distribution: `Ubuntu-24.04`
+- WSL version: `2`
+- Kernel: `6.6.87.2-microsoft-standard-WSL2`
+- Architecture: `x86_64`
+- GPU visibility: `nvidia-smi` works inside WSL2 and reports NVIDIA GeForce RTX 5090.
+- WSL display variables: `DISPLAY=:0`, `WAYLAND_DISPLAY=wayland-0`.
+- `conda`: not available in WSL2.
+- `mamba`: not available in WSL2.
+
+Because conda/mamba is unavailable in WSL2, no Habitat conda environment was created. The main project Python environment was not modified. To keep the spike auditable, the diagnostic scripts were run with WSL's default Python:
+
+```bash
+cd "/mnt/c/Users/Alphay/Documents/New project/eagc_track1_mvp"
+python3 tools/check_habitat_env.py
+python3 tools/download_habitat_test_scenes.py
+python3 tools/test_habitat_sim_spike.py
+```
+
+Observed WSL2 diagnostic results:
+
+- Python: `3.12.3` at `/usr/bin/python3`.
+- `habitat_sim`: not importable.
+- Habitat-Lab `habitat`: not importable.
+- `nvcc`: not available in WSL2 default PATH.
+- `data/scene_datasets/`: missing.
+- `habitat_test_scenes`: not downloaded because `habitat_sim` is missing.
+- RGB observation: not generated.
+- Simple simulator action: not executed.
+
+Generated WSL2 status files:
+
+```text
+outputs/habitat_spike/habitat_env_status.json
+outputs/habitat_spike/download_status.json
+outputs/habitat_spike/status.json
+```
+
+The WSL2 attempt therefore did not reach the Habitat rendering layer. The immediate blocker is missing conda/mamba in WSL2, not a Habitat renderer crash.
+
 ## Latest Results
 
 | Check | Result | Notes |
 |---|---|---|
 | Separate conda env | created | `habitat` env exists and uses Python 3.9.25. |
 | `habitat-sim` install | failed | No `win-64` package was available from configured conda channels. |
+| WSL2 Ubuntu | available | `Ubuntu-24.04` is running as WSL2 and can see the RTX 5090 through `nvidia-smi`. |
+| WSL2 conda/mamba | missing | No WSL2 Habitat environment was created because neither `conda` nor `mamba` is installed in WSL2. |
 | `habitat_sim` import | failed gracefully | `ModuleNotFoundError: No module named 'habitat_sim'` in `outputs/habitat_spike/habitat_env_status.json`. |
 | Habitat-Lab `habitat` import | failed gracefully | `ModuleNotFoundError: No module named 'habitat'` in env status. |
 | `habitat_test_scenes` download | failed gracefully | Blocked because `habitat_sim` is unavailable. |
@@ -180,17 +236,25 @@ Observed failure reasons in this run:
 
 1. Habitat packages are not installed in the active project Python environment, by design.
 2. The isolated Windows conda environment could be created, but `habitat-sim` was unavailable for `win-64` from the configured channels.
-3. No local Habitat scene assets are present under `data/scene_datasets/`.
-4. Because the package and scene prerequisites are missing, RGB/depth observation and action stepping were not evaluated.
+3. WSL2 Ubuntu is available and GPU-visible, but no WSL2 conda/mamba installation is present.
+4. No local Habitat scene assets are present under `data/scene_datasets/`.
+5. Because the package and scene prerequisites are missing, RGB/depth observation and action stepping were not evaluated.
 
 ## Recommendation
 
-Habitat is not yet validated on this machine because the Windows conda route did not provide a usable `habitat-sim` package and no test scene assets were downloaded. Unlike the AI2-THOR spike, this run did not reach a renderer crash or Unity hang; it stopped cleanly at missing prerequisites.
+Habitat is not yet validated on this machine because the Windows conda route did not provide a usable `habitat-sim` package, and the WSL2 route currently lacks conda/mamba. Unlike the AI2-THOR spike, this run did not reach a renderer crash or Unity hang; it stopped cleanly at missing prerequisites.
 
 Recommended next steps:
 
-1. Retry Habitat in a separate WSL2/native Linux/remote Linux GPU conda environment rather than Windows `win-64`.
-2. Install `habitat-sim` there using the official Habitat-Sim channel guidance.
+1. Install Miniconda/Mambaforge inside WSL2, or use a remote/native Linux GPU host that already has conda/mamba.
+2. Create a separate Habitat environment there:
+
+   ```bash
+   conda create -n habitat python=3.9 cmake=3.14.0 -y
+   conda activate habitat
+   conda install habitat-sim withbullet headless -c conda-forge -c aihabitat -y
+   ```
+
 3. Download the lightweight `habitat_test_scenes` into the ignored local `data/` directory:
 
    ```bash
@@ -214,6 +278,6 @@ Do not add Habitat to `requirements.txt`, the main Docker image, or the standard
 Current direction assessment:
 
 - Habitat remains a plausible public simulator direction, but this Windows machine has not yet reached the rendering layer.
-- The most likely viable next route is WSL2 or native/remote Linux GPU with conda packages and official test scenes.
+- The most likely viable next route is WSL2 after installing a separate conda/mamba distribution, or a native/remote Linux GPU machine with conda packages and official test scenes.
 - For near-term EAGC Track 1 work, keep LocalSim and visual-local hybrid as the stable baseline.
 - `data/`, scene files, and generated outputs are ignored and must not be committed.
