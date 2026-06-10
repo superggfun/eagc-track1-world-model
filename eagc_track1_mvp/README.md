@@ -156,11 +156,20 @@ Run randomized LocalSim robustness evaluation:
 ```powershell
 python tests/robustness_test_random_local_sim.py --mode mock --num-episodes 100 --difficulty easy --strict-leakage-check
 python tests/robustness_test_random_local_sim.py --mode real --num-episodes 20 --difficulty easy --strict-leakage-check
-python tests/robustness_test_random_local_sim.py --mode real --num-episodes 10 --difficulty medium --strict-leakage-check
-python tests/robustness_test_random_local_sim.py --mode real --num-episodes 50 --difficulty medium --strict-leakage-check
+python tests/robustness_test_random_local_sim.py --mode real --num-episodes 10 --difficulty medium --strict-leakage-check --episode-timeout-seconds 600 --max-qwen-calls-per-episode 40
+python tests/robustness_test_random_local_sim.py --mode real --num-episodes 50 --difficulty medium --strict-leakage-check --episode-timeout-seconds 600 --max-qwen-calls-per-episode 40
 ```
 
 The 50-episode real medium run is intended as an optional overnight stress test, not a normal development commit gate.
+
+Run tiered test suites:
+
+```powershell
+python tools/run_test_suite.py --tier fast
+python tools/run_test_suite.py --tier targeted --seed 6 --difficulty medium
+python tools/run_test_suite.py --tier standard
+python tools/run_test_suite.py --tier full
+```
 
 Replay a single randomized LocalSim seed with diagnostics:
 
@@ -495,6 +504,16 @@ v0.8.2 adds targeted replay and repair for a recoverable medium `door_locked` fa
 - `Track1ProcedureRunner` can synthesize a missing `navigate_to(target_room)` after door recovery if a failure occurred on a route action.
 - `TaskEvaluator` distinguishes “door opened” from “target room entered”; an open door alone is still `in_progress`.
 - Random robustness summaries use `leakage_check_passed` and `hidden_spec_leakage_detected` to avoid ambiguous `leakage=true` wording.
+
+## v0.8.3 Notes
+
+v0.8.3 adds test runtime guardrails and makes Track 1 exploration frontier-based:
+
+- `tests/robustness_test_random_local_sim.py` supports `--episode-timeout-seconds` and `--max-qwen-calls-per-episode`.
+- Robustness summaries include timeout/budget counts, max episode latency, max Qwen calls, slowest seed, and highest Qwen-call seed.
+- `tools/run_test_suite.py` provides `fast`, `targeted`, `standard`, and `full` test tiers.
+- `Track1ProcedureRunner` chooses exploration actions from observed frontiers/topology instead of hardcoded room names.
+- `validators/validate_track1_procedure.py` checks that exploration `navigate_to(room)` actions come from observed frontiers or discovered topology.
 
 ## v0.7.1 Notes
 

@@ -2,6 +2,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -26,6 +27,8 @@ def main() -> int:
     parser.add_argument("--num-episodes", type=int, default=20)
     parser.add_argument("--difficulty", choices=["easy", "medium"], default="easy")
     parser.add_argument("--strict-leakage-check", action="store_true")
+    parser.add_argument("--episode-timeout-seconds", type=int, default=600)
+    parser.add_argument("--max-qwen-calls-per-episode", type=int, default=40)
     args = parser.parse_args()
 
     root = PROJECT_ROOT / "outputs" / "robustness" / "local_sim_random" / args.difficulty / args.mode
@@ -59,8 +62,38 @@ def main() -> int:
         ]
         if args.mode == "mock":
             cmd.append("--use-mock-llm")
-        completed = subprocess.run(cmd, cwd=PROJECT_ROOT, text=True, capture_output=True)
-        result = _collect_result(seed, output_dir, completed.returncode, completed.stdout, completed.stderr, args.strict_leakage_check)
+        started = time.monotonic()
+        try:
+            completed = subprocess.run(
+                cmd,
+                cwd=PROJECT_ROOT,
+                text=True,
+                capture_output=True,
+                timeout=args.episode_timeout_seconds,
+            )
+            elapsed = time.monotonic() - started
+            result = _collect_result(
+                seed,
+                output_dir,
+                completed.returncode,
+                completed.stdout,
+                completed.stderr,
+                args.strict_leakage_check,
+                max_qwen_calls=args.max_qwen_calls_per_episode,
+                elapsed_seconds=elapsed,
+            )
+        except subprocess.TimeoutExpired as exc:
+            elapsed = time.monotonic() - started
+            stdout = _decode_timeout_output(exc.stdout)
+            stderr = _decode_timeout_output(exc.stderr)
+            result = _guardrail_result(
+                seed,
+                output_dir,
+                "episode_timeout",
+                stdout,
+                stderr,
+                elapsed_seconds=elapsed,
+            )
         results.append(result)
         print(
             "seed={seed} status={status} expected={expected} score={score} "
@@ -80,7 +113,16 @@ def main() -> int:
     return 0 if passed else 1
 
 
-def _collect_result(seed: int, output_dir: Path, returncode: int, stdout: str, stderr: str, strict_leakage_check: bool) -> Dict[str, Any]:
+def _collect_result(
+    seed: int,
+    output_dir: Path,
+    returncode: int,
+    stdout: str,
+    stderr: str,
+    strict_leakage_check: bool,
+    max_qwen_calls: int,
+    elapsed_seconds: float,
+) -> Dict[str, Any]:
     world_model_path = output_dir / "world_model.json"
     audit_path = output_dir / "run_audit.json"
     episode_log_path = output_dir / "episode_log.jsonl"
@@ -113,15 +155,19 @@ def _collect_result(seed: int, output_dir: Path, returncode: int, stdout: str, s
         leakage_errors = ["Missing required output artifacts."]
 
     task_status = str(world_model.get("task_status", {}).get("status") or "failed")
-    validation = "passed" if returncode == 0 and not validation_errors else "failed"
     hidden_spec = spec.get("hidden_spec", {}) if isinstance(spec.get("hidden_spec"), dict) else {}
     exception_type = str(audit.get("controlled_exception_type") or hidden_spec.get("controlled_exception", {}).get("type") or spec.get("controlled_exception", {}).get("type") or "")
     expected = str(audit.get("expected_task_status") or hidden_spec.get("expected_task_status") or spec.get("expected_task_status") or "")
     recoverable = bool(audit.get("recoverable", hidden_spec.get("recoverable", True)))
     accepted_failure = bool(audit.get("accepted_failure")) or (not recoverable and task_status in {"failed", "blocked_recovered", "in_progress"})
+    qwen_calls = int(audit.get("qwen_call_count") or 0)
+    budget_exceeded = qwen_calls > max_qwen_calls
+    if budget_exceeded:
+        validation_errors.append("qwen_call_budget_exceeded")
+    validation = "passed" if returncode == 0 and not validation_errors else "failed"
     result = {
         "seed": seed,
-        "status": task_status if validation == "passed" else "failed",
+        "status": "failed" if budget_exceeded else (task_status if validation == "passed" else "failed"),
         "expected": expected,
         "accepted_failure": accepted_failure,
         "recoverable": recoverable,
@@ -135,13 +181,60 @@ def _collect_result(seed: int, output_dir: Path, returncode: int, stdout: str, s
         "output_dir": str(output_dir),
         "steps": int(audit.get("total_steps_used") or 0),
         "recovery_steps": int(audit.get("recovery_steps_used") or 0),
-        "qwen_calls": int(audit.get("qwen_call_count") or 0),
-        "latency_seconds": float(audit.get("latency_seconds") or 0.0),
+        "qwen_calls": qwen_calls,
+        "latency_seconds": float(audit.get("latency_seconds") or elapsed_seconds or 0.0),
         "fallback_used": bool(audit.get("fallback_used", False)),
+        "guardrail_failure": "qwen_call_budget_exceeded" if budget_exceeded else "",
+        "episode_timeout": False,
+        "qwen_budget_exceeded": budget_exceeded,
         "failure_reason": "; ".join(validation_errors) or (stderr.strip() or stdout.strip() if returncode != 0 else ""),
     }
-    if validation != "passed" or (task_status not in {"complete", "blocked_recovered"} and not accepted_failure):
+    if budget_exceeded or validation != "passed" or (task_status not in {"complete", "blocked_recovered"} and not accepted_failure):
         _write_failure_case(output_dir, result, stdout, stderr, world_model, audit, spec, rows)
+    return result
+
+
+def _guardrail_result(
+    seed: int,
+    output_dir: Path,
+    reason: str,
+    stdout: str,
+    stderr: str,
+    elapsed_seconds: float,
+) -> Dict[str, Any]:
+    world_model = _read_json_if_exists(output_dir / "world_model.json")
+    audit = _read_json_if_exists(output_dir / "run_audit.json")
+    spec = _read_json_if_exists(output_dir / "generated_episode_spec.json")
+    rows = _read_jsonl_if_exists(output_dir / "episode_log.jsonl")
+    hidden_spec = spec.get("hidden_spec", {}) if isinstance(spec.get("hidden_spec"), dict) else {}
+    exception_type = str(audit.get("controlled_exception_type") or hidden_spec.get("controlled_exception", {}).get("type") or "")
+    expected = str(audit.get("expected_task_status") or hidden_spec.get("expected_task_status") or "")
+    qwen_calls = int(audit.get("qwen_call_count") or _count_qwen_calls(output_dir))
+    result = {
+        "seed": seed,
+        "status": "failed",
+        "expected": expected,
+        "accepted_failure": False,
+        "recoverable": bool(audit.get("recoverable", hidden_spec.get("recoverable", True))),
+        "template": str(spec.get("template") or spec.get("public_env_config", {}).get("template") or ""),
+        "score": 0.0,
+        "exception": exception_type,
+        "validation": "failed",
+        "leakage_check_passed": False,
+        "hidden_spec_leakage_detected": False,
+        "leakage_errors": [reason],
+        "output_dir": str(output_dir),
+        "steps": int(audit.get("total_steps_used") or 0),
+        "recovery_steps": int(audit.get("recovery_steps_used") or 0),
+        "qwen_calls": qwen_calls,
+        "latency_seconds": round(elapsed_seconds, 4),
+        "fallback_used": bool(audit.get("fallback_used", False)),
+        "guardrail_failure": reason,
+        "episode_timeout": reason == "episode_timeout",
+        "qwen_budget_exceeded": reason == "qwen_call_budget_exceeded",
+        "failure_reason": reason,
+    }
+    _write_failure_case(output_dir, result, stdout, stderr, world_model, audit, spec, rows)
     return result
 
 
@@ -181,6 +274,12 @@ def _build_summary(num_episodes: int, mode: str, difficulty: str, results: List[
         "average_qwen_calls": round(_avg([item["qwen_calls"] for item in results]), 4),
         "average_latency_seconds": round(_avg([item["latency_seconds"] for item in results]), 4),
         "fallback_used_count": sum(1 for item in results if item.get("fallback_used")),
+        "timeout_count": sum(1 for item in results if item.get("episode_timeout")),
+        "qwen_budget_exceeded_count": sum(1 for item in results if item.get("qwen_budget_exceeded")),
+        "max_episode_latency": round(max([item["latency_seconds"] for item in results], default=0.0), 4),
+        "max_qwen_calls": max([item["qwen_calls"] for item in results], default=0),
+        "slowest_seed": _seed_for_max(results, "latency_seconds"),
+        "highest_qwen_call_seed": _seed_for_max(results, "qwen_calls"),
         "leakage_check_passed": all(item.get("leakage_check_passed") for item in results),
         "hidden_spec_leakage_detected": any(item.get("hidden_spec_leakage_detected") for item in results),
         "failures": failures,
@@ -231,7 +330,13 @@ def _render_markdown(summary: Dict[str, Any]) -> str:
         f"- average_recovery_steps: {summary['average_recovery_steps']}",
         f"- average_qwen_calls: {summary['average_qwen_calls']}",
         f"- average_latency_seconds: {summary['average_latency_seconds']}",
+        f"- max_episode_latency: {summary['max_episode_latency']}",
+        f"- slowest_seed: {summary['slowest_seed']}",
         f"- fallback_used_count: {summary['fallback_used_count']}",
+        f"- timeout_count: {summary['timeout_count']}",
+        f"- qwen_budget_exceeded_count: {summary['qwen_budget_exceeded_count']}",
+        f"- max_qwen_calls: {summary['max_qwen_calls']}",
+        f"- highest_qwen_call_seed: {summary['highest_qwen_call_seed']}",
         f"- leakage_check_passed: {summary['leakage_check_passed']}",
         f"- hidden_spec_leakage_detected: {summary['hidden_spec_leakage_detected']}",
         "",
@@ -274,6 +379,27 @@ def _read_jsonl_if_exists(path: Path) -> List[Dict[str, Any]]:
 
 def _avg(values: List[float]) -> float:
     return sum(values) / len(values) if values else 0.0
+
+
+def _seed_for_max(results: List[Dict[str, Any]], field: str) -> int | None:
+    if not results:
+        return None
+    return int(max(results, key=lambda item: item.get(field, 0)).get("seed", 0))
+
+
+def _count_qwen_calls(output_dir: Path) -> int:
+    path = output_dir / "qwen_calls.jsonl"
+    if not path.exists():
+        return 0
+    return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
+
+
+def _decode_timeout_output(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def _bump_stats(target: Dict[str, Dict[str, Any]], key: str, item: Dict[str, Any]) -> None:

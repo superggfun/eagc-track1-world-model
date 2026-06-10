@@ -39,6 +39,7 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
     errors.extend(_validate_event_order(rows))
     errors.extend(_validate_task_reception(rows, world_model))
     errors.extend(_validate_exploration_actions(rows))
+    errors.extend(_validate_frontier_based_exploration(rows))
     errors.extend(_validate_partial_observability(rows))
     errors.extend(_validate_world_model_fields(world_model))
     errors.extend(_validate_audit(audit))
@@ -102,6 +103,34 @@ def _validate_exploration_actions(rows: List[Dict[str, Any]]) -> List[str]:
             errors.append(f"Exploration phase used non-exploration action: {action}")
         if any(arg in TASK_SPECIFIC_TARGETS for arg in _args):
             errors.append(f"Exploration phase used task-specific target before task reception: {action}")
+    return errors
+
+
+def _validate_frontier_based_exploration(rows: List[Dict[str, Any]]) -> List[str]:
+    errors: List[str] = []
+    in_exploration = False
+    known_rooms: set[str] = set()
+    known_frontiers: set[str] = set()
+    for row in rows:
+        event_type = row.get("event_type")
+        if event_type == "exploration_start":
+            in_exploration = True
+            _learn_from_observation(row, known_rooms, known_frontiers)
+            continue
+        if event_type == "exploration_end":
+            in_exploration = False
+        if not in_exploration:
+            continue
+        action = str(row.get("action", ""))
+        if action:
+            action_name, args = parse_action(action)
+            if action_name == "navigate_to" and args:
+                target = args[0]
+                if target not in known_rooms and target not in known_frontiers:
+                    errors.append(
+                        f"Exploration navigate_to({target}) was not derived from an observed frontier/topology."
+                    )
+        _learn_from_observation(row, known_rooms, known_frontiers)
     return errors
 
 
@@ -185,6 +214,36 @@ def _validate_score(audit: Dict[str, Any]) -> List[str]:
     if not isinstance(total, (int, float)) or not 0 <= float(total) <= 100:
         return ["track1_score.total_score must be between 0 and 100."]
     return []
+
+
+def _learn_from_observation(row: Dict[str, Any], known_rooms: set[str], known_frontiers: set[str]) -> None:
+    model_update = row.get("model_update")
+    if not isinstance(model_update, dict):
+        return
+    for frontier in model_update.get("frontiers", []) if isinstance(model_update.get("frontiers"), list) else []:
+        target = _frontier_target(frontier)
+        if target:
+            known_frontiers.add(target)
+    topology = model_update.get("topology")
+    if isinstance(topology, list):
+        for node in topology:
+            if not isinstance(node, dict):
+                continue
+            room = str(node.get("room") or "")
+            if room and node.get("visited") is True:
+                known_rooms.add(room)
+            for frontier in node.get("frontiers", []) if isinstance(node.get("frontiers"), list) else []:
+                target = _frontier_target(frontier)
+                if target:
+                    known_frontiers.add(target)
+
+
+def _frontier_target(frontier: Any) -> str:
+    if isinstance(frontier, dict):
+        return str(frontier.get("target") or "")
+    if isinstance(frontier, str):
+        return frontier.split(" via ", 1)[0].strip()
+    return ""
 
 
 def _read_json(path: Path, errors: List[str], label: str) -> Dict[str, Any]:

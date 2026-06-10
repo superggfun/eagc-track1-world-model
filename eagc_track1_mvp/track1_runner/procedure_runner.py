@@ -97,10 +97,15 @@ class Track1ProcedureRunner:
         self.step += 1
         self._perceive(initial, "Explore the environment and map rooms, objects, topology, and frontiers.")
 
-        for action in self._exploration_actions(initial):
+        attempted_exploration_actions: set[str] = set()
+        while True:
             if self.exploration_steps_used >= int(self.budgets["exploration_steps"]):
                 self.phase_budget_exceeded = True
                 break
+            action = self._next_exploration_action(initial, attempted_exploration_actions)
+            if not action:
+                break
+            attempted_exploration_actions.add(action)
             result = self.executor.execute(action)
             self.exploration_steps_used += 1
             if result.get("success", False):
@@ -419,14 +424,45 @@ class Track1ProcedureRunner:
         )
         self.step += 1
 
-    def _exploration_actions(self, initial: Dict[str, Any]) -> List[str]:
+    def _next_exploration_action(self, initial: Dict[str, Any], attempted: set[str]) -> str:
         current = str(initial.get("current_room", ""))
-        actions = [f"explore({current})", "search(visible_area)"]
-        if current != "hallway":
-            actions.extend(["navigate_to(hallway)", "explore(hallway)", "search(visible_area)"])
-        if current not in {"living_room", "kitchen"}:
-            actions.extend(["navigate_to(living_room)", "explore(living_room)"])
-        return actions
+        agent_state = self.store.world_model.get("agent_state", {})
+        if isinstance(agent_state, dict):
+            current = str(agent_state.get("current_room") or current)
+        candidates = [f"explore({current})", "search(visible_area)"]
+        visited = {
+            str(room)
+            for room in self.store.world_model.get("visited_rooms", [])
+            if isinstance(room, str) and room
+        }
+        for target in self._known_frontier_targets():
+            if target and target not in visited:
+                candidates.append(f"navigate_to({target})")
+        if not candidates:
+            candidates = ["search(visible_area)"]
+        for action in candidates:
+            if action not in attempted:
+                return action
+        return ""
+
+    def _known_frontier_targets(self) -> List[str]:
+        targets: List[str] = []
+        frontiers = self.store.world_model.get("frontiers", [])
+        if isinstance(frontiers, list):
+            for frontier in frontiers:
+                target = _frontier_target(frontier)
+                if target:
+                    targets.append(target)
+        topology = self.store.world_model.get("topology", [])
+        if isinstance(topology, list):
+            for node in topology:
+                if not isinstance(node, dict):
+                    continue
+                for frontier in node.get("frontiers", []) if isinstance(node.get("frontiers"), list) else []:
+                    target = _frontier_target(frontier)
+                    if target:
+                        targets.append(target)
+        return list(dict.fromkeys(targets))
 
     def _refresh_discovery_fields(self, world_model: Dict[str, Any]) -> None:
         visited = world_model.get("visited_rooms", [])
@@ -454,3 +490,11 @@ def _read_rows(path: Path) -> List[Dict[str, Any]]:
         if line.strip():
             rows.append(json.loads(line))
     return rows
+
+
+def _frontier_target(frontier: Any) -> str:
+    if isinstance(frontier, dict):
+        return str(frontier.get("target") or "")
+    if isinstance(frontier, str):
+        return frontier.split(" via ", 1)[0].strip()
+    return ""
