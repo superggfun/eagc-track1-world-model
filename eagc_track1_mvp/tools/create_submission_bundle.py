@@ -231,6 +231,7 @@ This bundle is a pre-submission package for the current local EAGC Track 1 MVP.
 ## What Is Included
 
 - Docker packaging instructions for `{image_name}`.
+- Docker image metadata and save/load instructions.
 - Source package: `source/eagc_track1_mvp_source.zip`.
 - Technical report draft.
 - Training/resource disclosure, reproducibility statement, system limitations, and open-source statement.
@@ -272,6 +273,7 @@ docker run --rm --network host -e QWEN_BASE_URL=http://127.0.0.1:8000/v1 -e QWEN
 ## What Is Not Included
 
 - Qwen model weights.
+- Any redistributed Qwen model checkpoint or model archive.
 - Official EAGC runtime/API.
 - ProcTHOR or AI2-THOR validated runtime.
 - Training outputs or fine-tuned models.
@@ -285,6 +287,7 @@ LocalSim is a self-built local environment, not official hidden evaluation. The 
 
 - Whether qualification submission requires Docker image tar, Dockerfile/source, or registry URL.
 - Whether model weights must be included, mounted, or served externally.
+- Whether external vLLM endpoints are allowed or whether model volumes must be mounted into the agent container.
 - Official qualification submission portal and final runtime schema.
 """
     (bundle_root / "README_SUBMISSION.md").write_text(text, encoding="utf-8")
