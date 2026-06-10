@@ -97,6 +97,44 @@ class RulePlanner:
     def next_actions(self, plan: Dict[str, Any]) -> List[str]:
         return list(plan.get("actions", []))
 
+    def plan_visual(self, task: str, world_model: Dict[str, Any]) -> Dict[str, Any]:
+        task_lower = task.lower().strip()
+        relation_query = _parse_relation_query(task_lower)
+        near_query = _parse_find_near(task_lower)
+        identify = _parse_identify_location(task_lower)
+        find = _parse_find_object(task_lower)
+
+        if relation_query:
+            subject, relation, target = relation_query
+            actions = [f"locate({subject})", f"locate({target})", f"answer_relation({subject}, {relation}, {target})"]
+            subgoals = [f"Find {subject}.", f"Find {target}.", f"Answer whether {subject} is {relation} {target}."]
+        elif near_query:
+            subject, target = near_query
+            actions = [f"locate({subject})", f"locate({target})", f"answer_relation({subject}, near, {target})"]
+            subgoals = [f"Find {subject}.", f"Find {target}.", f"Answer whether {subject} is near {target}."]
+        elif identify:
+            actions = [f"locate({identify})", f"answer_location({identify})"]
+            subgoals = [f"Find {identify}.", f"Answer where {identify} is located."]
+        elif find:
+            actions = [f"locate({find})", f"answer_location({find})"]
+            subgoals = [f"Find {find}.", f"Answer using the visual world model."]
+        else:
+            actions = ["inspect(visible_area)"]
+            subgoals = ["Inspect the visual world model for task-relevant evidence."]
+
+        invalid = invalid_actions(actions)
+        if invalid:
+            raise ValueError(f"RulePlanner produced invalid visual actions: {invalid}")
+        return {
+            "planner": "RulePlanner",
+            "mode": "visual_local_hybrid",
+            "task": task,
+            "subgoals": subgoals,
+            "actions": actions,
+            "based_on_rooms": world_model.get("rooms", []),
+            "based_on_objects": [obj.get("name") for obj in world_model.get("objects", []) if isinstance(obj, dict)],
+        }
+
 
 def _parse_place_on(task_lower: str) -> tuple[str, str] | None:
     match = re.search(r"place (?:the )?([a-z0-9_]+) on (?:the )?([a-z0-9_]+)", task_lower)
@@ -115,6 +153,40 @@ def _parse_place_in(task_lower: str) -> tuple[str, str] | None:
 def _parse_go_to_room(task_lower: str) -> str:
     match = re.search(r"go (?:from [a-z0-9_]+ to|to) (?:the )?([a-z0-9_]+)", task_lower)
     return match.group(1) if match else ""
+
+
+def _parse_find_object(task_lower: str) -> str:
+    match = re.search(r"\bfind (?:the )?([a-z0-9_ ]+?)(?:\.|$)", task_lower)
+    if not match:
+        return ""
+    text = match.group(1).strip()
+    if " near " in text:
+        return ""
+    return _normalize_visual_arg(text)
+
+
+def _parse_identify_location(task_lower: str) -> str:
+    match = re.search(r"\b(?:identify|find) where (?:the )?([a-z0-9_ ]+?) is\b", task_lower)
+    return _normalize_visual_arg(match.group(1)) if match else ""
+
+
+def _parse_relation_query(task_lower: str) -> tuple[str, str, str] | None:
+    match = re.search(r"\bis (?:the )?([a-z0-9_ ]+?) (on|inside|in|under|near|beside) (?:the )?([a-z0-9_ ]+?)\?", task_lower)
+    if not match:
+        return None
+    relation = "inside" if match.group(2) == "in" else match.group(2)
+    return _normalize_visual_arg(match.group(1)), relation, _normalize_visual_arg(match.group(3))
+
+
+def _parse_find_near(task_lower: str) -> tuple[str, str] | None:
+    match = re.search(r"\bfind (?:the )?([a-z0-9_ ]+?) (?:near|beside) (?:the )?([a-z0-9_ ]+?)(?:\.|$)", task_lower)
+    if not match:
+        return None
+    return _normalize_visual_arg(match.group(1)), _normalize_visual_arg(match.group(2))
+
+
+def _normalize_visual_arg(text: str) -> str:
+    return re.sub(r"[^a-z0-9_]+", "_", text.strip().lower()).strip("_")
 
 
 def _route_to_room_actions(room: str) -> list[str]:

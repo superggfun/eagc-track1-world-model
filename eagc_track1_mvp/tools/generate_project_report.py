@@ -187,6 +187,12 @@ Object and relation counts can vary slightly across real Qwen vision runs, so th
 
 The images are local smoke-test resources and are not tracked in git. This remains a local visual sequence smoke test, not an official environment, not ProcTHOR/AI2-THOR, and not training.
 
+### Visual-Local Hybrid Prototype
+
+v0.10 connects the visual sequence world model to symbolic planning and visual task evaluation. The flow builds a world model from the three-frame bedroom sequence, receives a visual task, plans with `RulePlanner.plan_visual(...)`, executes symbolic actions with `SymbolicVisualExecutor`, and writes `task_status`, `plans`, `episode_log.jsonl`, and `run_audit.json`.
+
+The smoke task set covers finding an object, identifying object location, answering a relation query, and finding an object near another object. This is plan-level symbolic execution only; physical actions are unsupported in visual mode and must not be reported as successful.
+
 ## 7. Failure Replay Case
 
 The seed 6 medium case previously exposed a recoverable `door_locked` failure. The original failure involved a locked door plus a mismatch between the target room route and object location. The root cause was that the planner could try to reach the task target before collecting the required object, leaving the task in progress after door recovery.

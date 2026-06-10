@@ -49,3 +49,16 @@ The run validated object persistence across frames, `not_observed_current_frame`
 Object and relation counts can vary slightly across real Qwen vision runs, so the smoke gate treats structural consistency and temporal world-model behavior as the stable validation targets.
 
 This is a local visual sequence smoke test only. It is not an official environment, not ProcTHOR/AI2-THOR, and not model training. The Pexels frame images are local test resources and are not included in git.
+
+## Visual-Local Hybrid Prototype
+
+v0.10 connects the visual sequence world model to planning and visual task evaluation. The prototype builds a multi-frame visual world model, receives a simple task, creates a symbolic plan, executes that plan at the world-model level, and writes task status plus audit fields.
+
+Supported smoke tasks:
+
+- `Find the laptop.`
+- `Identify where the book is.`
+- `Is the laptop on the chair?`
+- `Find the chair near the bed.`
+
+The symbolic executor does not perform physical manipulation and must not report physical actions such as `pick_up` or `place_on` as successful. This remains a local visual planning smoke test, not an official environment or training result.

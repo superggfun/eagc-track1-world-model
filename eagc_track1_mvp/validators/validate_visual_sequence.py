@@ -62,8 +62,10 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
             if object_id in object_ids:
                 errors.append(f"Duplicate object id in world_model.objects: {object_id}")
             object_ids.add(object_id)
+            object_ids.add(_slug(object_id))
         if object_name:
             object_names.add(object_name)
+            object_names.add(_slug(object_name))
 
     active_by_subject: Dict[str, List[Dict[str, Any]]] = {}
     all_location_by_subject: Dict[str, List[Dict[str, Any]]] = {}
@@ -94,27 +96,28 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
         ever_observed: set[str] = set()
         for _, observed in frame_observations:
             ever_observed.update(observed)
-        missing = sorted(name for name in ever_observed if name not in object_names and _slug(name) not in object_ids)
+        missing = sorted(name for name in ever_observed if _slug(name) not in object_names and _slug(name) not in object_ids)
         for name in missing:
             errors.append(f"Object observed in an earlier frame was deleted from world_model.objects: {name}")
 
         final_observed = frame_observations[-1][1]
         not_currently_visible = sorted(name for name in ever_observed - final_observed)
         visibility_states = {
-            str(state.get("entity"))
+            _slug(str(state.get("entity")))
             for state in world_model.get("states", [])
             if isinstance(state, dict)
             and state.get("attribute") == "visibility"
             and state.get("value") == "not_observed_current_frame"
         }
         uncertainty_items = {
-            str(item.get("item"))
+            _slug(str(item.get("item")))
             for item in world_model.get("uncertainty", [])
             if isinstance(item, dict) and "not visible" in str(item.get("reason", "")).lower()
         }
         for name in not_currently_visible:
-            if name in object_names or _slug(name) in object_ids:
-                if name not in visibility_states and name not in uncertainty_items:
+            normalized_name = _slug(name)
+            if normalized_name in object_names or normalized_name in object_ids:
+                if normalized_name not in visibility_states and normalized_name not in uncertainty_items:
                     errors.append(f"{name} is not visible in final frame but lacks visibility/uncertainty marker.")
 
     return errors

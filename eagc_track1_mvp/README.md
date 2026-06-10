@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.9.1 visual sequence smoke validation finalization.
+Current version: v0.10 visual-local hybrid Track 1 prototype.
 
-Current stable tag: `v0.9-visual-sequence-world-model`
+Current stable tag: `v0.9.1-visual-sequence-smoke-validated`
 
 Current status:
 
@@ -144,6 +144,14 @@ Run a local multi-image visual sequence:
 python main.py --env visual_sequence --image-dir assets/test_sequences/bedroom_sequence --max-frames 3 --validate
 python -m validators.validate_visual_sequence outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
 python tests/smoke_test_visual_sequence.py --image-dir assets/test_sequences/bedroom_sequence --max-frames 3
+```
+
+Run the visual-local hybrid prototype:
+
+```powershell
+python main.py --env visual_sequence --image-dir assets/test_sequences/bedroom_sequence --max-frames 3 --visual-local-hybrid --visual-task "Find the laptop." --validate
+python -m validators.validate_visual_local_hybrid outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
+python tests/smoke_test_visual_local_hybrid.py --image-dir assets/test_sequences/bedroom_sequence --max-frames 3
 ```
 
 Run the LocalSim Track 1 MVP environment:
@@ -623,6 +631,20 @@ Local non-source artifacts that should stay out of git include:
 - `pexels-readymade-4008334.jpg`
 - `source_pack/`
 - `outputs/`
+
+## v0.10 Notes
+
+v0.10 adds a visual-local hybrid Track 1 prototype:
+
+- It first builds a world model from the local multi-frame visual sequence.
+- After visual exploration, it receives a simple visual task such as `Find the laptop.` or `Is the laptop on the chair?`.
+- `RulePlanner.plan_visual(...)` generates lightweight symbolic actions such as `locate(object)`, `answer_location(object)`, and `answer_relation(subject, relation, object)`.
+- `SymbolicVisualExecutor` performs plan-level checks against the visual world model. It does not call a physical environment step and does not pretend that `pick_up` or `place_on` succeeded.
+- `visual_task_evaluator.py` supports find-object, identify-location, relation-query, and near-relation tasks.
+- `run_audit.json` records `visual_local_hybrid`, `visual_task`, `visual_task_status`, `symbolic_action_count`, `unsupported_physical_action_count`, and `evidence_count`.
+- `validators/validate_visual_local_hybrid.py` checks task ordering, symbolic answer coverage, plans, task status, and that no physical action is reported as successful.
+
+This is still a local prototype that connects visual world-model construction to planning and task evaluation. It is not real physical execution, not ProcTHOR/AI2-THOR, not the official EAGC runtime, and not model training.
 
 ## Adapter Layout
 

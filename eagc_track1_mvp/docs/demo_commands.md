@@ -89,3 +89,22 @@ The v0.9.1 validated local run used three Pexels bedroom images and produced:
 Object and relation counts can vary slightly across real Qwen vision runs; the smoke validator checks the structural and temporal consistency conditions.
 
 These local frame images are smoke-test resources and should remain untracked by git.
+
+## Visual-Local Hybrid Demo
+
+Use the visual sequence world model for symbolic planning and task evaluation:
+
+```powershell
+python main.py --env visual_sequence --image-dir assets/test_sequences/bedroom_sequence --max-frames 3 --visual-local-hybrid --visual-task "Find the laptop." --validate
+python -m validators.validate_visual_local_hybrid outputs/world_model.json outputs/run_audit.json outputs/episode_log.jsonl
+python tests/smoke_test_visual_local_hybrid.py --image-dir assets/test_sequences/bedroom_sequence --max-frames 3
+```
+
+The smoke test runs:
+
+- `Find the laptop.`
+- `Identify where the book is.`
+- `Is the laptop on the chair?`
+- `Find the chair near the bed.`
+
+This path performs symbolic plan-level execution only. It does not perform real physical manipulation, does not represent ProcTHOR or the official runtime, and does not train a model.

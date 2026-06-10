@@ -9,7 +9,18 @@ from planner.action_schema import is_valid_action, parse_action
 RELATION_STATUSES = {"active", "stale", "inferred", "uncertain"}
 LOCATION_RELATIONS = {"on", "inside", "under", "near", "beside", "at"}
 PLACEHOLDER_ARGS = {"object", "target", "thing", "item", "entity"}
-ALLOWED_SYMBOLIC_REGIONS = {"visible_area", "under_mat", "agent_hand", "next_room"}
+ALLOWED_SYMBOLIC_REGIONS = {
+    "visible_area",
+    "under_mat",
+    "agent_hand",
+    "next_room",
+    "on",
+    "inside",
+    "under",
+    "near",
+    "beside",
+    "at",
+}
 PICKUP_BLOCKED_CATEGORIES = {"furniture", "room", "door", "container", "surface", "inferred_support"}
 INTERACTIVE_NAMES = {"door", "drawer", "cabinet", "container", "box"}
 INTERACTIVE_CATEGORIES = {"door", "drawer", "container", "furniture", "inferred_support"}

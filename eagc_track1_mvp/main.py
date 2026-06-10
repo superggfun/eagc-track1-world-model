@@ -28,6 +28,7 @@ from validators.validate_semantic_consistency import validate as validate_semant
 from validators.validate_task_status import validate as validate_task_status
 from validators.validate_vision_extraction import validate as validate_vision_extraction
 from validators.validate_world_model import validate as validate_world_model
+from visual_runner import VisualLocalHybridRunner
 from world_model.action_effects import apply_action_effect, apply_exception_effect
 from world_model.store import WorldModelStore
 from world_model.update import apply_environment_context, apply_frame_visibility, update_agent_state
@@ -92,6 +93,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--image-dir", help="Local image directory for --env visual_sequence.")
     parser.add_argument("--max-steps", type=int, help="Maximum LocalSim steps or legacy visual sequence frames.")
     parser.add_argument("--max-frames", type=int, help="Maximum visual sequence frames to process.")
+    parser.add_argument("--visual-local-hybrid", action="store_true", help="Use visual sequence world model for symbolic task planning/evaluation.")
+    parser.add_argument("--visual-task", help="Task to evaluate after visual world model construction.")
     parser.add_argument(
         "--track1-procedure",
         action="store_true",
@@ -114,6 +117,8 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         image_dir=None,
         max_steps=None,
         max_frames=None,
+        visual_local_hybrid=False,
+        visual_task=None,
         track1_procedure=False,
         seed=1,
         difficulty="easy",
@@ -333,6 +338,76 @@ def run_demo(args: argparse.Namespace | None = None) -> Dict[str, Any]:
         )
 
         if env_name == "visual_sequence":
+            if bool(getattr(args, "visual_local_hybrid", False)):
+                visual_task = str(getattr(args, "visual_task", "") or "Find the laptop.")
+                runner = VisualLocalHybridRunner(
+                    env=env,
+                    extractor=extractor,
+                    store=store,
+                    logger=logger,
+                    output_dir=output_dir,
+                )
+                result = runner.run(initial, visual_task)
+                audit = build_run_audit(
+                    config=config,
+                    run_id=run_id,
+                    episode_id=initial["episode_id"],
+                    output_dir=output_dir,
+                    use_mock_llm=use_mock_llm,
+                    started_wall=started_wall,
+                    latency_seconds=time.perf_counter() - started,
+                    client=client,
+                    fallback_used=extractor.fallback_used,
+                    debug_raw_path=output_dir / "debug_qwen_raw.txt",
+                    world_model_path=world_model_path,
+                    episode_log_path=episode_log_path,
+                    validation_status=validation_status,
+                    prompt_version=PROMPT_VERSION,
+                    qwen_response_summary_path=qwen_response_summary_path,
+                    env_name="visual_sequence",
+                    scene="",
+                    vision_mode=True,
+                    image_path=Path(result["processed_frames"][-1]) if result["processed_frames"] else None,
+                    vision_call_success=bool(result["processed_frames"]),
+                    vision_parse_success=bool(result["processed_frames"]) and not extractor.fallback_used,
+                    simulator_frame_path=None,
+                    simulator_metadata_path=None,
+                    ai2thor_start_success=False,
+                    ai2thor_error_message="",
+                    oracle_metadata_mode=oracle_metadata_mode,
+                    frame_count=frame_count,
+                    image_dir=image_dir or PROJECT_ROOT / "assets" / "test_sequences" / "bedroom_sequence",
+                    processed_frames=result["processed_frames"],
+                )
+                audit.update(
+                    {
+                        "visual_local_hybrid": True,
+                        "visual_task": visual_task,
+                        "visual_task_status": result["task_status"],
+                        "symbolic_action_count": result["symbolic_action_count"],
+                        "unsupported_physical_action_count": result["unsupported_physical_action_count"],
+                        "evidence_count": result["evidence_count"],
+                    }
+                )
+                write_run_audit(audit_path, audit)
+                if args.validate:
+                    validation_status = run_validators(
+                        world_model_path,
+                        episode_log_path,
+                        audit_path,
+                        True,
+                        "visual_sequence",
+                        visual_local_hybrid=True,
+                    )
+                    audit["validation_status"] = validation_status
+                    write_run_audit(audit_path, audit)
+                write_latest_artifacts(output_root, world_model_path, episode_log_path, audit_path)
+                print(f"Demo complete. Wrote {world_model_path}")
+                print(f"Demo complete. Wrote {episode_log_path}")
+                print(f"Run audit written to {audit_path}")
+                if args.validate and isinstance(audit.get("validation_status"), dict) and not audit["validation_status"].get("passed", False):
+                    raise SystemExit(1)
+                return audit
             audit = run_visual_sequence_episode(
                 config=config,
                 run_id=run_id,
@@ -663,6 +738,7 @@ def run_validators(
     vision_mode: bool = False,
     env_name: str = "mock",
     track1_procedure: bool = False,
+    visual_local_hybrid: bool = False,
 ) -> Dict[str, Any]:
     checks = {
         "world_model": validate_world_model(world_model_path),
@@ -680,6 +756,10 @@ def run_validators(
         from validators.validate_visual_sequence import validate as validate_visual_sequence
 
         checks["visual_sequence"] = validate_visual_sequence(world_model_path, audit_path, episode_log_path)
+    if visual_local_hybrid and audit_path is not None:
+        from validators.validate_visual_local_hybrid import validate as validate_visual_local_hybrid
+
+        checks["visual_local_hybrid"] = validate_visual_local_hybrid(world_model_path, audit_path, episode_log_path)
     if env_name in {"local_sim", "local_sim_random"} and audit_path is not None:
         from validators.validate_local_sim_run import validate as validate_local_sim_run
 

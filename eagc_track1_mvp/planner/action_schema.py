@@ -4,7 +4,11 @@ from typing import Iterable, List, Tuple
 
 ACTION_PATTERNS = {
     "explore": re.compile(r"^explore\([a-zA-Z0-9_]+\)$"),
+    "inspect": re.compile(r"^inspect\([a-zA-Z0-9_]+\)$"),
     "locate": re.compile(r"^locate\([a-zA-Z0-9_]+\)$"),
+    "answer_location": re.compile(r"^answer_location\([a-zA-Z0-9_]+\)$"),
+    "answer_relation": re.compile(r"^answer_relation\([a-zA-Z0-9_]+,\s*[a-zA-Z0-9_]+,\s*[a-zA-Z0-9_]+\)$"),
+    "mark_task_complete": re.compile(r"^mark_task_complete\([a-zA-Z0-9_]+\)$"),
     "navigate_to": re.compile(r"^navigate_to\([a-zA-Z0-9_]+\)$"),
     "search": re.compile(r"^search\([a-zA-Z0-9_]+\)$"),
     "pick_up": re.compile(r"^pick_up\([a-zA-Z0-9_]+\)$"),
