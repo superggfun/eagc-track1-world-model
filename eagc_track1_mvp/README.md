@@ -734,6 +734,16 @@ docker run --rm -e QWEN_BASE_URL=http://host.docker.internal:8000/v1 -e QWEN_MOD
 
 See `docker/README_DOCKER.md` and `docker/docker_run_examples.md` for more details.
 
+## v0.11.1 Bundle Notes
+
+v0.11.1 adds a qualification submission readiness bundle builder:
+
+```powershell
+python tools/create_submission_bundle.py
+```
+
+The generated `submission_bundle/` includes Docker instructions, the prepared source zip, report/disclosure documents, sample `world_model.json` and `episode_log.jsonl` outputs, and SHA256 checksums. It is a local upload-preparation artifact and is ignored by git.
+
 ## Adapter Layout
 
 - `env_adapters/base.py`: stable adapter interface

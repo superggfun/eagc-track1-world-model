@@ -13,6 +13,7 @@ EXCLUDED_DIR_PARTS = {
     ".pytest_cache",
     "dist",
     "outputs",
+    "submission_bundle",
     "source_pack",
 }
 EXCLUDED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".zip"}
@@ -21,6 +22,7 @@ FORBIDDEN_MARKERS = {
     "/.venv-ai2thor/",
     "/dist/",
     "/source_pack/",
+    "/submission_bundle/",
     "/__pycache__/",
 }
 
@@ -59,7 +61,10 @@ def main() -> int:
         return 1
     print(f"Wrote {output_path}")
     print(f"Packaged tracked source files: {len(packaged)}")
-    print("Verified exclusions: outputs, dist, .venv-ai2thor, source_pack, __pycache__, zip files, and local images.")
+    print(
+        "Verified exclusions: outputs, dist, .venv-ai2thor, source_pack, "
+        "submission_bundle, __pycache__, zip files, and local images."
+    )
     return 0
 
 

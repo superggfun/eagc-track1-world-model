@@ -2,6 +2,7 @@
 outputs/
 dist/
 source_pack/
+submission_bundle/
 .venv*/
 .pytest_cache/
 __pycache__/

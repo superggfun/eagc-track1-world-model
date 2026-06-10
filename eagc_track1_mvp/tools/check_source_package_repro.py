@@ -14,7 +14,7 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPRO_ROOT = PROJECT_ROOT / "dist" / "repro_check"
 REPORT_PATH = PROJECT_ROOT / "dist" / "repro_check_report.json"
-FORBIDDEN_DIRS = {"outputs", "dist", "source_pack", ".venv-ai2thor", "__pycache__"}
+FORBIDDEN_DIRS = {"outputs", "dist", "source_pack", "submission_bundle", ".venv-ai2thor", "__pycache__"}
 FORBIDDEN_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".zip"}
 REQUIRED_FILES = [
     "README.md",

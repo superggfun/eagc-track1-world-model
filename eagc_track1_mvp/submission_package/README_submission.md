@@ -2,7 +2,7 @@
 
 This folder contains a pre-submission readiness package for the current EAGC Track 1 local MVP. It is intended for internal review, teacher discussion, technical report drafting, and future qualification submission preparation.
 
-Current project stage: `v0.10.3` pre-submission readiness package.
+Current project stage: `v0.11.1` qualification submission bundle readiness package.
 
 Current system scope:
 
@@ -21,6 +21,7 @@ Documents in this package:
 - `system_limitations.md`: known limitations and risks.
 - `demo_commands.md`: command set for local demonstrations.
 - `checklist.md`: current readiness against likely EAGC submission items.
+- `open_source_statement.md`: source release and dependency redistribution statement.
 
 Important framing:
 
