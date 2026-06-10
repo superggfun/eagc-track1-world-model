@@ -1,6 +1,10 @@
 __pycache__/
 .venv/
 .pytest_cache/
+data/
+*.glb
+*.ply
+*.obj
 *.zip
 outputs/*
 !outputs/.gitkeep

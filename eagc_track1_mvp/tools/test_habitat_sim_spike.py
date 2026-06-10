@@ -16,9 +16,11 @@ def main() -> int:
     args = parse_args()
     output_dir = _resolve_path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    status_path = output_dir / "habitat_sim_status.json"
+    status_path = output_dir / "status.json"
+    legacy_status_path = output_dir / "habitat_sim_status.json"
     status = _run_spike(args, output_dir)
     status_path.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+    legacy_status_path.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(status, ensure_ascii=False, indent=2))
     print(f"Habitat-Sim spike status written to {status_path}")
     return 0
@@ -43,6 +45,7 @@ def _run_spike(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         "rgb_saved": False,
         "rgb_path": str(rgb_path),
         "observation_keys": [],
+        "frame_shape": [],
         "elapsed_seconds": 0.0,
         "error_type": "",
         "error_message": "",
@@ -95,6 +98,7 @@ def _run_spike(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
                 {
                     "success": True,
                     "rgb_saved": rgb_path.exists() and rgb_path.stat().st_size > 0,
+                    "frame_shape": list(getattr(rgb, "shape", [])),
                     "reason": "",
                 }
             )
