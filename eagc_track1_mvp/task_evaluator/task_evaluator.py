@@ -105,13 +105,16 @@ def _evaluate_success_condition(condition: Dict[str, Any], world_model: Dict[str
         room = str(condition.get("room", ""))
         obj = str(condition.get("object", ""))
         target = str(condition.get("target", ""))
-        if world_model.get("agent_state", {}).get("current_room") == room and _location_support(world_model, obj) == target:
+        current_room = str(world_model.get("agent_state", {}).get("current_room") or "")
+        if current_room == room and _location_support(world_model, obj) == target:
             return _status(
                 expected_status,
                 True,
                 f"Agent reached {room} and placed {obj} on {target}.",
                 [f"agent current_room {room}", f"{obj}.location.support == {target}"],
             )
+        if current_room != room and _door_to_room_open(world_model, room):
+            return _status("in_progress", False, "door opened but target room not entered", [])
         return _status("in_progress", False, f"Agent/object condition for {obj} on {target} in {room} is unmet.", [])
 
     if condition_type == "tool_substitution":
@@ -208,6 +211,16 @@ def _has_relation(world_model: Dict[str, Any], subject: str, relation_name: str,
         ):
             return True
     return False
+
+
+def _door_to_room_open(world_model: Dict[str, Any], room: str) -> bool:
+    room_to_door = {
+        "kitchen": "kitchen_door",
+        "living_room": "living_room_door",
+        "bedroom": "bedroom_door",
+    }
+    door = room_to_door.get(room)
+    return bool(door and _has_state(world_model, door, "status", "open"))
 
 
 def _status(status: str, success: bool, reason: str, evidence: List[str]) -> Dict[str, Any]:

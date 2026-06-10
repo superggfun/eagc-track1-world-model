@@ -41,10 +41,13 @@ class Replanner:
             ]
         elif exception_type == "door_locked":
             door = object_name if object_name != "target object" else "door"
-            if door == "door":
-                recovery_actions = ["search(key_hook)", "search(under_mat)", f"unlock({door})", f"open({door})"]
+            required_key = str(exception.get("required_key") or "")
+            if not required_key and _find_object(world_model, "key"):
+                required_key = "key"
+            if required_key:
+                recovery_actions = [f"search({required_key})", f"pick_up({required_key})", f"unlock({door})", f"open({door})"]
             else:
-                recovery_actions = ["search(key)", "pick_up(key)", f"unlock({door})", f"open({door})"]
+                recovery_actions = ["search(key_hook)", "search(under_mat)", f"unlock({door})", f"open({door})"]
             recovery_subgoals = ["Identify lock state.", "Search likely key locations.", "Unlock and retry."]
         elif exception_type == "target_container_unavailable":
             object_to_place = exception.get("object_to_place", "cup")

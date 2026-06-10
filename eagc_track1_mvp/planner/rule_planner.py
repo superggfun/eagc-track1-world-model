@@ -14,15 +14,21 @@ class RulePlanner:
         target_room = _parse_go_to_room(task_lower)
         if generic_place_on and target_room:
             obj, target = generic_place_on
-            if target_room == "kitchen":
-                actions = ["navigate_to(hallway)", "open(kitchen_door)", "navigate_to(kitchen)"]
-            else:
-                actions = [f"navigate_to({target_room})"]
-            actions.extend([f"locate({obj})", f"pick_up({obj})", f"navigate_to({target})", f"place_on({obj}, {target})"])
+            actions = _route_to_room_actions(target_room)
+            actions.extend(
+                [
+                    f"navigate_to({obj})",
+                    f"locate({obj})",
+                    f"pick_up({obj})",
+                    f"navigate_to({target_room})",
+                    f"navigate_to({target})",
+                    f"place_on({obj}, {target})",
+                ]
+            )
             subgoals = [
-                f"Move toward {target_room}.",
+                f"Open or verify the route to {target_room}.",
                 f"Acquire the {obj}.",
-                f"Place the {obj} on the {target}.",
+                f"Return to {target_room} and place the {obj} on the {target}.",
             ]
         elif "bedroom to kitchen" in task_lower and "cup" in task_lower and "counter" in task_lower:
             actions = [
@@ -109,6 +115,12 @@ def _parse_place_in(task_lower: str) -> tuple[str, str] | None:
 def _parse_go_to_room(task_lower: str) -> str:
     match = re.search(r"go (?:from [a-z0-9_]+ to|to) (?:the )?([a-z0-9_]+)", task_lower)
     return match.group(1) if match else ""
+
+
+def _route_to_room_actions(room: str) -> list[str]:
+    if room == "kitchen":
+        return ["navigate_to(hallway)", "open(kitchen_door)", "navigate_to(kitchen)"]
+    return [f"navigate_to({room})"]
 
 
 def _resolve_pronoun(task_lower: str, value: str) -> str:

@@ -488,6 +488,8 @@ class LocalSimEnv(BaseEnvAdapter):
         extra: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         exception = {"type": exception_type, "object": obj, "state": "blocked"}
+        if exception_type == "door_locked" and obj == "kitchen_door":
+            exception["required_key"] = "key"
         if extra:
             exception.update(extra)
         return {

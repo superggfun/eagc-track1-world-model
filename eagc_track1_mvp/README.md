@@ -2,7 +2,7 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.8.1 randomized LocalSim leakage audit and medium robustness stress test.
+Current version: v0.8.2 medium failure replay and recoverable door-locked planner repair.
 
 The demo loop:
 
@@ -160,7 +160,14 @@ python tests/robustness_test_random_local_sim.py --mode real --num-episodes 10 -
 python tests/robustness_test_random_local_sim.py --mode real --num-episodes 50 --difficulty medium --strict-leakage-check
 ```
 
-The 50-episode real medium run is intended as an optional overnight stress test, not a v0.8.1 commit gate.
+The 50-episode real medium run is intended as an optional overnight stress test, not a normal development commit gate.
+
+Replay a single randomized LocalSim seed with diagnostics:
+
+```powershell
+python tools/replay_random_local_sim_failure.py --seed 6 --difficulty medium --mode real
+python tools/replay_random_local_sim_failure.py --seed 6 --difficulty medium --mode mock
+```
 
 Sequence frames should be local files named in deterministic order:
 
@@ -476,6 +483,18 @@ Local standards for this MVP:
 - leakage checks must pass for every generated run
 
 These are local hidden-style checks for robustness. They are not official EAGC evaluation results.
+
+## v0.8.2 Notes
+
+v0.8.2 adds targeted replay and repair for a recoverable medium `door_locked` failure:
+
+- `tools/replay_random_local_sim_failure.py` reruns one generated seed and saves `generated_episode_spec.json`, `public_env_config.json`, `hidden_spec_debug.json`, output artifacts, and `failure_diagnosis.json`.
+- `diagnostics/diagnose_episode_failure.py` classifies common route/recovery failures such as `door_unlocked_but_not_entered`, `key_found_but_not_used`, `opened_door_but_original_plan_not_resumed`, and `recovery_plan_incomplete`.
+- `RulePlanner` now keeps the post-recovery route for tasks like “go to kitchen and place cup on counter”: open/verify the room route, navigate to the object, pick it up, return to the target room, and place it.
+- `Replanner` uses explicit `required_key` metadata for locked doors when available.
+- `Track1ProcedureRunner` can synthesize a missing `navigate_to(target_room)` after door recovery if a failure occurred on a route action.
+- `TaskEvaluator` distinguishes “door opened” from “target room entered”; an open door alone is still `in_progress`.
+- Random robustness summaries use `leakage_check_passed` and `hidden_spec_leakage_detected` to avoid ambiguous `leakage=true` wording.
 
 ## v0.7.1 Notes
 

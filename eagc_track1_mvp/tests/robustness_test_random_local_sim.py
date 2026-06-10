@@ -64,7 +64,9 @@ def main() -> int:
         results.append(result)
         print(
             "seed={seed} status={status} expected={expected} score={score} "
-            "exception={exception} leakage={leakage_check} validation={validation} output_dir={output_dir}".format(**result)
+            "exception={exception} leakage_check_passed={leakage_check_passed} "
+            "hidden_spec_leakage_detected={hidden_spec_leakage_detected} "
+            "validation={validation} output_dir={output_dir}".format(**result)
         )
 
     summary = _build_summary(len(seeds), args.mode, args.difficulty, results)
@@ -127,7 +129,8 @@ def _collect_result(seed: int, output_dir: Path, returncode: int, stdout: str, s
         "score": float(audit.get("track1_total_score") or score.get("total_score") or 0.0),
         "exception": exception_type,
         "validation": validation,
-        "leakage_check": "passed" if not leakage_errors else "failed",
+        "leakage_check_passed": not leakage_errors,
+        "hidden_spec_leakage_detected": bool(leakage_errors),
         "leakage_errors": leakage_errors,
         "output_dir": str(output_dir),
         "steps": int(audit.get("total_steps_used") or 0),
@@ -178,7 +181,8 @@ def _build_summary(num_episodes: int, mode: str, difficulty: str, results: List[
         "average_qwen_calls": round(_avg([item["qwen_calls"] for item in results]), 4),
         "average_latency_seconds": round(_avg([item["latency_seconds"] for item in results]), 4),
         "fallback_used_count": sum(1 for item in results if item.get("fallback_used")),
-        "leakage_check_passed": all(item.get("leakage_check") == "passed" for item in results),
+        "leakage_check_passed": all(item.get("leakage_check_passed") for item in results),
+        "hidden_spec_leakage_detected": any(item.get("hidden_spec_leakage_detected") for item in results),
         "failures": failures,
         "per_template_stats": per_template,
         "per_exception_type_stats": per_exception,
@@ -229,6 +233,7 @@ def _render_markdown(summary: Dict[str, Any]) -> str:
         f"- average_latency_seconds: {summary['average_latency_seconds']}",
         f"- fallback_used_count: {summary['fallback_used_count']}",
         f"- leakage_check_passed: {summary['leakage_check_passed']}",
+        f"- hidden_spec_leakage_detected: {summary['hidden_spec_leakage_detected']}",
         "",
         "## Failures",
         "",

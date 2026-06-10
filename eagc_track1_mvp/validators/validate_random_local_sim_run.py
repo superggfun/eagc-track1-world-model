@@ -50,6 +50,7 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
                 errors.append("controlled exception requires recovery_action in episode_log.")
 
     errors.extend(_validate_no_teleport_placement(world_model, rows))
+    errors.extend(_validate_door_locked_route_completion(hidden_spec, rows, task_status))
 
     expected = str(audit.get("expected_task_status") or hidden_spec.get("expected_task_status") or spec.get("expected_task_status") or "")
     actual = str(task_status.get("status") or "")
@@ -59,6 +60,30 @@ def validate(world_model_path: Path, audit_path: Path, episode_log_path: Path) -
         elif not audit.get("accepted_failure_reason"):
             errors.append("accepted_failure requires accepted_failure_reason.")
     return errors
+
+
+def _validate_door_locked_route_completion(
+    hidden_spec: Dict[str, Any],
+    rows: List[Dict[str, Any]],
+    task_status: Dict[str, Any],
+) -> List[str]:
+    controlled = hidden_spec.get("controlled_exception", {})
+    condition = hidden_spec.get("success_condition", {})
+    if not isinstance(controlled, dict) or controlled.get("type") != "door_locked":
+        return []
+    if not isinstance(condition, dict):
+        return []
+    target_room = str(condition.get("room") or "")
+    if not target_room:
+        return []
+    actions = [str(row.get("action") or "") for row in rows if isinstance(row, dict)]
+    entered = f"navigate_to({target_room})" in actions or f"enter({target_room})" in actions
+    if not entered:
+        return [f"recovery_plan_incomplete: door_locked route never executed navigate_to({target_room}) or enter({target_room})."]
+    event_types = [row.get("event_type") for row in rows if isinstance(row, dict)]
+    if "recovery_complete" in event_types and task_status.get("status") == "in_progress" and "resume_action" not in event_types:
+        return ["recovery_plan_incomplete: recovery_complete left task in_progress without resume_action."]
+    return []
 
 
 def _validate_no_teleport_placement(world_model: Dict[str, Any], rows: List[Dict[str, Any]]) -> List[str]:

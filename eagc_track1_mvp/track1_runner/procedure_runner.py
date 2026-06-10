@@ -266,6 +266,7 @@ class Track1ProcedureRunner:
         recovery_complete = self._execute_recovery_actions(recovery_plan)
         if not recovery_complete:
             return
+        remaining_actions = self._door_route_continuation(result, action, remaining_actions)
         current = evaluate_task_status(
             self.task,
             self.store.world_model,
@@ -291,6 +292,41 @@ class Track1ProcedureRunner:
                 )
                 self.step += 1
                 return
+
+    def _door_route_continuation(
+        self,
+        failure: Dict[str, Any],
+        failed_action: str,
+        remaining_actions: List[str],
+    ) -> List[str]:
+        exception = failure.get("exception", {})
+        if not isinstance(exception, dict) or exception.get("type") != "door_locked":
+            return remaining_actions
+        target_room = self._target_room_after_door_failure(failed_action, exception)
+        if not target_room:
+            return remaining_actions
+        current_room = self.store.world_model.get("agent_state", {}).get("current_room")
+        action = f"navigate_to({target_room})"
+        if current_room == target_room or action in remaining_actions:
+            return remaining_actions
+        return [action, *remaining_actions]
+
+    def _target_room_after_door_failure(self, failed_action: str, exception: Dict[str, Any]) -> str:
+        if failed_action.startswith("navigate_to(") and failed_action.endswith(")"):
+            target = failed_action.removeprefix("navigate_to(").removesuffix(")")
+            if target in {"bedroom", "hallway", "kitchen", "living_room"}:
+                return target
+        condition = self.evaluator_context.get("success_condition", {})
+        if isinstance(condition, dict) and condition.get("room"):
+            return str(condition["room"])
+        door = str(exception.get("object") or "")
+        if door == "kitchen_door":
+            return "kitchen"
+        if door == "living_room_door":
+            return "living_room"
+        if door == "bedroom_door":
+            return "bedroom"
+        return ""
 
     def _execute_recovery_actions(self, recovery_plan: Dict[str, Any]) -> bool:
         max_recovery = int(self.budgets["max_recovery_steps"])
