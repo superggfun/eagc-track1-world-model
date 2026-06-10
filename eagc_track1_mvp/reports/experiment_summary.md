@@ -31,3 +31,21 @@ Development gates used for v0.8.x:
 
 The local score is `local_heuristic_score`. It is not an official Track 1 score.
 
+## Visual Sequence Smoke Validation
+
+v0.9.1 adds a finalized local real-image visual sequence smoke validation. The run used three local Pexels bedroom images under `assets/test_sequences/bedroom_sequence/`, named `frame_000.jpg`, `frame_001.jpg`, and `frame_002.jpg`.
+
+Observed validation summary:
+
+- `processed_frames=3`
+- `qwen_call_count=3`
+- `fallback_used=False`
+- `vision_parse_success=True`
+- `object_count=15`
+- `relation_count=23`
+
+The run validated object persistence across frames, `not_observed_current_frame` visibility records for temporarily missing objects, and stale/active relation updates when spatial relations changed.
+
+Object and relation counts can vary slightly across real Qwen vision runs, so the smoke gate treats structural consistency and temporal world-model behavior as the stable validation targets.
+
+This is a local visual sequence smoke test only. It is not an official environment, not ProcTHOR/AI2-THOR, and not model training. The Pexels frame images are local test resources and are not included in git.

@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.9 multi-frame visual sequence world model update.
+Current version: v0.9.1 visual sequence smoke validation finalization.
 
-Current stable tag: `v0.8.4-technical-report-demo-package`
+Current stable tag: `v0.9-visual-sequence-world-model`
 
 Current status:
 
@@ -525,10 +525,10 @@ v0.8.2 adds targeted replay and repair for a recoverable medium `door_locked` fa
 
 - `tools/replay_random_local_sim_failure.py` reruns one generated seed and saves `generated_episode_spec.json`, `public_env_config.json`, `hidden_spec_debug.json`, output artifacts, and `failure_diagnosis.json`.
 - `diagnostics/diagnose_episode_failure.py` classifies common route/recovery failures such as `door_unlocked_but_not_entered`, `key_found_but_not_used`, `opened_door_but_original_plan_not_resumed`, and `recovery_plan_incomplete`.
-- `RulePlanner` now keeps the post-recovery route for tasks like “go to kitchen and place cup on counter”: open/verify the room route, navigate to the object, pick it up, return to the target room, and place it.
+- `RulePlanner` now keeps the post-recovery route for tasks like 鈥済o to kitchen and place cup on counter鈥? open/verify the room route, navigate to the object, pick it up, return to the target room, and place it.
 - `Replanner` uses explicit `required_key` metadata for locked doors when available.
 - `Track1ProcedureRunner` can synthesize a missing `navigate_to(target_room)` after door recovery if a failure occurred on a route action.
-- `TaskEvaluator` distinguishes “door opened” from “target room entered”; an open door alone is still `in_progress`.
+- `TaskEvaluator` distinguishes 鈥渄oor opened鈥?from 鈥渢arget room entered鈥? an open door alone is still `in_progress`.
 - Random robustness summaries use `leakage_check_passed` and `hidden_spec_leakage_detected` to avoid ambiguous `leakage=true` wording.
 
 ## v0.8.3 Notes
@@ -603,6 +603,26 @@ v0.9 adds a local multi-frame visual sequence world-model update path:
 - `tests/smoke_test_visual_sequence.py` runs the visual sequence path and validator when local test images are present.
 
 You need to provide local test images under `assets/test_sequences/bedroom_sequence/` or another directory. This is still a local smoke test over static images, not an official runtime, not ProcTHOR, not AI2-THOR, and not a training setup.
+
+## v0.9.1 Notes
+
+v0.9.1 finalizes the real-image visual sequence smoke validation:
+
+- The local validation used three Pexels bedroom-sequence images named `frame_000.jpg`, `frame_001.jpg`, and `frame_002.jpg`.
+- The images are local test resources only and are ignored by git; do not submit them as source.
+- Latest validation summary: `processed_frames=3`, `qwen_call_count=3`, `fallback_used=False`, `vision_parse_success=True`, `object_count=15`, `relation_count=23`.
+- Object and relation counts can vary slightly across real Qwen vision runs; the validator focuses on structured extraction, frame accounting, object persistence, not-visible retention, and stale/active relation consistency.
+- The run validated object persistence across frames, `not_observed_current_frame` visibility records, and stale/active relation updates.
+- `tests/smoke_test_visual_sequence.py` can be run directly from the project root without setting `PYTHONPATH`.
+- This remains a local visual sequence smoke test, not an official environment, not ProcTHOR/AI2-THOR, and not model training.
+
+Local non-source artifacts that should stay out of git include:
+
+- `assets/test_sequences/bedroom_sequence/frame_*.jpg`
+- `assets/test_sequences/bedroom_sequence/frame_*.png`
+- `pexels-readymade-4008334.jpg`
+- `source_pack/`
+- `outputs/`
 
 ## Adapter Layout
 

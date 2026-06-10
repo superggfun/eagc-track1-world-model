@@ -6,6 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from validators.validate_visual_sequence import validate as validate_visual_sequence
 
 
@@ -18,10 +22,9 @@ def main() -> int:
     parser.add_argument("--max-frames", type=int, default=3)
     args = parser.parse_args()
 
-    project_root = Path(__file__).resolve().parents[1]
     image_dir = Path(args.image_dir)
     if not image_dir.is_absolute():
-        image_dir = project_root / image_dir
+        image_dir = PROJECT_ROOT / image_dir
 
     frames = _frames(image_dir)
     if len(frames) < 2:
@@ -31,7 +34,7 @@ def main() -> int:
         )
         return 1
 
-    output_dir = project_root / "outputs" / "visual_sequence_smoke" / image_dir.name
+    output_dir = PROJECT_ROOT / "outputs" / "visual_sequence_smoke" / image_dir.name
     command = [
         sys.executable,
         "main.py",
@@ -45,7 +48,7 @@ def main() -> int:
         str(output_dir),
         "--validate",
     ]
-    completed = subprocess.run(command, cwd=project_root)
+    completed = subprocess.run(command, cwd=PROJECT_ROOT)
     if completed.returncode != 0:
         return completed.returncode
 
@@ -67,6 +70,7 @@ def main() -> int:
     print(f"object_count={len(world_model.get('objects', []))}")
     print(f"relation_count={len(world_model.get('relations', []))}")
     print(f"fallback_used={audit.get('fallback_used', False)}")
+    print(f"vision_parse_success={audit.get('vision_parse_success', False)}")
     print(f"output_dir={output_dir}")
     return 0
 

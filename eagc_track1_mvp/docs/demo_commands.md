@@ -76,3 +76,16 @@ python tests/smoke_test_visual_sequence.py --image-dir assets/test_sequences/bed
 ```
 
 The visual sequence path tests incremental world-model updates over local static images. It is not ProcTHOR, AI2-THOR, official EAGC runtime integration, or training.
+
+The v0.9.1 validated local run used three Pexels bedroom images and produced:
+
+- `processed_frames=3`
+- `qwen_call_count=3`
+- `fallback_used=False`
+- `vision_parse_success=True`
+- `object_count=15`
+- `relation_count=23`
+
+Object and relation counts can vary slightly across real Qwen vision runs; the smoke validator checks the structural and temporal consistency conditions.
+
+These local frame images are smoke-test resources and should remain untracked by git.

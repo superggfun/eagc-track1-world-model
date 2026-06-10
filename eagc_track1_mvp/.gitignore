@@ -4,3 +4,9 @@ __pycache__/
 *.zip
 outputs/*
 !outputs/.gitkeep
+source_pack/
+pexels-readymade-4008334.jpg
+assets/test_sequences/bedroom_sequence/frame_*.jpg
+assets/test_sequences/bedroom_sequence/frame_*.jpeg
+assets/test_sequences/bedroom_sequence/frame_*.png
+assets/test_sequences/bedroom_sequence/frame_*.webp
