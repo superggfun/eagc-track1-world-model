@@ -180,6 +180,7 @@ Generate the technical report and source package:
 ```powershell
 python tools/generate_project_report.py
 python tools/package_source.py
+python tools/check_source_package_repro.py --zip-path dist/eagc_track1_mvp_source.zip
 ```
 
 Run the LocalSim Track 1 MVP environment:
@@ -690,8 +691,20 @@ v0.10.2 packages the current project as a more reproducible stage demo:
 - `tools/run_test_suite.py` supports `fast`, `targeted`, `standard`, and `full` tiers.
 - `tools/create_demo_snapshot.py` creates `outputs/demo_snapshot/` with a LocalSim Track 1 demo and a visual evidence demo.
 - `tools/package_source.py` creates `dist/eagc_track1_mvp_source.zip` from git-tracked source files only and verifies that outputs, local images, `.venv-ai2thor`, `source_pack`, zip files, and `__pycache__` are excluded.
+- `tools/check_source_package_repro.py` extracts the source zip into `dist/repro_check/`, verifies required files and exclusions, then runs `python -m compileall .` and `python tools/run_test_suite.py --tier fast` in the clean extracted project.
 - `docs/submission_readiness_checklist.md` summarizes current artifacts, dependencies, hardware, training disclosure, and known limitations.
 - The project remains a local MVP. LocalSim results are not official EAGC results, visual-local hybrid is symbolic, and no model training is performed.
+
+## v0.10.4 Notes
+
+v0.10.4 adds a clean source package reproducibility check:
+
+```powershell
+python tools/package_source.py
+python tools/check_source_package_repro.py --zip-path dist/eagc_track1_mvp_source.zip
+```
+
+The check confirms that the source archive excludes runtime outputs, local images, `dist/`, `source_pack/`, `.venv-ai2thor/`, and `__pycache__/`, then verifies that the extracted source can compile and run the fast test tier.
 - `validators/validate_visual_local_hybrid.py` checks task ordering, symbolic answer coverage, plans, task status, and that no physical action is reported as successful.
 
 This is still a local prototype that connects visual world-model construction to planning and task evaluation. It is not real physical execution, not ProcTHOR/AI2-THOR, not the official EAGC runtime, and not model training.

@@ -10,3 +10,4 @@ assets/test_sequences/bedroom_sequence/frame_*.jpg
 assets/test_sequences/bedroom_sequence/frame_*.jpeg
 assets/test_sequences/bedroom_sequence/frame_*.png
 assets/test_sequences/bedroom_sequence/frame_*.webp
+dist/
