@@ -202,6 +202,14 @@ def extract_instruction(traj_data: Dict[str, Any]) -> str:
     return "ALFRED offline trajectory task"
 
 
+def _episode_id(traj_data: Dict[str, Any], traj_path: Path) -> str:
+    for key in ["task_id", "episode_id", "trial_id", "root"]:
+        value = traj_data.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return traj_path.parent.name if traj_path.parent.name else traj_path.stem
+
+
 def extract_scene_id(traj_data: Dict[str, Any]) -> str:
     scene = traj_data.get("scene", {})
     if isinstance(scene, dict):

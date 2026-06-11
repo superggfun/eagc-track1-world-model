@@ -1,6 +1,11 @@
 # ALFRED Offline Adapter Report
 
-This document records the optional ALFRED offline trajectory adapter spike. It is not part of the main fast/targeted/standard test gates and does not run AI2-THOR.
+This document records the optional ALFRED offline trajectory adapter spike. It does not run AI2-THOR.
+
+The adapter has two validation modes:
+
+1. A tiny synthetic ALFRED-like fixture for deterministic fast-tier conversion tests.
+2. Real ALFRED dataset conversion when the user manually provides local data.
 
 ## Goal
 
@@ -53,6 +58,12 @@ ALFRED data should stay outside git. The project ignores common local ALFRED/dat
 
 ## Commands
 
+Synthetic fixture conversion:
+
+```powershell
+python tests/smoke_test_alfred_fixture_conversion.py
+```
+
 Check local data:
 
 ```powershell
@@ -85,7 +96,15 @@ python tests/smoke_test_alfred_offline_adapter.py
 
 ## Current Status
 
-The v0.15 adapter, checker, converter, validator, smoke test, and documentation are prepared.
+The v0.15.1 adapter, checker, converter, validator, synthetic fixture smoke test, real-data graceful smoke test, and documentation are prepared.
+
+The synthetic fixture is located at:
+
+```text
+tests/fixtures/alfred/sample_traj_data.json
+```
+
+It contains `fixture_type = "synthetic_alfred_like"` and is not real ALFRED data. It only proves that the adapter can parse an ALFRED-like task/instruction/subgoal/action structure and produce project artifacts.
 
 If no local ALFRED data is present, the expected status is:
 

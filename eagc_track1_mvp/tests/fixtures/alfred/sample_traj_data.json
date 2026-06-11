@@ -1,0 +1,75 @@
+{
+  "fixture_type": "synthetic_alfred_like",
+  "fixture_note": "This is a tiny synthetic ALFRED-like fixture for adapter tests. It is not real ALFRED data and must not be used as benchmark evidence.",
+  "task_id": "synthetic_put_mug_on_table",
+  "task_type": "pick_and_place_simple",
+  "turk_annotations": {
+    "anns": [
+      {
+        "task_desc": "Put the mug on the table.",
+        "high_descs": [
+          "Find the mug.",
+          "Pick up the mug.",
+          "Put the mug on the table."
+        ]
+      }
+    ]
+  },
+  "scene": {
+    "floor_plan": "FloorPlan1",
+    "scene_num": 1
+  },
+  "pddl_params": {
+    "object_target": "Mug",
+    "parent_target": "DiningTable",
+    "recep_target": "DiningTable"
+  },
+  "plan": {
+    "high_pddl": [
+      {
+        "high_idx": 0,
+        "discrete_action": {
+          "action": "GotoLocation",
+          "args": ["Mug"]
+        }
+      },
+      {
+        "high_idx": 1,
+        "discrete_action": {
+          "action": "PickupObject",
+          "args": ["Mug"]
+        }
+      },
+      {
+        "high_idx": 2,
+        "discrete_action": {
+          "action": "PutObject",
+          "args": ["Mug", "DiningTable"]
+        }
+      }
+    ],
+    "low_actions": [
+      {
+        "low_idx": 0,
+        "api_action": {
+          "action": "MoveAhead"
+        }
+      },
+      {
+        "low_idx": 1,
+        "api_action": {
+          "action": "PickupObject",
+          "objectId": "Mug|+00.10|+00.90|-01.20"
+        }
+      },
+      {
+        "low_idx": 2,
+        "api_action": {
+          "action": "PutObject",
+          "objectId": "Mug|+00.10|+00.90|-01.20",
+          "receptacleObjectId": "DiningTable|+01.10|+00.00|-00.20"
+        }
+      }
+    ]
+  }
+}

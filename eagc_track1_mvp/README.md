@@ -229,13 +229,15 @@ python tools/run_test_suite.py --tier standard
 python tools/run_test_suite.py --tier full
 ```
 
-The fast tier compiles only source directories, equivalent to:
+The fast tier is deterministic and does not call real Qwen, real vision, external simulators, local images, or real ALFRED data. It compiles source directories, runs mock-only smoke tests, and converts a tiny synthetic ALFRED-like fixture.
+
+The compile step is equivalent to:
 
 ```powershell
-python -m compileall clients env_adapters perception world_model planner executor logging_utils validators task_evaluator track1_runner scoring diagnostics tools tests
+python -m compileall clients env_adapters perception world_model planner executor logging_utils validators task_evaluator track1_runner scoring diagnostics dataset_adapters tools tests
 ```
 
-For documentation, README, report, demo command, and small script edits, run only the fast tier and any related report-generation script. Run `targeted` after core planner/replanner/task evaluator/LocalSim/validator changes. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
+`targeted` adds real Qwen text smoke, real visual-local hybrid smoke, and LocalSim real smoke. Run `targeted` after core planner/replanner/task evaluator/LocalSim/validator changes or when real Qwen behavior needs checking. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
 
 Replay a single randomized LocalSim seed with diagnostics:
 
@@ -377,6 +379,13 @@ docs/virtualhome_windows_spike_report.md
 
 The optional ALFRED offline adapter parses public `traj_data.json` files without launching AI2-THOR. It is intended for public household task trajectory alignment in reports and diagnostics, not online closed-loop simulator evaluation.
 
+It supports two validation modes:
+
+1. Synthetic fixture conversion for stable fast-tier testing: `tests/fixtures/alfred/sample_traj_data.json`.
+2. Real ALFRED dataset conversion when the user manually provides a local ALFRED path.
+
+The synthetic fixture is explicitly marked `fixture_type="synthetic_alfred_like"` and is not real ALFRED data or benchmark evidence.
+
 Set one of:
 
 ```powershell
@@ -388,6 +397,7 @@ Then run:
 
 ```powershell
 python tools/check_alfred_dataset.py
+python tests/smoke_test_alfred_fixture_conversion.py
 python tools/convert_alfred_offline.py --traj-path C:\path\to\traj_data.json
 python -m validators.validate_alfred_offline_conversion outputs/alfred_offline/status.json
 ```

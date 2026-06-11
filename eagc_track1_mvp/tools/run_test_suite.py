@@ -22,6 +22,7 @@ SOURCE_DIRS = [
     "track1_runner",
     "scoring",
     "diagnostics",
+    "dataset_adapters",
     "tools",
     "tests",
 ]
@@ -52,6 +53,7 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
     smoke_real = [py, "tests/smoke_test_all_mock_episodes.py", "--mode", "real", "--all", "--strict-real"]
     local_sim = [py, "tests/smoke_test_local_sim_episodes.py", "--mode", "real"]
     track1 = [py, "tests/smoke_test_track1_procedure.py", "--mode", "real"]
+    alfred_fixture = [py, "tests/smoke_test_alfred_fixture_conversion.py"]
     visual_local_hybrid = [
         py,
         "tests/smoke_test_visual_local_hybrid.py",
@@ -69,6 +71,9 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         "3",
     ]
     generate_report = [py, "tools/generate_project_report.py"]
+    package_source = [py, "tools/package_source.py"]
+    check_source_package = [py, "tools/check_source_package_repro.py", "--zip-path", "dist/eagc_track1_mvp_source.zip"]
+    demo_snapshot = [py, "tools/create_demo_snapshot.py"]
     docker_smoke = [py, "tools/docker_smoke_check.py"]
     targeted_replay = [
         py,
@@ -156,18 +161,31 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
     ]
 
     if tier == "fast":
-        commands = [compileall, smoke_mock]
-        if _visual_sequence_available():
-            commands.append(visual_local_hybrid)
-        return commands
+        return [compileall, smoke_mock, alfred_fixture]
     if tier == "docker-smoke":
         return [compileall, docker_smoke, smoke_mock]
     if tier == "targeted":
-        return [*_commands("fast", seed, difficulty), local_sim, track1, targeted_replay, targeted_robustness]
+        return [*_commands("fast", seed, difficulty), smoke_real, visual_local_hybrid, local_sim, track1]
     if tier == "standard":
-        return [compileall, smoke_real, local_sim, track1, easy20_mock, visual_sequence, generate_report]
+        return [
+            *_commands("targeted", seed, difficulty),
+            easy20_mock,
+            visual_sequence,
+            generate_report,
+            demo_snapshot,
+            package_source,
+            check_source_package,
+        ]
     if tier == "full":
-        return [*_commands("standard", seed, difficulty), easy100_mock, easy20_real, medium5, medium10_real]
+        return [
+            *_commands("standard", seed, difficulty),
+            targeted_replay,
+            targeted_robustness,
+            easy100_mock,
+            easy20_real,
+            medium5,
+            medium10_real,
+        ]
     raise ValueError(f"Unknown tier: {tier}")
 
 
