@@ -34,7 +34,11 @@ def main() -> int:
         "pdf_path": str(pdf_path),
         "html_path": str(html_path),
         "pdf_built": False,
+        "pdf_generated": False,
         "html_built": False,
+        "html_fallback_path": str(html_path),
+        "manual_export_required": False,
+        "manual_export_steps": [],
         "method": None,
         "warnings": [],
     }
@@ -55,13 +59,25 @@ def main() -> int:
         elif _try_wkhtmltopdf(html_path, pdf_path, status):
             status["pdf_built"] = True
             status["method"] = "wkhtmltopdf"
+        elif _try_playwright(html_path, pdf_path, status):
+            status["pdf_built"] = True
+            status["method"] = "playwright"
         else:
+            status["manual_export_required"] = True
+            status["manual_export_steps"] = [
+                f"Open {html_path} in a browser.",
+                "Use Print.",
+                "Choose Save as PDF.",
+                f"Save the file as {pdf_path}.",
+                "Re-run python tools/build_report_pdf.py if a local PDF backend is later installed.",
+            ]
             status["warnings"].append(
                 "No local PDF backend was available. Generated HTML instead. "
-                "Install pandoc, WeasyPrint, or wkhtmltopdf to build PDF."
+                "Install pandoc, WeasyPrint, wkhtmltopdf, or Playwright Chromium to build PDF automatically."
             )
 
         if status["pdf_built"]:
+            status["pdf_generated"] = True
             print(f"Technical report PDF written to {pdf_path}")
         else:
             print(f"Technical report HTML written to {html_path}")
@@ -73,6 +89,7 @@ def main() -> int:
         print(f"Report build failed: {exc}")
         return 1
     finally:
+        status_path.parent.mkdir(parents=True, exist_ok=True)
         status_path.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"Report build status written to {status_path}")
 
@@ -117,6 +134,29 @@ def _try_wkhtmltopdf(html_path: Path, pdf_path: Path, status: dict[str, Any]) ->
         return False
     command = [executable, str(html_path), str(pdf_path)]
     return _run_pdf_command(command, status)
+
+
+def _try_playwright(html_path: Path, pdf_path: Path, status: dict[str, Any]) -> bool:
+    try:
+        from playwright.sync_api import sync_playwright  # type: ignore
+    except Exception:
+        status["warnings"].append("Playwright not available.")
+        return False
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            page = browser.new_page()
+            page.goto(html_path.as_uri(), wait_until="networkidle")
+            page.pdf(path=str(pdf_path), format="A4", print_background=True)
+            browser.close()
+        return pdf_path.exists() and pdf_path.stat().st_size > 0
+    except Exception as exc:
+        message = str(exc)
+        if "Executable doesn't exist" in message or "playwright install" in message:
+            status["warnings"].append("Playwright is installed, but Chromium is missing. Run playwright install to enable automatic PDF export.")
+        else:
+            status["warnings"].append(f"Playwright PDF export failed: {_tail(message, 500)}")
+        return False
 
 
 def _run_pdf_command(command: list[str], status: dict[str, Any]) -> bool:

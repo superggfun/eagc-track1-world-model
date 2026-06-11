@@ -2,7 +2,7 @@
 
 This folder contains a pre-submission readiness package for the current EAGC Track 1 local MVP. It is intended for internal review, teacher discussion, technical report drafting, and future qualification submission preparation.
 
-Current project stage: `v0.16.7` submission readiness refresh with VirtualHome evidence pipeline documentation.
+Current project stage: `v0.17.2` final submission handoff readiness, including dry-run submission materials, resource profile conclusions, source package reproducibility checks, GitHub readiness checks, and HTML/PDF technical report fallback handling.
 
 Current system scope:
 
@@ -22,7 +22,17 @@ Documents in this package:
 - `system_limitations.md`: known limitations and risks.
 - `demo_commands.md`: command set for local demonstrations.
 - `checklist.md`: current readiness against likely EAGC submission items.
+- `final_submission_checklist.md`: final dry-run checklist for source package, report, disclosure, checksums, and optional evidence.
+- `final_artifact_manifest.md`: local artifact inventory and exclusion list for handoff.
+- `submission_email_draft.md`: placeholder email draft for official submission; it is not sent by any script.
 - `open_source_statement.md`: source release and dependency redistribution statement.
+
+Technical report export note:
+
+- The source report is `submission_package/technical_report_draft.md`.
+- The generated HTML fallback is `submission_bundle/reports/technical_report_draft.html`.
+- If `submission_bundle/reports/technical_report_draft.pdf` is not generated automatically, open the HTML file in a browser, select Print, choose Save as PDF, save it as `technical_report_draft.pdf`, and place it in `submission_bundle/reports/`.
+- The build status is recorded in `submission_bundle/reports/technical_report_build_status.json`.
 
 Important framing:
 

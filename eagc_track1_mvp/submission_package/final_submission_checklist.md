@@ -10,12 +10,15 @@ This checklist is for a local dry run before an official EAGC Track 1 qualificat
   - `submission_bundle/reports/technical_report_draft.html`
   - `submission_bundle/reports/technical_report_build_status.json`
   - PDF is included only if a local PDF backend is available.
+  - If PDF generation is unavailable locally, open `submission_bundle/reports/technical_report_draft.html` in a browser, choose Print, Save as PDF, name it `technical_report_draft.pdf`, and place it in `submission_bundle/reports/`.
 - [ ] Training resource disclosure: `submission_package/training_resource_disclosure.md`
 - [ ] Reproducibility statement: `submission_package/reproducibility_statement.md`
 - [ ] System limitations: `submission_package/system_limitations.md`
 - [ ] Demo commands: `submission_package/demo_commands.md`
 - [ ] Open-source statement: `submission_package/open_source_statement.md`
 - [ ] Checksums: `submission_bundle/checksums/SHA256SUMS.txt`
+- [ ] Final artifact manifest: `submission_package/final_artifact_manifest.md`
+- [ ] Submission email draft: `submission_package/submission_email_draft.md`
 - [ ] Docker instructions:
   - `Dockerfile`
   - `docker/README_DOCKER.md`
@@ -67,6 +70,7 @@ python tools/build_report_pdf.py
 python tools/run_test_suite.py --tier fast
 python tools/run_test_suite.py --tier targeted-text --timeout-seconds 300
 python tools/pre_submission_audit.py
+python tools/check_github_push_readiness.py
 ```
 
 Do not run aggregate `targeted`, `standard`, or `full` unless explicitly requested.

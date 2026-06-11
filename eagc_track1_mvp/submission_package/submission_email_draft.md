@@ -8,11 +8,13 @@ Dear EAGC 2026 Organizing Committee,
 
 We are submitting the qualification materials for our EAGC 2026 Track 1 project, [TEAM_OR_PROJECT_NAME].
 
+Source / GitHub link placeholder: [GITHUB_OR_SOURCE_PACKAGE_LINK]
+
 The package includes:
 
 - source package / GitHub-ready project files,
 - Dockerfile and Docker run instructions,
-- technical report draft with HTML/PDF fallback status,
+- technical report attached or included in the bundle,
 - reproducibility statement,
 - training-resource disclosure,
 - system limitations statement,

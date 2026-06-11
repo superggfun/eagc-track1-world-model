@@ -52,6 +52,7 @@ RESOURCE_PROFILE_ARTIFACTS = [
 ]
 FINAL_SUBMISSION_FILES = [
     "submission_package/final_submission_checklist.md",
+    "submission_package/final_artifact_manifest.md",
     "submission_package/submission_email_draft.md",
     "submission_package/technical_report_draft.md",
     "submission_package/training_resource_disclosure.md",
@@ -59,6 +60,7 @@ FINAL_SUBMISSION_FILES = [
     "submission_package/system_limitations.md",
     "submission_package/demo_commands.md",
     "submission_package/open_source_statement.md",
+    "tools/check_github_push_readiness.py",
 ]
 RUNTIME_DIRS = [
     "outputs",

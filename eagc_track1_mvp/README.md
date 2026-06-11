@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.17.1 final submission dry-run package.
+Current version: v0.17.2 final submission handoff package.
 
-Current stable tag: `v0.17.1-final-submission-dry-run`
+Current stable tag: `v0.17.2-final-submission-handoff`
 
 Current status:
 
@@ -16,6 +16,7 @@ Current status:
 - VirtualHome manual-play Windows regression smoke validated with scene graph, multi-task program log, converted world model, frame export, single-frame Qwen vision comparison, and episode-level multi-frame grounding
 - VirtualHome + existing Qwen/vLLM resource profile and coexistence audit
 - Final submission dry-run checklist and email draft
+- Final artifact manifest and GitHub push readiness check
 - Docker/source package readiness
 - No training yet
 - Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, fully automated VirtualHome startup, and real ALFRED dataset conversion are not validated yet
@@ -49,6 +50,7 @@ This package is for qualification-submission preparation, teacher review, and te
 Final dry-run files:
 
 - `submission_package/final_submission_checklist.md`
+- `submission_package/final_artifact_manifest.md`
 - `submission_package/submission_email_draft.md`
 
 The email file is a draft only and is not sent by any project automation.
@@ -61,7 +63,7 @@ python tools/pre_submission_audit.py
 
 The audit writes `outputs/pre_submission_audit/audit_report.json` and `.md`, checks key submission documents, reports dirty git state, verifies that `v0.15.2-targeted-suite-controls` exists, records optional VirtualHome evidence artifact presence, and warns about ignored runtime artifact directories such as `outputs/`, `dist/`, `submission_bundle/`, and local datasets.
 
-v0.17.1 final dry-run audit additionally checks the final submission checklist, email draft, source package, submission bundle, technical report build status, and resource profile helper.
+v0.17.2 final handoff audit additionally checks the final submission checklist, artifact manifest, email draft, source package, submission bundle, technical report build status, resource profile helper, and GitHub push readiness helper.
 
 ## Requirements
 
