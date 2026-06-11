@@ -269,6 +269,52 @@ Script robustness changes:
 
 The v0.13.3 result is therefore a partial success: Habitat-Sim installation and official test-scene acquisition work in WSL2, but RGB rendering is still blocked by WSL2 headless EGL / CUDA device mapping.
 
+## Remote RTX 4090 Linux Smoke
+
+On 2026-06-11, a remote RTX 4090 Linux host was used for an additional public simulator smoke test.
+
+Remote machine summary:
+
+- OS: Ubuntu 22.04.4 LTS.
+- Kernel: `5.19.0-50-generic`.
+- GPU: NVIDIA GeForce RTX 4090.
+- NVIDIA driver / CUDA from `nvidia-smi`: `550.144.03` / CUDA `12.4`.
+- Docker: not available on the remote PATH.
+- `nvcc`: not available on the remote PATH.
+- Python: system `python3` is available; plain `python` was initially absent before Miniforge.
+- Results archive: `outputs/remote_simulator_results.tar.gz` locally, ignored by git.
+
+Habitat-Sim setup on the remote host:
+
+- Miniforge was installed under `/root/miniforge3`.
+- A separate conda environment `habitat` was created.
+- `habitat-sim` installed successfully from `aihabitat` / `conda-forge`.
+- `habitat_sim` imports successfully, version `0.3.3`.
+- `nvidia-smi` is available from inside the Habitat environment.
+- `libEGL` was required in addition to the base Habitat-Sim package stack.
+- Official `habitat_test_scenes` were made available under ignored `data/` paths.
+
+Remote Habitat-Sim smoke result:
+
+- `habitat_test_scenes` available: yes.
+- Scene file count: 8.
+- Selected scene: `apartment_1.glb`.
+- RGB smoke success: no.
+- `rgb.png` saved: no.
+- Action step success: no.
+- Failure reason:
+
+  ```text
+  Platform::WindowlessEglApplication::tryCreateContext(): cannot get default EGL display: EGL_BAD_PARAMETER
+  WindowlessContext: Unable to create windowless context
+  ```
+
+Conclusion:
+
+- Remote Ubuntu RTX 4090 validates Habitat-Sim install/import and test-scene availability.
+- Remote Ubuntu RTX 4090 Habitat-Sim RGB smoke did not succeed.
+- The remaining blocker is renderer/EGL configuration, not Python package installation.
+
 ## Latest Results
 
 | Check | Result | Notes |
@@ -285,6 +331,9 @@ The v0.13.3 result is therefore a partial success: Habitat-Sim installation and 
 | Minimal scene load | failed in renderer | Worker reached EGL context creation and failed with CUDA/EGL device mapping error. |
 | RGB observation | failed | `rgb.png` was not generated. |
 | Simple action | failed | No action frame was generated because renderer initialization failed. |
+| Remote RTX 4090 Habitat install/import | succeeded | Ubuntu 22.04 remote host imports `habitat_sim 0.3.3`. |
+| Remote RTX 4090 test scenes | available | Official lightweight scenes are present under ignored `data/` paths. |
+| Remote RTX 4090 RGB smoke | failed in renderer | Headless EGL failed with `EGL_BAD_PARAMETER`; no `rgb.png` was generated. |
 
 Generated status files:
 
@@ -319,18 +368,23 @@ Observed failure reasons in this run:
    Platform::WindowlessEglApplication::tryCreateContext(): unable to find CUDA device 0 among 1 EGL devices in total
    WindowlessContext: Unable to create windowless context
    ```
+7. On the remote RTX 4090 Ubuntu host, install/import and scene availability succeed, but headless EGL still fails:
+
+   ```text
+   Platform::WindowlessEglApplication::tryCreateContext(): cannot get default EGL display: EGL_BAD_PARAMETER
+   WindowlessContext: Unable to create windowless context
+   ```
 
 ## Recommendation
 
-Habitat is not yet fully validated on this machine. The Windows conda route did not provide a usable `habitat-sim` package. The WSL2 route now installs and imports Habitat-Sim and downloads official test scenes, but headless RGB rendering fails at EGL context creation.
+Habitat is not yet fully validated. The Windows conda route did not provide a usable `habitat-sim` package. The WSL2 route installs and imports Habitat-Sim and downloads official test scenes, but headless RGB rendering fails at EGL context creation. The remote RTX 4090 Ubuntu route also installs/imports Habitat-Sim and has test scenes available, but RGB rendering fails at headless EGL display creation.
 
 Recommended next steps:
 
 1. Treat WSL2 Habitat-Sim as partially validated: install/import/data acquisition work; rendering does not yet.
 2. For the next rendering attempt, test one of:
    - WSL2 EGL device configuration / `EGL_DEVICE_ID` style environment controls.
-   - A native Linux GPU host.
-   - A remote Linux GPU instance.
+   - Remote/native Linux EGL/OpenGL package configuration.
    - A Docker GPU route with known-good EGL/OpenGL libraries.
 3. Re-run:
 
@@ -349,6 +403,7 @@ Current direction assessment:
 
 - Habitat remains a plausible public simulator direction, but this Windows machine has not yet reached the rendering layer.
 - WSL2 has now reached the rendering layer and fails specifically at headless EGL context creation.
-- The most likely viable next route is either WSL2 EGL device configuration, Docker GPU with EGL libraries, or native/remote Linux GPU.
+- Remote Ubuntu RTX 4090 has also reached the rendering layer and fails specifically at headless EGL context creation.
+- The most likely viable next route is EGL/OpenGL system-library configuration or a simulator-ready Docker image with known-good EGL support.
 - For near-term EAGC Track 1 work, keep LocalSim and visual-local hybrid as the stable baseline.
 - `data/`, scene files, and generated outputs are ignored and must not be committed.

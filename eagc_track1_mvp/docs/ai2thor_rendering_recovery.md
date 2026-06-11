@@ -116,6 +116,45 @@ New-Item -ItemType Directory -Force -Path outputs\ai2thor_cache
 docker run --rm --gpus all -e NVIDIA_DRIVER_CAPABILITIES=all -v "${PWD}\outputs:/app/outputs" -v "${PWD}\outputs\ai2thor_cache:/root/.ai2thor" ai2thor-render-smoke:latest python3 tools/run_ai2thor_minimal_render_test.py --platform cloud --timeout-seconds 420 --output-dir outputs/ai2thor_render_test/docker_cloud_vulkan_cached
 ```
 
+### Remote RTX 4090 Linux CloudRendering
+
+On 2026-06-11, AI2-THOR CloudRendering was tested on a remote RTX 4090 Ubuntu host.
+
+Remote machine summary:
+
+- OS: Ubuntu 22.04.4 LTS.
+- Kernel: `5.19.0-50-generic`.
+- GPU: NVIDIA GeForce RTX 4090.
+- NVIDIA driver / CUDA from `nvidia-smi`: `550.144.03` / CUDA `12.4`.
+- Docker: not available on the remote PATH.
+- `nvcc`: not available on the remote PATH.
+- Results archive: `outputs/remote_simulator_results.tar.gz` locally, ignored by git.
+
+AI2-THOR setup:
+
+- A separate conda environment `ai2thor` was created.
+- `ai2thor==5.0.0`, `pillow`, and `numpy` were installed.
+- `ai2thor`, `Controller`, and `CloudRendering` imports succeeded.
+- `nvidia-smi` was visible inside the environment.
+
+Remote CloudRendering result:
+
+- Render success: no.
+- `frame.png` saved: no.
+- `metadata.json` saved: no.
+- Failure reason:
+
+  ```text
+  Platform CloudRendering failed validation with the following errors: Vulkan API driver missing.
+  CloudRendering requires libvulkan1. Please install by running: sudo apt-get -y install libvulkan1
+  ```
+
+Conclusion:
+
+- Remote Ubuntu RTX 4090 AI2-THOR CloudRendering smoke did not succeed.
+- The blocker is a missing Vulkan runtime dependency (`libvulkan1`), not an AI2-THOR Python import problem.
+- No additional AI2-THOR versions were tried.
+
 ## Latest Results
 
 | Route | Result | Notes |
@@ -128,6 +167,7 @@ docker run --rm --gpus all -e NVIDIA_DRIVER_CAPABILITIES=all -v "${PWD}\outputs:
 | Docker CloudRendering before Vulkan fix | failed gracefully | GPU was visible, but AI2-THOR reported `Vulkan API driver missing` and required `libvulkan1`. |
 | Docker CloudRendering after Vulkan fix | timeout | After adding `libvulkan1`, `vulkan-tools`, and `NVIDIA_DRIVER_CAPABILITIES=all`, CloudRendering proceeded to AI2-THOR build download but still exceeded 180 seconds. |
 | Docker CloudRendering with persistent cache | timeout | With `/root/.ai2thor` persisted and timeout increased to 420 seconds, the CloudRendering build reached 100 percent download but still did not initialize or save frame/metadata. A second cached retry with 240 seconds also timed out. |
+| Remote RTX 4090 CloudRendering | failed prerequisite validation | AI2-THOR 5.0.0 imports successfully, but CloudRendering requires missing system package `libvulkan1`; no frame/metadata was saved. |
 
 ## Error Logs
 
@@ -150,5 +190,6 @@ Current recommendation:
 - Do not spend more time on Windows native AI2-THOR for this branch; AI2-THOR 5.0.0 reports no Windows build for the tested commit.
 - WSL2 CloudRendering is still blocked by Controller initialization timeout despite Python/AI2-THOR/GPU availability.
 - The isolated Docker route is the most promising local route because GPU and Vulkan prerequisites can be satisfied, but it still times out during/after Unity build download and initialization. A longer offline build-cache strategy or pre-downloaded AI2-THOR build may be needed before another attempt.
+- The remote RTX 4090 Ubuntu route imports AI2-THOR and CloudRendering successfully, but fails prerequisite validation because `libvulkan1` is missing.
 - For near-term EAGC Track 1 progress, keep LocalSim and visual-local hybrid as the stable local MVP baseline.
-- For future simulator integration, prefer a clean remote/native Linux GPU machine or a purpose-built Linux Docker image with a pre-seeded AI2-THOR build cache. If AI2-THOR remains unstable, evaluate Habitat or another simulator separately.
+- For future simulator integration, prefer a clean remote/native Linux GPU machine or a purpose-built Linux Docker image with Vulkan/EGL/OpenGL dependencies installed and, ideally, a pre-seeded AI2-THOR build cache. If AI2-THOR remains unstable, evaluate Habitat or another simulator separately.
