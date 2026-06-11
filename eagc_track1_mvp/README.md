@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.15.3 submission readiness refresh and audit.
+Current version: v0.16 VirtualHome real Windows smoke diagnostics.
 
-Current stable tag: `v0.15.2-targeted-suite-controls`
+Current stable tag: `v0.15.3-submission-readiness-audit`
 
 Current status:
 
@@ -13,10 +13,10 @@ Current status:
 - Visual-local hybrid prototype with evidence reporting
 - Real Qwen3.6 vLLM integration
 - ALFRED offline adapter with synthetic fixture conversion
-- VirtualHome setup diagnostics only
+- VirtualHome setup diagnostics with real Windows smoke readiness checks
 - Docker/source package readiness
 - No training yet
-- Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, real VirtualHome executable smoke, and real ALFRED dataset conversion are not validated yet
+- Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, successful real VirtualHome executable smoke, and real ALFRED dataset conversion are not validated yet
 
 The demo loop:
 
@@ -372,6 +372,8 @@ VirtualHome is a Windows-friendly household activity simulator candidate for sce
 For a real VirtualHome Windows executable smoke, place the VirtualHome repo and simulator outside this project tree, then set:
 
 ```powershell
+# If the repo is not present yet, clone it outside this project:
+git clone https://github.com/xavierpuigf/virtualhome.git C:\Users\Alphay\Documents\ExternalTools\virtualhome
 $env:VIRTUALHOME_REPO_PATH="C:\Users\Alphay\Documents\ExternalTools\virtualhome"
 $env:VIRTUALHOME_SIMULATOR_PATH="C:\Users\Alphay\Documents\ExternalTools\virtualhome_simulator\<actual_exe_name>.exe"
 ```

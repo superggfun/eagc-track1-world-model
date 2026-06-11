@@ -54,6 +54,10 @@ def build_hint() -> Dict[str, Any]:
             "VIRTUALHOME_REPO_PATH to that repository. Otherwise clone/download it manually and "
             "install it in a separate environment or use editable install from that repo."
         )
+        hints.append(
+            "Recommended manual clone command: git clone https://github.com/xavierpuigf/virtualhome.git "
+            "C:\\Users\\Alphay\\Documents\\ExternalTools\\virtualhome"
+        )
     if not env_status.get("virtualhome_simulator_path"):
         hints.append(
             "VirtualHome Windows Unity executable path is not configured. Download the Windows "
@@ -75,6 +79,7 @@ def build_hint() -> Dict[str, Any]:
         "candidate_simulators": simulator_candidates,
         "likely_simulators": likely_simulators,
         "manual_install_hint": [
+            "git clone https://github.com/xavierpuigf/virtualhome.git C:\\Users\\Alphay\\Documents\\ExternalTools\\virtualhome",
             '$env:VIRTUALHOME_REPO_PATH="C:\\Users\\Alphay\\Documents\\ExternalTools\\virtualhome"',
             '$env:VIRTUALHOME_SIMULATOR_PATH="C:\\Users\\Alphay\\Documents\\ExternalTools\\virtualhome_simulator\\<actual_exe_name>.exe"',
             "python tools/check_virtualhome_env.py",
@@ -105,7 +110,7 @@ def main() -> int:
     else:
         print("No VirtualHome Windows simulator .exe candidate was found.")
     print("PowerShell setup example:")
-    for command in hint["manual_install_hint"][:2]:
+    for command in hint["manual_install_hint"][:3]:
         print(command)
     return 0
 

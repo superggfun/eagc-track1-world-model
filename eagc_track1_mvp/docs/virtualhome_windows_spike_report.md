@@ -186,6 +186,47 @@ Required user-provided artifacts before a real smoke can run:
 
 Do not commit the executable, Unity assets, frames, videos, or other large simulator artifacts.
 
+v0.16 real-smoke preparation:
+
+- External directories are expected outside this repository:
+  - `C:\Users\Alphay\Documents\ExternalTools\virtualhome`
+  - `C:\Users\Alphay\Documents\ExternalTools\virtualhome_simulator`
+- If the repository is missing, manually clone it outside the EAGC project:
+
+```powershell
+git clone https://github.com/xavierpuigf/virtualhome.git C:\Users\Alphay\Documents\ExternalTools\virtualhome
+```
+
+- If the Windows Unity simulator executable is missing, download it manually according to the official VirtualHome documentation and set:
+
+```powershell
+$env:VIRTUALHOME_REPO_PATH="C:\Users\Alphay\Documents\ExternalTools\virtualhome"
+$env:VIRTUALHOME_SIMULATOR_PATH="C:\Users\Alphay\Documents\ExternalTools\virtualhome_simulator\<actual_exe_name>.exe"
+```
+
+- The v0.16 smoke remains VirtualHome-only: it does not call Qwen, does not start lightweight vLLM, and does not modify the existing long-context vLLM Docker container.
+- A successful real smoke must produce `scene_graph.json`, `program_log.json`, and converted world-model artifacts. If the repo/API or executable is missing, the scripts must report a blocker in `status.json` rather than fabricate success.
+
+Latest v0.16 local probe on 2026-06-11:
+
+- External directories were created outside the EAGC project:
+  - `C:\Users\Alphay\Documents\ExternalTools\virtualhome`
+  - `C:\Users\Alphay\Documents\ExternalTools\virtualhome_simulator`
+- `C:\Users\Alphay\Documents\ExternalTools\virtualhome` exists, but it is currently empty or otherwise not a VirtualHome repository exposing `simulation/unity_simulator/comm_unity.py`.
+- `C:\Users\Alphay\Documents\ExternalTools\virtualhome_simulator` exists, but no Windows Unity simulator `.exe` was found.
+- `python tools/setup_virtualhome_hint.py` completed and now prints the external clone command and PowerShell environment variable examples.
+- `python tools/check_virtualhome_env.py` completed and wrote `outputs/virtualhome_spike/env_status.json`.
+- `python_api_import_success=false`.
+- `simulator_executable_exists=false`.
+- `python tools/test_virtualhome_windows_spike.py` completed gracefully with `success=false` and `reason=missing_virtualhome_python_api`.
+- `python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json` passed because the missing dependency is explicit and auditable.
+- The simulator did not start.
+- Scene graph acquired: no.
+- Action program executed: no.
+- Converted world model / episode log generated: no.
+- Frame saved: no.
+- Recommendation: provide the real VirtualHome repo/API and Windows Unity executable outside the project tree before retrying real smoke.
+
 ## Assessment Criteria
 
 VirtualHome becomes a useful Windows-friendly household simulator candidate if:

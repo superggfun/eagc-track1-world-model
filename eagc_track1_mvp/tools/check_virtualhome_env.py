@@ -43,11 +43,10 @@ def candidate_simulator_paths() -> list[Path]:
         Path.home() / "Downloads" / "VirtualHomeSimulator",
     ]
     for root in roots:
+        candidates.append(root)
         if root.exists():
             candidates.extend(sorted(root.glob("*.exe")))
             candidates.extend(sorted(root.rglob("*.exe")))
-        else:
-            candidates.append(root)
     return _unique_paths(candidates)
 
 
@@ -196,6 +195,7 @@ def collect_status() -> Dict[str, Any]:
         "simulator_executable_size_bytes": executable_size,
         "module_import_available": module_status,
         "virtualhome_api_available": any(module_status.values()),
+        "python_api_import_success": any(module_status.values()),
         "candidate_repo_paths": [
             {
                 "path": str(path),
