@@ -30,4 +30,6 @@ This checklist maps the current local MVP to likely EAGC qualification submissio
 | VirtualHome manual-play smoke | Validated | Manual-play Windows connection, 8080 communication, scene graph extraction, 4/4 fixed household tasks, converted world model/log, frame export, single-frame Qwen vision, and multi-frame grounding have succeeded. |
 | VirtualHome automated startup | Not validated | Manual Play is still required. |
 | VirtualHome outputs in git | Excluded | Frames, raw Qwen responses, and `outputs/virtualhome_spike/` artifacts are runtime diagnostics and should remain ignored. |
+| VirtualHome + vLLM resource profile | Prepared | v0.17 recorded RTX 5090 memory, existing `openclaw-vllm` endpoint, VirtualHome 8080 status, Qwen text latency, and frame vision latency. |
+| Lightweight vLLM | Not used | Documented as fallback only; not started for current dry-run package. |
 | Pre-submission audit | Prepared | `python tools/pre_submission_audit.py`. |

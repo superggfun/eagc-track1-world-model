@@ -58,6 +58,14 @@ python tools/build_virtualhome_evidence_report.py
 
 These require external VirtualHome resources, a manually running `VirtualHome.exe` in Play mode, and the existing local Qwen/vLLM endpoint for the vision tiers. They do not start lightweight vLLM and do not modify the existing Qwen Docker container.
 
+VirtualHome + vLLM resource profile, optional:
+
+```powershell
+python tools/run_test_suite.py --tier targeted-resource-profile --timeout-seconds 300
+```
+
+This is a read-only resource audit. It records GPU memory, Docker/container summaries, VirtualHome port status, Qwen `/models` availability, and minimal text/frame-vision latency if both services are available. It does not start lightweight vLLM and does not stop, restart, rebuild, delete, or reconfigure the original Qwen/vLLM Docker container.
+
 Aggregate targeted tier:
 
 ```powershell

@@ -33,6 +33,8 @@ VirtualHome manual-play Windows simulator evidence has been validated for scene 
 
 AI2-THOR/ProcTHOR/Habitat have not been validated in the stable path due to platform/runtime/rendering issues. AI2-THOR adapter code may exist as experimental work, but it is not part of the current validated submission path.
 
+The v0.17 resource audit used the existing `openclaw-vllm` endpoint and did not modify, restart, rebuild, delete, or manage that container. Lightweight vLLM was not started. The current conclusion is that the validated VirtualHome evidence pipeline works with the existing endpoint, so a lightweight endpoint is only a future fallback.
+
 ## Online API Use
 
 No online model APIs are used during evaluation runs. The system is designed to call a local vLLM endpoint.
@@ -47,6 +49,7 @@ Current training resource use:
 - Distillation: none.
 - ALFRED simulator execution: none.
 - VirtualHome model training: none.
+- Lightweight vLLM run: none.
 - External online model calls: none during evaluation.
 
 Hardware used for local development/testing:

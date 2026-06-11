@@ -8,6 +8,8 @@ The inference path uses a local Qwen3.6-35B-A3B-NVFP4 model served through an Op
 
 Current readiness state as of v0.16.7: LocalSim, the official-style Track1 procedure runner, visual-local hybrid evidence reporting, Docker/source packaging, ALFRED synthetic fixture conversion, and VirtualHome manual-play evidence smoke are prepared. Official EAGC runtime, hidden evaluation environments, real ProcTHOR/Habitat/AI2-THOR execution, fully automated VirtualHome startup, real ALFRED dataset conversion, and model training remain unvalidated.
 
+v0.17 resource audit status: the validated VirtualHome evidence path works with the existing long-context Qwen/vLLM endpoint. The resource snapshot recorded an RTX 5090 with 32607 MiB total memory, 31674 MiB used, and 514 MiB free; `openclaw-vllm` was running on `127.0.0.1:8000`; VirtualHome manual-play was listening on `127.0.0.1:8080`; Qwen text smoke latency was about 0.141 seconds; VirtualHome frame vision smoke latency was about 0.696 seconds; multi-frame grounding averaged about 2.722 seconds per frame. No container changes were made, and lightweight vLLM remains a documented fallback only.
+
 ## Method Overview
 
 The system separates perception, memory, planning, execution, evaluation, and auditing:
@@ -221,6 +223,8 @@ These are local MVP results, not official EAGC scores.
 Local development and evaluation were performed on a Windows workstation with an RTX 5090 32GB GPU. Real Qwen inference was served by a local vLLM service at an OpenAI-compatible endpoint. The agent code itself is lightweight Python and can run in a slim Docker image; heavy model inference is external to the agent container.
 
 No training compute has been used. All model calls are inference calls.
+
+The v0.17 resource profile recorded high VRAM residency from the existing long-context vLLM profile, but the current VirtualHome evidence smoke still completed successfully without starting lightweight vLLM. The current recommendation is to keep the existing endpoint for this smoke pipeline and consider a separate lightweight endpoint only if longer episodes, additional frames, or concurrent workloads become unstable and the user explicitly allows it.
 
 ## Training Resource Disclosure Summary
 

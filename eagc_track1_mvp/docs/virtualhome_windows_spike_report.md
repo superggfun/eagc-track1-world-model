@@ -466,6 +466,13 @@ v0.17 resource profile and coexistence audit:
   - multi-frame grounding rerun: 5/5 frames succeeded, 2.722 seconds average Qwen latency
 - Current recommendation: the validated smoke pipeline can continue using the existing endpoint; lightweight vLLM is not required unless future longer or concurrent workloads become unstable.
 
+v0.17.1 final submission dry-run:
+
+- The VirtualHome evidence and resource-profile conclusions were carried into the final dry-run submission materials.
+- Added final submission checklist and email draft.
+- No new simulator execution requirement was added.
+- The dry-run package still excludes frames, raw Qwen responses, VirtualHome executable/assets, model weights, and `outputs/` artifacts from git.
+
 ## Assessment Criteria
 
 VirtualHome becomes a useful Windows-friendly household simulator candidate if:

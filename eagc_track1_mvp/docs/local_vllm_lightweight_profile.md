@@ -103,3 +103,7 @@ Latest v0.17 resource audit:
 - Multi-frame VirtualHome grounding rerun: 5/5 frames succeeded, average 2.722 seconds per frame.
 
 Conclusion: despite high VRAM residency from the original long-context vLLM profile, the current VirtualHome evidence pipeline is stable enough for smoke testing. Do not switch to lite vLLM unless future longer episodes or more frames become unstable and the user explicitly allows a separate lightweight endpoint.
+
+## v0.17.1 Dry-Run Status
+
+The final submission dry-run package keeps this conclusion unchanged: lightweight vLLM was not started, no original Qwen/vLLM container changes were made, and the current VirtualHome evidence pipeline remains documented as working with the existing endpoint.

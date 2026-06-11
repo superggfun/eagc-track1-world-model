@@ -86,6 +86,14 @@ Notes:
 - They do not modify, restart, or manage the existing Qwen Docker container.
 - Generated frames, raw Qwen responses, and `outputs/virtualhome_spike/` artifacts are runtime outputs and should not be committed.
 
+Resource profile:
+
+```powershell
+python tools/run_test_suite.py --tier targeted-resource-profile --timeout-seconds 300
+```
+
+This records current GPU/vLLM/VirtualHome coexistence status without starting lightweight vLLM and without managing the original Qwen Docker container.
+
 Key outputs:
 
 - `outputs/virtualhome_spike/scene_graph.json`

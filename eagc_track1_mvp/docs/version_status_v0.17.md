@@ -105,3 +105,14 @@ Suggested future fallback profile, if explicitly allowed:
 - The smoke uses selected frames, not long-horizon video.
 - Qwen vision output can vary slightly across runs.
 - Runtime outputs, frames, and raw responses are not redistributed in git.
+
+## v0.17.1 Dry-Run Follow-Up
+
+v0.17.1 does not add new runtime functionality. It packages the v0.17 resource conclusion into final submission dry-run materials:
+
+- `submission_package/final_submission_checklist.md`
+- `submission_package/submission_email_draft.md`
+- refreshed technical report, reproducibility, training disclosure, limitations, checklist, and demo commands
+- final pre-submission audit checks for source package, submission bundle, technical report build status, and resource profile helpers
+
+The v0.17 conclusion remains unchanged: the current VirtualHome evidence pipeline works with the existing long-context vLLM endpoint, and lightweight vLLM is a fallback only.

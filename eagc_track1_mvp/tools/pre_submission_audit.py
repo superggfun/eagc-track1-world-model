@@ -50,6 +50,16 @@ RESOURCE_PROFILE_ARTIFACTS = [
     "virtualhome_vllm_resource_profile.md",
     "coexistence_smoke_status.json",
 ]
+FINAL_SUBMISSION_FILES = [
+    "submission_package/final_submission_checklist.md",
+    "submission_package/submission_email_draft.md",
+    "submission_package/technical_report_draft.md",
+    "submission_package/training_resource_disclosure.md",
+    "submission_package/reproducibility_statement.md",
+    "submission_package/system_limitations.md",
+    "submission_package/demo_commands.md",
+    "submission_package/open_source_statement.md",
+]
 RUNTIME_DIRS = [
     "outputs",
     "dist",
@@ -172,6 +182,17 @@ def build_report() -> Dict[str, Any]:
     if not all(item["exists"] for item in resource_profile["artifacts"]):
         warnings.append("One or more resource profile runtime artifacts are missing; run python tools/run_test_suite.py --tier targeted-resource-profile if needed.")
 
+    final_submission = _final_submission_status()
+    for item in final_submission["files"]:
+        if not item["exists"]:
+            failures.append(f"Missing final submission file: {item['path']}")
+    if not final_submission["source_package_exists"]:
+        warnings.append("Final source package is missing; run python tools/package_source.py.")
+    if not final_submission["submission_bundle_exists"]:
+        warnings.append("Submission bundle is missing; run python tools/create_submission_bundle.py.")
+    if not final_submission["technical_report_build_status_exists"]:
+        warnings.append("Technical report build status is missing; run python tools/build_report_pdf.py.")
+
     pdf_status_path = PROJECT_ROOT / "submission_bundle" / "reports" / "technical_report_build_status.json"
     pdf_status: Dict[str, Any] = {}
     if pdf_status_path.exists():
@@ -196,6 +217,7 @@ def build_report() -> Dict[str, Any]:
         "runtime_dirs": runtime_dirs,
         "virtualhome_evidence": virtualhome_evidence,
         "resource_profile": resource_profile,
+        "final_submission": final_submission,
         "tracked_violation_count": len(tracked_violations),
         "tracked_violations": tracked_violations,
         "technical_report_build_status": pdf_status,
@@ -249,6 +271,22 @@ def _resource_profile_status() -> Dict[str, Any]:
             }
             for rel in RESOURCE_PROFILE_ARTIFACTS
         ],
+    }
+
+
+def _final_submission_status() -> Dict[str, Any]:
+    bundle_dir = PROJECT_ROOT / "submission_bundle"
+    report_status = bundle_dir / "reports" / "technical_report_build_status.json"
+    return {
+        "description": "Final dry-run submission checks. Runtime bundles are generated locally but should not be tracked in git.",
+        "files": [{"path": rel, "exists": (PROJECT_ROOT / rel).exists()} for rel in FINAL_SUBMISSION_FILES],
+        "source_package": str(SOURCE_ZIP),
+        "source_package_exists": SOURCE_ZIP.exists(),
+        "submission_bundle": str(bundle_dir),
+        "submission_bundle_exists": bundle_dir.exists(),
+        "technical_report_build_status": str(report_status),
+        "technical_report_build_status_exists": report_status.exists(),
+        "resource_profile_helper_exists": (PROJECT_ROOT / "tools" / "profile_virtualhome_vllm_resources.py").exists(),
     }
 
 
@@ -327,6 +365,23 @@ def _markdown(report: Dict[str, Any]) -> str:
     lines.extend(["", "### Local Runtime Artifacts", "", "| artifact | exists |", "|---|---:|"])
     for item in rp.get("artifacts", []):
         lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(["", "## Final Submission Dry Run", ""])
+    final = report.get("final_submission", {})
+    lines.append(final.get("description", ""))
+    lines.extend(["", "### Required Draft Files", "", "| file | exists |", "|---|---:|"])
+    for item in final.get("files", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(
+        [
+            "",
+            "### Generated Local Artifacts",
+            "",
+            f"- source_package_exists: `{final.get('source_package_exists')}`",
+            f"- submission_bundle_exists: `{final.get('submission_bundle_exists')}`",
+            f"- technical_report_build_status_exists: `{final.get('technical_report_build_status_exists')}`",
+            f"- resource_profile_helper_exists: `{final.get('resource_profile_helper_exists')}`",
+        ]
+    )
     lines.append("")
     return "\n".join(lines)
 

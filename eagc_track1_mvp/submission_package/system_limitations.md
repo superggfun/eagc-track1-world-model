@@ -30,6 +30,8 @@ Known limitations:
 - The final model endpoint, mounted model, or organizer-hosted inference strategy requires organizer clarification.
 - The official submission portal and official runtime schema are not available yet.
 - Docker has been prepared for mock-mode agent smoke testing; real vLLM access depends on host/container networking.
+- The v0.17 resource profile is a local workstation snapshot and is not a guarantee of performance under official infrastructure.
+- The current pipeline works with the existing long-context vLLM endpoint, but longer VirtualHome episodes, more frames, or concurrent workloads may require a separate lightweight endpoint in the future.
 
 Current safest claim:
 
