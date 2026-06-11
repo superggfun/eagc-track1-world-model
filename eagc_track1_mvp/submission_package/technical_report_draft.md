@@ -34,6 +34,7 @@ The `capabilities()` schema records whether a backend is validated, whether it r
 Current capability status:
 
 - LocalSim: validated local Track 1 MVP backend.
+- MazeSim: validated synthetic topology stress backend for exploration, blocked-edge replanning, and map-building checks.
 - VirtualHome: validated manual-play Windows backend; manual Play is required.
 - ALFRED offline: validated for the synthetic fixture only; real dataset conversion is not validated.
 - AI2-THOR: reserved but not validated; Windows/WSL/cloud rendering stack remains unresolved.
@@ -46,7 +47,7 @@ The reserved adapters do not import heavy dependencies during registry listing a
 
 Main modules:
 
-- `env_adapters/`: mock, visual sequence, LocalSim, validated VirtualHome conversion path, official-adapter placeholder, adapter capability registry, and reserved AI2-THOR/Habitat/ProcTHOR targets.
+- `env_adapters/`: mock, visual sequence, LocalSim, MazeSim synthetic topology stress, validated VirtualHome conversion path, official-adapter placeholder, adapter capability registry, and reserved AI2-THOR/Habitat/ProcTHOR targets.
 - `dataset_adapters/`: optional offline public dataset conversion paths such as ALFRED trajectory parsing.
 - `clients/`: OpenAI-compatible Qwen/vLLM client and deterministic mock client.
 - `perception/`: prompt templates, JSON extraction, text observation extraction, and vision observation extraction.
@@ -79,6 +80,7 @@ The test suite is decomposed to keep development checks bounded:
 - `targeted-vision`: real Qwen vision smoke for visual-local hybrid tasks.
 - `targeted-local-sim`: LocalSim real smoke; latest observed runtime is approximately 283 seconds.
 - `targeted-track1`: official-style Track1 procedure smoke.
+- `targeted-maze`: synthetic topology stress over one deterministic easy maze and one medium generated maze.
 - `standard` and `full`: longer checks for packaging and robustness; these are not routine edit gates.
 
 Each `tools/run_test_suite.py` run writes JSON and Markdown reports under `outputs/test_suite_reports/`.
@@ -211,6 +213,19 @@ The comparison is evidence-driven. Visual objects are matched approximately agai
 
 VirtualHome artifacts such as exported frames, raw Qwen responses, and `outputs/virtualhome_spike/` reports are runtime diagnostics and are not redistributed in git.
 
+## Maze Topology Stress
+
+v0.17.3 adds a lightweight synthetic MazeSim benchmark to stress unknown-topology exploration without using external simulator assets. MazeSim generates graph/grid mazes with seeded difficulty, dead ends, loops, blocked corridors, hidden goals, and optional route exceptions. The runner explores from a start cell, incrementally builds a topology world model, replans around blocked corridors, and records map coverage metrics.
+
+The maze stress runner writes:
+
+- `outputs/maze_stress/world_model.json`
+- `outputs/maze_stress/episode_log.jsonl`
+- `outputs/maze_stress/maze_metrics.json`
+- `outputs/maze_stress/status.json`
+
+Metrics include goal success, steps taken, shortest-path length, path efficiency, visited cells, map coverage, dead ends entered, backtracks, replans, and blocked edges encountered. This benchmark is not an official EAGC runtime and does not replace ProcTHOR, Habitat, AI2-THOR, or VirtualHome. It complements VirtualHome by focusing on topology exploration and planning rather than household scene graph or visual grounding.
+
 ## Local Evaluation
 
 Current local gates include:
@@ -220,6 +235,7 @@ Current local gates include:
 - `targeted-vision`: real Qwen vision smoke for visual-local hybrid tasks.
 - `targeted-local-sim`: fixed LocalSim real smoke.
 - `targeted-track1`: official-style Track1 procedure smoke.
+- `targeted-maze`: synthetic MazeSim topology stress.
 - `targeted-virtualhome-*`: optional manual-play VirtualHome evidence tiers.
 - `standard`: real mock smoke, fixed LocalSim, Track 1 procedure, easy randomized mock batch, visual sequence smoke, and report generation.
 - `docker-smoke`: source-directory compile, Docker smoke check, and mock-only smoke tests inside the agent container.

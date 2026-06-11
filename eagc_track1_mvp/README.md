@@ -2,13 +2,14 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.17.3 simulator adapter interface freeze.
+Current version: v0.17.3 maze topology stress test.
 
-Current stable tag: `v0.17.3-adapter-interface-freeze`
+Current stable tag: `v0.17.3-maze-topology-stress-test`
 
 Current status:
 
 - LocalSim Track 1 MVP
+- MazeSim synthetic topology stress benchmark
 - Official-style Track1 procedure runner
 - Visual-local hybrid prototype with evidence reporting
 - Real Qwen3.6 vLLM integration
@@ -56,6 +57,7 @@ python tools/list_env_adapters.py
 Validated backends:
 
 - `local_sim`: validated local Track 1 MVP backend.
+- `maze_sim`: validated synthetic topology stress backend for exploration, dead-end recovery, blocked-edge replanning, and map-building checks.
 - `virtualhome`: validated Windows manual-play backend for scene graph, frame export, and action-program smoke.
 
 Offline adapter:
@@ -296,6 +298,7 @@ python tools/run_test_suite.py --tier targeted-virtualhome-frame --timeout-secon
 python tools/run_test_suite.py --tier targeted-virtualhome-vision --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted-virtualhome-multiframe --timeout-seconds 600
 python tools/run_test_suite.py --tier targeted-resource-profile --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-maze --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted --timeout-seconds 900 --continue-on-failure
 python tools/run_test_suite.py --tier standard
 python tools/run_test_suite.py --tier full
@@ -320,6 +323,7 @@ Targeted tests are decomposed:
 - `targeted-virtualhome-vision`: optional Qwen vision extraction on a VirtualHome frame and visual-symbolic comparison.
 - `targeted-virtualhome-multiframe`: optional episode-level multi-frame Qwen grounding over selected VirtualHome task frames.
 - `targeted-resource-profile`: optional read-only VirtualHome + vLLM resource profile and coexistence smoke; it does not manage Docker or start lightweight vLLM.
+- `targeted-maze`: synthetic LocalSim-style maze topology stress; runs one deterministic easy maze and one medium generated maze with validators.
 - `targeted`: aggregate of the four targeted smoke groups.
 
 Each command records elapsed time and status under `outputs/test_suite_reports/`. Use `--timeout-seconds` to prevent a long test from hanging the suite and `--continue-on-failure` when you want a complete report across all targeted groups. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
@@ -330,6 +334,16 @@ Replay a single randomized LocalSim seed with diagnostics:
 python tools/replay_random_local_sim_failure.py --seed 6 --difficulty medium --mode real
 python tools/replay_random_local_sim_failure.py --seed 6 --difficulty medium --mode mock
 ```
+
+Run the MazeSim topology stress benchmark:
+
+```powershell
+python tools/run_maze_stress_test.py --episode generated_grid_maze --seed 42 --difficulty medium --max-steps 200
+python -m validators.validate_maze_stress_test outputs/maze_stress/status.json
+python tools/run_test_suite.py --tier targeted-maze --timeout-seconds 300
+```
+
+MazeSim is a lightweight synthetic LocalSim-style benchmark for unknown-topology exploration, dead ends, loops, blocked corridors, replanning, and map coverage metrics. It writes `outputs/maze_stress/world_model.json`, `episode_log.jsonl`, `maze_metrics.json`, and `status.json`. It is not an official EAGC runtime, does not use external simulator assets, does not call Qwen, and does not train a model. It complements VirtualHome: VirtualHome stresses household scene graph/action evidence, while MazeSim stresses topology exploration and planning.
 
 Sequence frames should be local files named in deterministic order:
 

@@ -103,6 +103,36 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
     virtualhome_multiframe = [py, "tools/run_virtualhome_multiframe_suite.py"]
     resource_profile = [py, "tools/profile_virtualhome_vllm_resources.py"]
     resource_smoke = [py, "tools/test_virtualhome_vllm_resource_smoke.py"]
+    maze_easy = [
+        py,
+        "tools/run_maze_stress_test.py",
+        "--episode",
+        "simple_t_maze",
+        "--seed",
+        "42",
+        "--difficulty",
+        "easy",
+        "--max-steps",
+        "80",
+        "--output-dir",
+        "outputs/maze_stress/simple_t_maze",
+    ]
+    maze_easy_validate = [py, "-m", "validators.validate_maze_stress_test", "outputs/maze_stress/simple_t_maze/status.json"]
+    maze_medium = [
+        py,
+        "tools/run_maze_stress_test.py",
+        "--episode",
+        "generated_grid_maze",
+        "--seed",
+        "42",
+        "--difficulty",
+        "medium",
+        "--max-steps",
+        "200",
+        "--output-dir",
+        "outputs/maze_stress",
+    ]
+    maze_medium_validate = [py, "-m", "validators.validate_maze_stress_test", "outputs/maze_stress/status.json"]
     targeted_replay = [
         py,
         "tools/replay_random_local_sim_failure.py",
@@ -199,6 +229,7 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         "targeted-virtualhome-vision": [virtualhome_vision],
         "targeted-virtualhome-multiframe": [virtualhome_multiframe],
         "targeted-resource-profile": [resource_profile, resource_smoke],
+        "targeted-maze": [maze_easy, maze_easy_validate, maze_medium, maze_medium_validate],
         "targeted": [qwen_text, visual_local_hybrid, local_sim, track1],
         "standard": [
             compileall,
@@ -342,6 +373,7 @@ def _tier_descriptions() -> Dict[str, str]:
         "targeted-virtualhome-vision": "Optional Qwen vision extraction on a VirtualHome frame and visual-symbolic comparison.",
         "targeted-virtualhome-multiframe": "Optional VirtualHome episode-level multi-frame Qwen grounding and evidence comparison.",
         "targeted-resource-profile": "Read-only VirtualHome + vLLM resource profile and coexistence smoke; does not manage Docker or start lite vLLM.",
+        "targeted-maze": "Synthetic LocalSim maze topology stress: deterministic easy maze plus medium generated maze.",
         "targeted": "Aggregate targeted smoke: text, vision, LocalSim, Track1 procedure.",
         "standard": "Longer gate: targeted-style coverage plus report/source/demo packaging.",
         "full": "Optional stress suite with longer robustness batches.",

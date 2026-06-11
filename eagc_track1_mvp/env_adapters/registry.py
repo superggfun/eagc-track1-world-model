@@ -18,6 +18,17 @@ ADAPTER_CAPABILITIES: Dict[str, Dict[str, Any]] = {
         supports_online_closed_loop=True,
         known_blockers=[],
     ),
+    "maze_sim": adapter_capabilities(
+        adapter_name="maze_sim",
+        validated=True,
+        validation_status="validated_synthetic_topology_stress",
+        requires_rendering=False,
+        supports_scene_graph=True,
+        supports_frame_export=False,
+        supports_action_execution=True,
+        supports_online_closed_loop=True,
+        known_blockers=["synthetic stress test; not official EAGC runtime"],
+    ),
     "virtualhome": adapter_capabilities(
         adapter_name="virtualhome",
         validated=True,
@@ -80,6 +91,7 @@ ADAPTER_CAPABILITIES: Dict[str, Dict[str, Any]] = {
 
 ADAPTER_CLASS_PATHS = {
     "local_sim": ("env_adapters.local_sim_env", "LocalSimEnv"),
+    "maze_sim": ("env_adapters.maze_sim_env", "MazeSimEnv"),
     "ai2thor": ("env_adapters.ai2thor_adapter", "AI2ThorAdapter"),
     "habitat": ("env_adapters.habitat_adapter", "HabitatAdapter"),
     "procthor": ("env_adapters.procthor_adapter", "ProcThorAdapter"),
