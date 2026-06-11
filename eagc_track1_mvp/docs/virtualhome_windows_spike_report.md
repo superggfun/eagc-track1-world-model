@@ -66,13 +66,13 @@ python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status
 GPU budget:
 
 ```powershell
-python tools/check_gpu_budget.py
+python tools/check_local_gpu_runtime.py
 ```
 
 Optional lightweight vLLM endpoint check:
 
 ```powershell
-python tools/test_vllm_lite_endpoint.py
+python tools/check_vllm_endpoint.py --base-url http://127.0.0.1:8000/v1
 ```
 
 ## Expected Artifacts
@@ -118,12 +118,31 @@ Latest local probe on 2026-06-11:
 - `python tools/test_virtualhome_windows_spike.py` completed gracefully and wrote `outputs/virtualhome_spike/status.json`.
 - `python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json` passed because the missing API/executable state is reported explicitly rather than faked as success.
 - `python tools/setup_virtualhome_hint.py` provides manual setup hints and does not download large files.
+- VirtualHome-only simulator execution did not start because the Python API and executable path are missing.
+- `scene_graph.json` was not generated.
+- `program_log.json` was not generated.
+- No camera frame was saved.
 
 Current `status.json` reason:
 
 ```text
 missing_virtualhome_python_api
 ```
+
+Local RTX 5090 runtime note:
+
+- The workstation has one RTX 5090 32GB GPU.
+- `python tools/check_local_gpu_runtime.py` recorded approximately 31,768 MiB used and 420 MiB free during the latest probe.
+- The original long-context vLLM profile can leave very little free VRAM and should not be used for VirtualHome coexistence testing.
+- `python tools/check_local_gpu_runtime.py` records the current GPU and process state to `outputs/local_runtime_check/gpu_status.txt`.
+- If a coexistence test is attempted later, use a separate lightweight vLLM profile with a shorter context and lower memory utilization. See `docs/local_vllm_lightweight_profile.md`.
+- If memory remains insufficient, use time-sliced operation: run VirtualHome first to generate scene graph/log/frame artifacts, then run Qwen/vLLM post-processing afterward.
+
+VirtualHome + vLLM coexistence status:
+
+- Not run in the latest probe because VirtualHome-only smoke did not reach simulator startup.
+- The original 262K-context vLLM container should not be used for coexistence testing.
+- A future coexistence test should first validate VirtualHome-only, then use `python tools/check_vllm_endpoint.py --base-url ...` and `python tools/test_virtualhome_vllm_coexistence.py` with a lightweight endpoint.
 
 Required user-provided artifacts before a real smoke can run:
 

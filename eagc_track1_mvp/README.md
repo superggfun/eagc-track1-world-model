@@ -329,6 +329,7 @@ python tools/test_ai2thor_adapter.py --scene FloorPlan1
 Run the optional VirtualHome Windows spike:
 
 ```powershell
+python tools/check_local_gpu_runtime.py
 python tools/check_gpu_budget.py
 python tools/setup_virtualhome_hint.py
 python tools/check_virtualhome_env.py
@@ -348,7 +349,7 @@ Only after reviewing the inferred image/mount plan, start the separate container
 
 ```powershell
 scripts/start_vllm_qwen36_vh_lite.ps1 -ForceRun
-python tools/test_vllm_lite_endpoint.py
+python tools/check_vllm_endpoint.py --base-url http://127.0.0.1:8001/v1
 scripts/stop_vllm_qwen36_vh_lite.ps1
 ```
 
@@ -356,6 +357,7 @@ These scripts use a separate container name, `eagc-vllm-qwen36-vh-lite`, and hos
 
 ```text
 docs/vllm_virtualhome_gpu_budget.md
+docs/local_vllm_lightweight_profile.md
 docs/virtualhome_windows_spike_report.md
 ```
 

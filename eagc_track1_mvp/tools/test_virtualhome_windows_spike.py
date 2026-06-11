@@ -79,6 +79,10 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
         program_log_path = output_dir / "program_log.json"
         program_log_path.write_text(json.dumps(program_log, indent=2, ensure_ascii=False), encoding="utf-8")
         status["program_log_saved"] = True
+        frame_path = _try_save_frame(comm, output_dir)
+        status["frame_saved"] = frame_path is not None
+        if frame_path:
+            status["frame_path"] = str(frame_path)
 
         paths = convert_files(scene_graph_path, program_log_path, output_dir)
         status["converted_world_model_saved"] = paths["world_model"].exists()
@@ -141,6 +145,40 @@ def _render_program(comm: Any, program: List[str]) -> Any:
         method = getattr(comm, method_name, None)
         if callable(method):
             return method(program, recording=False)
+    return None
+
+
+def _try_save_frame(comm: Any, output_dir: Path) -> Path | None:
+    for method_name in ["camera_image", "get_camera_image", "get_image", "screenshot"]:
+        method = getattr(comm, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            result = method()
+        except Exception:
+            continue
+        payload = _extract_frame_payload(result)
+        if not payload:
+            continue
+        frame_path = output_dir / "frame_000.png"
+        frame_path.write_bytes(payload)
+        return frame_path
+    return None
+
+
+def _extract_frame_payload(result: Any) -> bytes | None:
+    if isinstance(result, bytes):
+        return result
+    if isinstance(result, tuple):
+        for item in result:
+            payload = _extract_frame_payload(item)
+            if payload:
+                return payload
+    if isinstance(result, dict):
+        for key in ["image", "frame", "png", "bytes"]:
+            payload = _extract_frame_payload(result.get(key))
+            if payload:
+                return payload
     return None
 
 
