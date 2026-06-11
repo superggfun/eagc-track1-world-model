@@ -224,7 +224,12 @@ Run tiered test suites:
 
 ```powershell
 python tools/run_test_suite.py --tier fast
-python tools/run_test_suite.py --tier targeted --seed 6 --difficulty medium
+python tools/run_test_suite.py --list-tiers
+python tools/run_test_suite.py --tier targeted-text --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-vision --timeout-seconds 600
+python tools/run_test_suite.py --tier targeted-local-sim --timeout-seconds 600
+python tools/run_test_suite.py --tier targeted-track1 --timeout-seconds 600
+python tools/run_test_suite.py --tier targeted --timeout-seconds 900 --continue-on-failure
 python tools/run_test_suite.py --tier standard
 python tools/run_test_suite.py --tier full
 ```
@@ -237,7 +242,15 @@ The compile step is equivalent to:
 python -m compileall clients env_adapters perception world_model planner executor logging_utils validators task_evaluator track1_runner scoring diagnostics dataset_adapters tools tests
 ```
 
-`targeted` adds real Qwen text smoke, real visual-local hybrid smoke, and LocalSim real smoke. Run `targeted` after core planner/replanner/task evaluator/LocalSim/validator changes or when real Qwen behavior needs checking. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
+Targeted tests are decomposed:
+
+- `targeted-text`: minimal real Qwen text endpoint smoke, no vision.
+- `targeted-vision`: real Qwen vision visual-local hybrid smoke.
+- `targeted-local-sim`: fixed LocalSim real episodes.
+- `targeted-track1`: official-style Track1ProcedureRunner real smoke.
+- `targeted`: aggregate of the four targeted smoke groups.
+
+Each command records elapsed time and status under `outputs/test_suite_reports/`. Use `--timeout-seconds` to prevent a long test from hanging the suite and `--continue-on-failure` when you want a complete report across all targeted groups. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
 
 Replay a single randomized LocalSim seed with diagnostics:
 

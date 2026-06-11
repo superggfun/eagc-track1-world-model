@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+REPORT_DIR = PROJECT_ROOT / "outputs" / "test_suite_reports"
 GUARDRAILS = ["--episode-timeout-seconds", "600", "--max-qwen-calls-per-episode", "40"]
 SOURCE_DIRS = [
     "clients",
@@ -30,20 +34,37 @@ SOURCE_DIRS = [
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run tiered EAGC Track 1 local test suites.")
-    parser.add_argument("--tier", choices=["fast", "targeted", "standard", "full", "docker-smoke"], required=True)
+    parser.add_argument(
+        "--tier",
+        choices=list(_tier_descriptions().keys()),
+        help="Test tier to run. Use --list-tiers to inspect available tiers.",
+    )
     parser.add_argument("--seed", type=int, default=6)
     parser.add_argument("--difficulty", choices=["easy", "medium"], default="medium")
+    parser.add_argument("--timeout-seconds", type=int, default=900)
+    parser.add_argument("--continue-on-failure", action="store_true")
+    parser.add_argument("--list-tiers", action="store_true")
     args = parser.parse_args()
 
+    if args.list_tiers:
+        _print_tiers()
+        return 0
+    if not args.tier:
+        parser.error("--tier is required unless --list-tiers is used")
+
     commands = _commands(args.tier, args.seed, args.difficulty)
-    for command in commands:
-        print(f"\n$ {' '.join(command)}", flush=True)
-        completed = subprocess.run(command, cwd=PROJECT_ROOT)
-        if completed.returncode != 0:
-            print(f"Command failed with exit code {completed.returncode}: {' '.join(command)}")
-            return completed.returncode
-    print(f"\nTest suite tier {args.tier!r} passed.")
-    return 0
+    report = _run_commands(
+        tier=args.tier,
+        commands=commands,
+        timeout_seconds=args.timeout_seconds,
+        continue_on_failure=args.continue_on_failure,
+    )
+    _write_report(report)
+    if report["success"]:
+        print(f"\nTest suite tier {args.tier!r} passed.")
+        return 0
+    print(f"\nTest suite tier {args.tier!r} failed. Report: {report['report_json_path']}")
+    return 1
 
 
 def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
@@ -51,6 +72,7 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
     compileall = [py, "-m", "compileall", *SOURCE_DIRS]
     smoke_mock = [py, "tests/smoke_test_all_mock_episodes.py", "--mode", "mock", "--all"]
     smoke_real = [py, "tests/smoke_test_all_mock_episodes.py", "--mode", "real", "--all", "--strict-real"]
+    qwen_text = [py, "tools/test_qwen_text_call.py"]
     local_sim = [py, "tests/smoke_test_local_sim_episodes.py", "--mode", "real"]
     track1 = [py, "tests/smoke_test_track1_procedure.py", "--mode", "real"]
     alfred_fixture = [py, "tests/smoke_test_alfred_fixture_conversion.py"]
@@ -160,45 +182,163 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         *GUARDRAILS,
     ]
 
-    if tier == "fast":
-        return [compileall, smoke_mock, alfred_fixture]
-    if tier == "docker-smoke":
-        return [compileall, docker_smoke, smoke_mock]
-    if tier == "targeted":
-        return [*_commands("fast", seed, difficulty), smoke_real, visual_local_hybrid, local_sim, track1]
-    if tier == "standard":
-        return [
-            *_commands("targeted", seed, difficulty),
+    tier_commands = {
+        "fast": [compileall, smoke_mock, alfred_fixture],
+        "targeted-text": [qwen_text],
+        "targeted-vision": [visual_local_hybrid],
+        "targeted-local-sim": [local_sim],
+        "targeted-track1": [track1],
+        "targeted": [qwen_text, visual_local_hybrid, local_sim, track1],
+        "standard": [
+            compileall,
+            smoke_real,
+            visual_local_hybrid,
+            local_sim,
+            track1,
             easy20_mock,
             visual_sequence,
             generate_report,
             demo_snapshot,
             package_source,
             check_source_package,
-        ]
-    if tier == "full":
-        return [
-            *_commands("standard", seed, difficulty),
+        ],
+        "full": [
+            compileall,
+            smoke_real,
+            visual_local_hybrid,
+            local_sim,
+            track1,
             targeted_replay,
             targeted_robustness,
             easy100_mock,
             easy20_real,
             medium5,
             medium10_real,
-        ]
-    raise ValueError(f"Unknown tier: {tier}")
+        ],
+        "docker-smoke": [compileall, docker_smoke, smoke_mock],
+    }
+    return tier_commands[tier]
 
 
-def _visual_sequence_available() -> bool:
-    image_dir = PROJECT_ROOT / "assets" / "test_sequences" / "bedroom_sequence"
-    if not image_dir.exists():
-        return False
-    return any(
-        path.is_file()
-        and path.name.lower().startswith("frame_")
-        and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"}
-        for path in image_dir.iterdir()
-    )
+def _run_commands(
+    tier: str,
+    commands: List[List[str]],
+    timeout_seconds: int,
+    continue_on_failure: bool,
+) -> Dict[str, object]:
+    started = datetime.now(timezone.utc)
+    report: Dict[str, object] = {
+        "tier": tier,
+        "start_time": started.isoformat(),
+        "end_time": "",
+        "elapsed_seconds": 0.0,
+        "timeout_seconds": timeout_seconds,
+        "continue_on_failure": continue_on_failure,
+        "success": True,
+        "commands": [],
+        "report_json_path": "",
+        "report_md_path": "",
+    }
+    overall_start = time.perf_counter()
+    command_reports: List[Dict[str, object]] = []
+    for command in commands:
+        command_text = " ".join(command)
+        print(f"\n$ {command_text}", flush=True)
+        command_started = datetime.now(timezone.utc)
+        timer = time.perf_counter()
+        row: Dict[str, object] = {
+            "command": command_text,
+            "argv": command,
+            "start_time": command_started.isoformat(),
+            "end_time": "",
+            "elapsed_seconds": 0.0,
+            "returncode": None,
+            "status": "running",
+            "timeout": False,
+        }
+        try:
+            completed = subprocess.run(command, cwd=PROJECT_ROOT, timeout=timeout_seconds)
+            row["returncode"] = completed.returncode
+            row["status"] = "passed" if completed.returncode == 0 else "failed"
+        except subprocess.TimeoutExpired:
+            row["returncode"] = None
+            row["status"] = "timeout"
+            row["timeout"] = True
+            print(f"Command timed out after {timeout_seconds}s: {command_text}")
+        finally:
+            row["elapsed_seconds"] = round(time.perf_counter() - timer, 3)
+            row["end_time"] = datetime.now(timezone.utc).isoformat()
+            command_reports.append(row)
+
+        if row["status"] != "passed":
+            report["success"] = False
+            if not continue_on_failure:
+                break
+    report["commands"] = command_reports
+    report["end_time"] = datetime.now(timezone.utc).isoformat()
+    report["elapsed_seconds"] = round(time.perf_counter() - overall_start, 3)
+    return report
+
+
+def _write_report(report: Dict[str, object]) -> None:
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    tier = str(report["tier"]).replace("/", "_")
+    json_path = REPORT_DIR / f"{timestamp}_{tier}_report.json"
+    md_path = REPORT_DIR / f"{timestamp}_{tier}_report.md"
+    report["report_json_path"] = str(json_path)
+    report["report_md_path"] = str(md_path)
+    json_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    md_path.write_text(_report_markdown(report), encoding="utf-8")
+    print(f"\nTest suite report written to {json_path}")
+    print(f"Test suite report written to {md_path}")
+
+
+def _report_markdown(report: Dict[str, object]) -> str:
+    lines = [
+        f"# Test Suite Report: {report['tier']}",
+        "",
+        f"- success: `{report['success']}`",
+        f"- start_time: `{report['start_time']}`",
+        f"- end_time: `{report['end_time']}`",
+        f"- elapsed_seconds: `{report['elapsed_seconds']}`",
+        f"- timeout_seconds: `{report['timeout_seconds']}`",
+        f"- continue_on_failure: `{report['continue_on_failure']}`",
+        "",
+        "| status | timeout | elapsed_seconds | command |",
+        "|---|---:|---:|---|",
+    ]
+    for item in report.get("commands", []):
+        if not isinstance(item, dict):
+            continue
+        command = str(item.get("command", "")).replace("|", "\\|")
+        lines.append(
+            f"| {item.get('status')} | {item.get('timeout')} | {item.get('elapsed_seconds')} | `{command}` |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _tier_descriptions() -> Dict[str, str]:
+    return {
+        "fast": "Deterministic sanity check: compile source dirs, mock-only smoke, ALFRED synthetic fixture.",
+        "targeted-text": "Minimal real Qwen text chat smoke; no vision and no long batch.",
+        "targeted-vision": "Visual-local hybrid smoke using real Qwen vision.",
+        "targeted-local-sim": "Fixed LocalSim episodes with real Qwen text extraction.",
+        "targeted-track1": "Official-style Track1ProcedureRunner real smoke.",
+        "targeted": "Aggregate targeted smoke: text, vision, LocalSim, Track1 procedure.",
+        "standard": "Longer gate: targeted-style coverage plus report/source/demo packaging.",
+        "full": "Optional stress suite with longer robustness batches.",
+        "docker-smoke": "Mock-only container-safe smoke.",
+    }
+
+
+def _print_tiers() -> None:
+    print("Available tiers:")
+    for tier, description in _tier_descriptions().items():
+        print(f"\n{tier}: {description}")
+        for command in _commands(tier, seed=6, difficulty="medium"):
+            print(f"  - {' '.join(command)}")
 
 
 if __name__ == "__main__":
