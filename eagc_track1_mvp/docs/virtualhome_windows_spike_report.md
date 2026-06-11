@@ -289,6 +289,35 @@ Latest v0.16.2 manual-play probe on 2026-06-11:
 - Frame saved: no. Camera frame export remains optional and was not validated in this run.
 - The real VirtualHome smoke is now validated in manual-play mode, but automated simulator startup is still not validated.
 
+Latest v0.16.3 manual-play regression probe on 2026-06-11:
+
+- The manual-play route was promoted to an optional test suite tier:
+  `python tools/run_test_suite.py --tier targeted-virtualhome-manual`
+- The tier first checks whether `127.0.0.1:8080` is listening.
+- If the port is not listening, the tier writes `outputs/virtualhome_spike/manual_suite_status.json`, reports `virtualhome_manual_play_port_not_open`, and exits as a graceful skip.
+- If the port is listening, it runs:
+  - `python tools/check_virtualhome_env.py`
+  - `python tools/test_virtualhome_windows_spike.py`
+  - `python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json`
+  - `python -m validators.validate_virtualhome_converted_world_model outputs/virtualhome_spike/converted_world_model.json outputs/virtualhome_spike/converted_episode_log.jsonl`
+- The smoke now runs four fixed household tasks:
+  - `walk_to_and_sit_on_sofa`
+  - `walk_to_and_grab_object`
+  - `walk_to_and_open_object`
+  - `place_object_on_surface`
+- Latest run result:
+  - task success count: 4
+  - task failed count: 0
+  - task unsupported count: 0
+  - converted object count: 440
+  - scene graph saved: yes
+  - program log saved: yes
+  - converted world model saved: yes
+  - converted episode log saved: yes
+  - frame saved: no
+- The converted world-model quality validator checks non-empty objects, rooms or uncertainty, relations, source, episode id, and episode log action/result content.
+- VirtualHome is now validated as a manual-play Windows simulator smoke, but it is still not an automated backend and still does not replace official EAGC runtime validation.
+
 ## Assessment Criteria
 
 VirtualHome becomes a useful Windows-friendly household simulator candidate if:

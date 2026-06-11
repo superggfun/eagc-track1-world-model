@@ -50,6 +50,14 @@ def validate(status_path: Path) -> List[str]:
     if errors:
         return errors
 
+    program_log = _read_json(output_dir / "program_log.json", errors, "program_log")
+    if not errors:
+        tasks = program_log.get("tasks", [])
+        if not isinstance(tasks, list) or not tasks:
+            errors.append("program_log.tasks must be a non-empty list for a successful VirtualHome spike.")
+        elif not any(isinstance(task, dict) and task.get("status") == "success" for task in tasks):
+            errors.append("program_log.tasks must include at least one successful task.")
+
     world_model = _read_json(output_dir / "converted_world_model.json", errors, "converted_world_model")
     if errors:
         return errors

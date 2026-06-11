@@ -97,6 +97,7 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
     check_source_package = [py, "tools/check_source_package_repro.py", "--zip-path", "dist/eagc_track1_mvp_source.zip"]
     demo_snapshot = [py, "tools/create_demo_snapshot.py"]
     docker_smoke = [py, "tools/docker_smoke_check.py"]
+    virtualhome_manual = [py, "tools/run_virtualhome_manual_suite.py"]
     targeted_replay = [
         py,
         "tools/replay_random_local_sim_failure.py",
@@ -188,6 +189,7 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         "targeted-vision": [visual_local_hybrid],
         "targeted-local-sim": [local_sim],
         "targeted-track1": [track1],
+        "targeted-virtualhome-manual": [virtualhome_manual],
         "targeted": [qwen_text, visual_local_hybrid, local_sim, track1],
         "standard": [
             compileall,
@@ -326,6 +328,7 @@ def _tier_descriptions() -> Dict[str, str]:
         "targeted-vision": "Visual-local hybrid smoke using real Qwen vision.",
         "targeted-local-sim": "Fixed LocalSim episodes with real Qwen text extraction.",
         "targeted-track1": "Official-style Track1ProcedureRunner real smoke.",
+        "targeted-virtualhome-manual": "Optional VirtualHome manual-play smoke; skips if 127.0.0.1:8080 is not listening.",
         "targeted": "Aggregate targeted smoke: text, vision, LocalSim, Track1 procedure.",
         "standard": "Longer gate: targeted-style coverage plus report/source/demo packaging.",
         "full": "Optional stress suite with longer robustness batches.",

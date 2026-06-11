@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.16.2 VirtualHome manual-play connection smoke.
+Current version: v0.16.3 VirtualHome manual-play regression suite.
 
-Current stable tag: `v0.16.1-virtualhome-runtime-blocker`
+Current stable tag: `v0.16.3-virtualhome-regression-smoke`
 
 Current status:
 
@@ -13,7 +13,7 @@ Current status:
 - Visual-local hybrid prototype with evidence reporting
 - Real Qwen3.6 vLLM integration
 - ALFRED offline adapter with synthetic fixture conversion
-- VirtualHome manual-play Windows smoke validated with scene graph, program log, and converted world model
+- VirtualHome manual-play Windows regression smoke validated with scene graph, multi-task program log, and converted world model
 - Docker/source package readiness
 - No training yet
 - Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, fully automated VirtualHome startup, and real ALFRED dataset conversion are not validated yet
@@ -241,6 +241,7 @@ python tools/run_test_suite.py --tier targeted-text --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted-vision --timeout-seconds 600
 python tools/run_test_suite.py --tier targeted-local-sim --timeout-seconds 600
 python tools/run_test_suite.py --tier targeted-track1 --timeout-seconds 600
+python tools/run_test_suite.py --tier targeted-virtualhome-manual --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted --timeout-seconds 900 --continue-on-failure
 python tools/run_test_suite.py --tier standard
 python tools/run_test_suite.py --tier full
@@ -260,6 +261,7 @@ Targeted tests are decomposed:
 - `targeted-vision`: real Qwen vision visual-local hybrid smoke.
 - `targeted-local-sim`: fixed LocalSim real episodes.
 - `targeted-track1`: official-style Track1ProcedureRunner real smoke.
+- `targeted-virtualhome-manual`: optional VirtualHome manual-play smoke; skips if `127.0.0.1:8080` is not listening.
 - `targeted`: aggregate of the four targeted smoke groups.
 
 Each command records elapsed time and status under `outputs/test_suite_reports/`. Use `--timeout-seconds` to prevent a long test from hanging the suite and `--continue-on-failure` when you want a complete report across all targeted groups. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
@@ -365,6 +367,7 @@ python tools/setup_virtualhome_hint.py
 python tools/check_virtualhome_env.py
 python tools/test_virtualhome_windows_spike.py
 python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json
+python -m validators.validate_virtualhome_converted_world_model outputs/virtualhome_spike/converted_world_model.json outputs/virtualhome_spike/converted_episode_log.jsonl
 ```
 
 VirtualHome is a Windows-friendly household activity simulator candidate for scene graph, action program, and optional visual-frame smoke tests. It is a complementary route after AI2-THOR/Habitat local rendering blockers, not a claim that VirtualHome fully replaces ProcTHOR, Habitat, AI2-THOR, or the official EAGC runtime.
@@ -379,6 +382,20 @@ $env:VIRTUALHOME_SIMULATOR_PATH="C:\Users\Alphay\Documents\ExternalTools\virtual
 ```
 
 Do not commit the VirtualHome repository, Unity executable, Unity assets, generated frames, videos, or other simulator artifacts.
+
+The currently validated VirtualHome path is manual Play:
+
+1. Start `VirtualHome.exe`.
+2. Select Windowed mode if prompted.
+3. Press Play.
+4. Confirm `127.0.0.1:8080` is listening.
+5. Run:
+
+```powershell
+python tools/run_test_suite.py --tier targeted-virtualhome-manual --timeout-seconds 300
+```
+
+This tier validates scene graph retrieval, four small household program tasks, conversion to `converted_world_model.json` / `converted_episode_log.jsonl`, and conversion quality checks. It does not call Qwen and does not test frame export.
 
 If you want to test a separate lightweight vLLM profile for sharing GPU memory with VirtualHome, review the dry-run first:
 

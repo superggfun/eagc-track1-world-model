@@ -91,12 +91,31 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
         scene_graph_path.write_text(json.dumps(scene_graph, indent=2, ensure_ascii=False), encoding="utf-8")
         status["scene_graph_saved"] = True
 
-        program = _choose_program(scene_graph)
-        program_log = {"program": program, "result": "not_executed"}
-        render_result = _render_program(comm, program)
-        if render_result is not None:
-            program_log = {"program": program, "result": render_result}
-        status["program_execution_success"] = _virtualhome_success(render_result)
+        task_results = _run_task_suite(comm, scene_graph, scene_id)
+        successful_tasks = [item for item in task_results if item.get("status") == "success"]
+        failed_tasks = [item for item in task_results if item.get("status") == "failed"]
+        unsupported_tasks = [item for item in task_results if item.get("status") == "unsupported_in_scene"]
+        program = [
+            action
+            for item in task_results
+            if item.get("status") == "success"
+            for action in item.get("program", [])
+        ]
+        program_log = {
+            "tasks": task_results,
+            "program": program,
+            "summary": {
+                "task_count": len(task_results),
+                "success_count": len(successful_tasks),
+                "failed_count": len(failed_tasks),
+                "unsupported_count": len(unsupported_tasks),
+            },
+        }
+        status["task_results"] = task_results
+        status["task_success_count"] = len(successful_tasks)
+        status["task_failed_count"] = len(failed_tasks)
+        status["task_unsupported_count"] = len(unsupported_tasks)
+        status["program_execution_success"] = bool(successful_tasks) and not failed_tasks
         program_log_path = output_dir / "program_log.json"
         program_log_path.write_text(json.dumps(program_log, indent=2, ensure_ascii=False), encoding="utf-8")
         status["program_log_saved"] = True
@@ -113,8 +132,10 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
         status["converted_object_count"] = len(converted_objects) if isinstance(converted_objects, list) else 0
         if status["converted_object_count"] <= 0:
             raise RuntimeError("VirtualHome scene graph conversion produced no world_model objects.")
-        if render_result is not None and not _virtualhome_success(render_result):
-            raise RuntimeError(f"VirtualHome program execution failed: {render_result}")
+        if not successful_tasks:
+            raise RuntimeError("VirtualHome task suite produced no successful tasks.")
+        if failed_tasks:
+            raise RuntimeError(f"VirtualHome task suite had failed tasks: {failed_tasks}")
         status["success"] = True
         status["reason"] = "virtualhome_spike_completed"
     except Exception as exc:  # VirtualHome APIs vary; capture exact failure.
@@ -223,23 +244,79 @@ def _get_scene_graph(comm: Any) -> Dict[str, Any]:
     raise RuntimeError("VirtualHome communication object does not expose a known scene graph method.")
 
 
-def _choose_program(scene_graph: Dict[str, Any]) -> List[str]:
+def _run_task_suite(comm: Any, scene_graph: Dict[str, Any], scene_id: int) -> List[Dict[str, Any]]:
+    results: List[Dict[str, Any]] = []
+    for spec in _task_specs(scene_graph):
+        row: Dict[str, Any] = {
+            "task_name": spec["task_name"],
+            "program": spec["program"],
+            "required_objects": spec["required_objects"],
+            "status": "pending",
+            "result": None,
+        }
+        missing = [name for name in spec["required_objects"] if not _scene_has_object(scene_graph, name)]
+        if missing:
+            row["status"] = "unsupported_in_scene"
+            row["missing_objects"] = missing
+            results.append(row)
+            continue
+        try:
+            _call_if_exists(comm, "reset", scene_id)
+            add_result = _call_if_exists(comm, "add_character")
+            row["character_added"] = _virtualhome_success(add_result)
+            row["character_add_result"] = add_result
+            render_result = _render_program(comm, spec["program"])
+            row["result"] = render_result
+            row["status"] = "success" if _virtualhome_success(render_result) else "failed"
+        except Exception as exc:
+            row["status"] = "failed"
+            row["error_type"] = type(exc).__name__
+            row["error_message"] = str(exc)
+        results.append(row)
+    return results
+
+
+def _task_specs(scene_graph: Dict[str, Any]) -> List[Dict[str, Any]]:
     nodes = [node for node in scene_graph.get("nodes", []) if isinstance(node, dict)]
     names = {str(node.get("class_name", "")).lower() for node in nodes}
-    for target_name, actions in [
-        ("sofa", ["Walk", "Sit"]),
-        ("television", ["Walk"]),
-        ("tv", ["Walk"]),
-        ("book", ["Find"]),
-        ("chair", ["Find"]),
-    ]:
-        if target_name in names:
-            return [f"<char0> [{action}] <{target_name}> (1)" for action in actions]
-    room = next((node for node in nodes if _node_category_name(node) == "rooms"), None)
-    if room and room.get("id") is not None:
-        room_name = str(room.get("class_name") or "living_room").lower()
-        return [f"<char0> [Walk] <{room_name}> ({room['id']})"]
-    return ["<char0> [Walk] <living_room> (1)"]
+    object_for_grab = "book" if "book" in names else "cupcake"
+    open_target = "fridge" if "fridge" in names else "microwave"
+    place_object = "mug" if "mug" in names else "book"
+    surface = "coffeetable" if "coffeetable" in names else "desk"
+    return [
+        {
+            "task_name": "walk_to_and_sit_on_sofa",
+            "required_objects": ["sofa"],
+            "program": ["<char0> [Walk] <sofa> (1)", "<char0> [Sit] <sofa> (1)"],
+        },
+        {
+            "task_name": "walk_to_and_grab_object",
+            "required_objects": [object_for_grab],
+            "program": [f"<char0> [Walk] <{object_for_grab}> (1)", f"<char0> [Grab] <{object_for_grab}> (1)"],
+        },
+        {
+            "task_name": "walk_to_and_open_object",
+            "required_objects": [open_target],
+            "program": [f"<char0> [Walk] <{open_target}> (1)", f"<char0> [Open] <{open_target}> (1)"],
+        },
+        {
+            "task_name": "place_object_on_surface",
+            "required_objects": [place_object, surface],
+            "program": [
+                f"<char0> [Walk] <{place_object}> (1)",
+                f"<char0> [Grab] <{place_object}> (1)",
+                f"<char0> [Walk] <{surface}> (1)",
+                f"<char0> [PutBack] <{place_object}> (1) <{surface}> (1)",
+            ],
+        },
+    ]
+
+
+def _scene_has_object(scene_graph: Dict[str, Any], class_name: str) -> bool:
+    return any(
+        isinstance(node, dict) and str(node.get("class_name", "")).lower() == class_name
+        for node in scene_graph.get("nodes", [])
+    )
 
 
 def _first_node_id(nodes: List[Dict[str, Any]], class_name: str) -> Any:

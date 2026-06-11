@@ -85,6 +85,7 @@ def convert_scene_graph_to_world_model(scene_graph: Dict[str, Any], episode_id: 
 
     return {
         "episode_id": episode_id,
+        "source": "virtualhome",
         "agent_state": {
             "current_room": _first_room_name(rooms),
             "holding": None,
