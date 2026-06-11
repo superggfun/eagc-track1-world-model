@@ -318,6 +318,44 @@ Latest v0.16.3 manual-play regression probe on 2026-06-11:
 - The converted world-model quality validator checks non-empty objects, rooms or uncertainty, relations, source, episode id, and episode log action/result content.
 - VirtualHome is now validated as a manual-play Windows simulator smoke, but it is still not an automated backend and still does not replace official EAGC runtime validation.
 
+Latest v0.16.4 frame export and visual-symbolic evidence probe on 2026-06-11:
+
+- The frame path is now an optional manual-play tier:
+  `python tools/run_test_suite.py --tier targeted-virtualhome-frame`
+- The tier first checks whether `127.0.0.1:8080` is listening.
+- If the port is not listening, it writes `outputs/virtualhome_spike/frame_suite_status.json`, reports `virtualhome_manual_play_port_not_open`, and exits as a graceful skip.
+- If the port is listening, it runs:
+  - `python tools/test_virtualhome_windows_spike.py --export-frame`
+  - `python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json`
+  - `python -m validators.validate_virtualhome_converted_world_model outputs/virtualhome_spike/converted_world_model.json outputs/virtualhome_spike/converted_episode_log.jsonl`
+  - `python -m validators.validate_virtualhome_frame_export outputs/virtualhome_spike/frame_export_status.json`
+  - `python tools/build_virtualhome_evidence_report.py`
+- Frame export uses the documented VirtualHome camera API:
+  - `camera_count()`
+  - `camera_image([camera_index], mode="normal", image_width=640, image_height=480)`
+- Runtime artifacts:
+  - `outputs/virtualhome_spike/frame_000.png` if frame export succeeds
+  - `outputs/virtualhome_spike/frame_export_status.json`
+  - `outputs/virtualhome_spike/visual_symbolic_evidence_report.json`
+  - `outputs/virtualhome_spike/visual_symbolic_evidence_report.md`
+- Latest run result:
+  - frame export: success
+  - frame dimensions: 640x480
+  - camera index: 86 of 87 cameras
+  - task success count: 4
+  - task failed count: 0
+  - scene graph object count: 444
+  - scene graph relation count: 932
+  - converted world-model object count: 440
+  - converted world-model relation count: 932
+- The evidence report compares symbolic state and optional visual observation metadata:
+  - scene graph object/relation counts
+  - converted world-model object/relation counts
+  - executed/successful task counts
+  - frame availability and dimensions if available
+- v0.16.4 still does not call Qwen vision, does not start lightweight vLLM, and does not perform official EAGC runtime validation.
+- If frame export fails, the failure is captured as `virtualhome_frame_api_unavailable`, `virtualhome_camera_not_configured`, `virtualhome_frame_export_timeout`, or `virtualhome_frame_export_unsupported`; the existing scene graph/program pipeline remains valid.
+
 ## Assessment Criteria
 
 VirtualHome becomes a useful Windows-friendly household simulator candidate if:

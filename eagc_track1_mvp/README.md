@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.16.3 VirtualHome manual-play regression suite.
+Current version: v0.16.4 VirtualHome frame export and visual-symbolic evidence comparison.
 
-Current stable tag: `v0.16.3-virtualhome-regression-smoke`
+Current stable tag: `v0.16.4-virtualhome-frame-export`
 
 Current status:
 
@@ -13,7 +13,7 @@ Current status:
 - Visual-local hybrid prototype with evidence reporting
 - Real Qwen3.6 vLLM integration
 - ALFRED offline adapter with synthetic fixture conversion
-- VirtualHome manual-play Windows regression smoke validated with scene graph, multi-task program log, and converted world model
+- VirtualHome manual-play Windows regression smoke validated with scene graph, multi-task program log, converted world model, and frame export evidence report
 - Docker/source package readiness
 - No training yet
 - Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, fully automated VirtualHome startup, and real ALFRED dataset conversion are not validated yet
@@ -242,6 +242,7 @@ python tools/run_test_suite.py --tier targeted-vision --timeout-seconds 600
 python tools/run_test_suite.py --tier targeted-local-sim --timeout-seconds 600
 python tools/run_test_suite.py --tier targeted-track1 --timeout-seconds 600
 python tools/run_test_suite.py --tier targeted-virtualhome-manual --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-virtualhome-frame --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted --timeout-seconds 900 --continue-on-failure
 python tools/run_test_suite.py --tier standard
 python tools/run_test_suite.py --tier full
@@ -262,6 +263,7 @@ Targeted tests are decomposed:
 - `targeted-local-sim`: fixed LocalSim real episodes.
 - `targeted-track1`: official-style Track1ProcedureRunner real smoke.
 - `targeted-virtualhome-manual`: optional VirtualHome manual-play smoke; skips if `127.0.0.1:8080` is not listening.
+- `targeted-virtualhome-frame`: optional VirtualHome manual-play frame export smoke and visual-symbolic evidence report.
 - `targeted`: aggregate of the four targeted smoke groups.
 
 Each command records elapsed time and status under `outputs/test_suite_reports/`. Use `--timeout-seconds` to prevent a long test from hanging the suite and `--continue-on-failure` when you want a complete report across all targeted groups. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
@@ -366,8 +368,11 @@ python tools/check_gpu_budget.py
 python tools/setup_virtualhome_hint.py
 python tools/check_virtualhome_env.py
 python tools/test_virtualhome_windows_spike.py
+python tools/test_virtualhome_windows_spike.py --export-frame
 python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json
 python -m validators.validate_virtualhome_converted_world_model outputs/virtualhome_spike/converted_world_model.json outputs/virtualhome_spike/converted_episode_log.jsonl
+python -m validators.validate_virtualhome_frame_export outputs/virtualhome_spike/frame_export_status.json
+python tools/build_virtualhome_evidence_report.py
 ```
 
 VirtualHome is a Windows-friendly household activity simulator candidate for scene graph, action program, and optional visual-frame smoke tests. It is a complementary route after AI2-THOR/Habitat local rendering blockers, not a claim that VirtualHome fully replaces ProcTHOR, Habitat, AI2-THOR, or the official EAGC runtime.
@@ -393,9 +398,10 @@ The currently validated VirtualHome path is manual Play:
 
 ```powershell
 python tools/run_test_suite.py --tier targeted-virtualhome-manual --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-virtualhome-frame --timeout-seconds 300
 ```
 
-This tier validates scene graph retrieval, four small household program tasks, conversion to `converted_world_model.json` / `converted_episode_log.jsonl`, and conversion quality checks. It does not call Qwen and does not test frame export.
+The manual tier validates scene graph retrieval, four small household program tasks, conversion to `converted_world_model.json` / `converted_episode_log.jsonl`, and conversion quality checks. The frame tier additionally attempts to export `frame_000.png`, validates `frame_export_status.json`, and builds `visual_symbolic_evidence_report.json` / `.md`. Neither tier calls Qwen or starts lightweight vLLM.
 
 If you want to test a separate lightweight vLLM profile for sharing GPU memory with VirtualHome, review the dry-run first:
 

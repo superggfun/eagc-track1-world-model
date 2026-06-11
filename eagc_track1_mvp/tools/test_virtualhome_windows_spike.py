@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+from PIL import Image
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -21,6 +23,7 @@ from tools.check_virtualhome_env import collect_status
 
 
 DEFAULT_OUTPUT_DIR = Path("outputs/virtualhome_spike")
+DEFAULT_FRAME_OUTPUT = DEFAULT_OUTPUT_DIR / "frame_000.png"
 
 
 def _status_template() -> Dict[str, Any]:
@@ -39,7 +42,13 @@ def _status_template() -> Dict[str, Any]:
     }
 
 
-def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
+def run_spike(
+    output_dir: Path,
+    scene_id: int,
+    port: int,
+    export_frame: bool = False,
+    frame_output: Path | None = None,
+) -> Dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     status = _status_template()
     env_status = collect_status()
@@ -119,10 +128,12 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
         program_log_path = output_dir / "program_log.json"
         program_log_path.write_text(json.dumps(program_log, indent=2, ensure_ascii=False), encoding="utf-8")
         status["program_log_saved"] = True
-        frame_path = _try_save_frame(comm, output_dir)
-        status["frame_saved"] = frame_path is not None
-        if frame_path:
-            status["frame_path"] = str(frame_path)
+        if export_frame:
+            frame_status = _try_export_frame(comm, output_dir, frame_output or (output_dir / "frame_000.png"))
+            status["frame_export_status"] = frame_status
+            status["frame_saved"] = bool(frame_status.get("success"))
+            if frame_status.get("frame_path"):
+                status["frame_path"] = str(frame_status["frame_path"])
 
         paths = convert_files(scene_graph_path, program_log_path, output_dir)
         status["converted_world_model_saved"] = paths["world_model"].exists()
@@ -352,8 +363,102 @@ def _virtualhome_success(result: Any) -> bool:
     return result is True
 
 
+def _try_export_frame(comm: Any, output_dir: Path, frame_output: Path) -> Dict[str, Any]:
+    status: Dict[str, Any] = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "success": False,
+        "reason": "",
+        "error_type": "",
+        "error_message": "",
+        "frame_path": str(frame_output.resolve()),
+        "camera_index": None,
+        "camera_count": None,
+        "width": None,
+        "height": None,
+    }
+    try:
+        frame_output.parent.mkdir(parents=True, exist_ok=True)
+        camera_count, camera_indexes = _candidate_camera_indexes(comm)
+        status["camera_count"] = camera_count
+        if not camera_indexes:
+            status["reason"] = "virtualhome_camera_not_configured"
+            return _write_frame_status(output_dir, status)
+        last_error = ""
+        for camera_index in camera_indexes:
+            try:
+                ok, images = comm.camera_image([camera_index], mode="normal", image_width=640, image_height=480)
+                if not ok:
+                    last_error = f"camera_image returned success={ok} for camera {camera_index}"
+                    continue
+                if not images:
+                    last_error = f"camera_image returned no images for camera {camera_index}"
+                    continue
+                saved = _save_frame_payload(images[0], frame_output)
+                status.update(
+                    {
+                        "success": True,
+                        "reason": "virtualhome_frame_export_completed",
+                        "camera_index": camera_index,
+                        "frame_path": str(saved.resolve()),
+                    }
+                )
+                with Image.open(saved) as image:
+                    status["width"], status["height"] = image.size
+                return _write_frame_status(output_dir, status)
+            except Exception as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+        status["reason"] = "virtualhome_frame_export_unsupported"
+        status["error_message"] = last_error
+    except TimeoutError as exc:
+        status["reason"] = "virtualhome_frame_export_timeout"
+        status["error_type"] = type(exc).__name__
+        status["error_message"] = str(exc)
+    except Exception as exc:
+        status["reason"] = "virtualhome_frame_api_unavailable"
+        status["error_type"] = type(exc).__name__
+        status["error_message"] = str(exc)
+    return _write_frame_status(output_dir, status)
+
+
+def _candidate_camera_indexes(comm: Any) -> tuple[int | None, List[int]]:
+    ok, camera_count = comm.camera_count()
+    if not ok or not isinstance(camera_count, int) or camera_count <= 0:
+        return None, []
+    candidates = []
+    for index in [camera_count - 1, 0, max(0, camera_count - 8)]:
+        if index not in candidates and 0 <= index < camera_count:
+            candidates.append(index)
+    return camera_count, candidates
+
+
+def _save_frame_payload(payload: Any, frame_output: Path) -> Path:
+    if isinstance(payload, Image.Image):
+        payload.save(frame_output)
+        return frame_output
+    if isinstance(payload, bytes):
+        frame_output.write_bytes(payload)
+        return frame_output
+    shape = getattr(payload, "shape", None)
+    if shape is not None:
+        array = payload
+        if len(shape) == 3 and shape[2] >= 3:
+            array = payload[:, :, :3][:, :, ::-1]
+        Image.fromarray(array).save(frame_output)
+        return frame_output
+    extracted = _extract_frame_payload(payload)
+    if extracted:
+        frame_output.write_bytes(extracted)
+        return frame_output
+    raise TypeError(f"Unsupported frame payload type: {type(payload).__name__}")
+
+
+def _write_frame_status(output_dir: Path, status: Dict[str, Any]) -> Dict[str, Any]:
+    (output_dir / "frame_export_status.json").write_text(json.dumps(status, indent=2), encoding="utf-8")
+    return status
+
+
 def _try_save_frame(comm: Any, output_dir: Path) -> Path | None:
-    for method_name in ["camera_image", "get_camera_image", "get_image", "screenshot"]:
+    for method_name in ["get_camera_image", "get_image", "screenshot"]:
         method = getattr(comm, method_name, None)
         if not callable(method):
             continue
@@ -398,9 +503,17 @@ def main() -> int:
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--scene", type=int, default=0)
     parser.add_argument("--port", type=int, default=int(os.environ.get("VIRTUALHOME_PORT", "8080")))
+    parser.add_argument("--export-frame", action="store_true")
+    parser.add_argument("--frame-output", default=str(DEFAULT_FRAME_OUTPUT))
     args = parser.parse_args()
 
-    status = run_spike(Path(args.output_dir), args.scene, args.port)
+    status = run_spike(
+        Path(args.output_dir),
+        args.scene,
+        args.port,
+        export_frame=args.export_frame,
+        frame_output=Path(args.frame_output),
+    )
     return 0 if status.get("success") or status.get("reason") in {
         "missing_virtualhome_executable",
         "missing_virtualhome_python_api",
