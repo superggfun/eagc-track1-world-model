@@ -87,6 +87,11 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
         paths = convert_files(scene_graph_path, program_log_path, output_dir)
         status["converted_world_model_saved"] = paths["world_model"].exists()
         status["converted_episode_log_saved"] = paths["episode_log"].exists()
+        converted_world_model = json.loads(paths["world_model"].read_text(encoding="utf-8"))
+        converted_objects = converted_world_model.get("objects", [])
+        status["converted_object_count"] = len(converted_objects) if isinstance(converted_objects, list) else 0
+        if status["converted_object_count"] <= 0:
+            raise RuntimeError("VirtualHome scene graph conversion produced no world_model objects.")
         status["success"] = True
         status["reason"] = "virtualhome_spike_completed"
     except Exception as exc:  # VirtualHome APIs vary; capture exact failure.

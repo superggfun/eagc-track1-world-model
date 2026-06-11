@@ -339,6 +339,15 @@ python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status
 
 VirtualHome is a Windows-friendly household activity simulator candidate for scene graph, action program, and optional visual-frame smoke tests. It is a complementary route after AI2-THOR/Habitat local rendering blockers, not a claim that VirtualHome fully replaces ProcTHOR, Habitat, AI2-THOR, or the official EAGC runtime.
 
+For a real VirtualHome Windows executable smoke, place the VirtualHome repo and simulator outside this project tree, then set:
+
+```powershell
+$env:VIRTUALHOME_REPO_PATH="C:\Users\Alphay\Documents\ExternalTools\virtualhome"
+$env:VIRTUALHOME_SIMULATOR_PATH="C:\Users\Alphay\Documents\ExternalTools\virtualhome_simulator\<actual_exe_name>.exe"
+```
+
+Do not commit the VirtualHome repository, Unity executable, Unity assets, generated frames, videos, or other simulator artifacts.
+
 If you want to test a separate lightweight vLLM profile for sharing GPU memory with VirtualHome, review the dry-run first:
 
 ```powershell

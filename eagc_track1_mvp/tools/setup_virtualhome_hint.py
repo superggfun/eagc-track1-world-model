@@ -11,46 +11,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from tools.check_virtualhome_env import collect_status
+from tools.check_virtualhome_env import candidate_repo_paths, candidate_simulator_paths, collect_status, repo_has_api
 
 
 OUTPUT_PATH = Path("outputs/virtualhome_spike/setup_hint.json")
 
 
 def _candidate_repo_paths() -> List[Path]:
-    candidates = []
-    env_path = os.environ.get("VIRTUALHOME_REPO_PATH")
-    if env_path:
-        candidates.append(Path(env_path))
-    roots = [
-        Path.cwd(),
-        Path.cwd().parent,
-        Path.home(),
-        Path.home() / "Documents",
-        Path.home() / "Downloads",
-    ]
-    names = ["VirtualHome", "virtualhome", "virtual-home"]
-    for root in roots:
-        for name in names:
-            candidates.append(root / name)
-    seen = set()
-    unique: List[Path] = []
-    for candidate in candidates:
-        value = str(candidate)
-        if value not in seen:
-            unique.append(candidate)
-            seen.add(value)
-    return unique
+    return candidate_repo_paths()
 
 
 def _repo_has_api(path: Path) -> bool:
-    return any(
-        (path / relative).exists()
-        for relative in [
-            Path("simulation/unity_simulator/comm_unity.py"),
-            Path("virtualhome/simulation/unity_simulator/comm_unity.py"),
-        ]
-    )
+    return repo_has_api(path)
 
 
 def build_hint() -> Dict[str, Any]:
@@ -64,6 +36,16 @@ def build_hint() -> Dict[str, Any]:
         for path in _candidate_repo_paths()
     ]
     likely_repos = [item for item in candidate_repos if item["looks_like_virtualhome_repo"]]
+    simulator_candidates = [
+        {
+            "path": str(path),
+            "exists": path.exists(),
+            "is_executable_candidate": path.exists() and path.is_file() and path.suffix.lower() == ".exe",
+            "size_bytes": path.stat().st_size if path.exists() and path.is_file() else None,
+        }
+        for path in candidate_simulator_paths()
+    ]
+    likely_simulators = [item for item in simulator_candidates if item["is_executable_candidate"]]
 
     hints: List[str] = []
     if not env_status.get("virtualhome_api_available"):
@@ -79,6 +61,10 @@ def build_hint() -> Dict[str, Any]:
         )
     elif not env_status.get("simulator_executable_exists"):
         hints.append("Configured VirtualHome simulator path does not exist; verify the .exe path.")
+    if not likely_repos:
+        hints.append("Recommended repo location: C:\\Users\\Alphay\\Documents\\ExternalTools\\virtualhome")
+    if not likely_simulators:
+        hints.append("Recommended simulator folder: C:\\Users\\Alphay\\Documents\\ExternalTools\\virtualhome_simulator\\")
     hints.append("Do not commit the VirtualHome executable, Unity assets, videos, images, or large scene files.")
 
     return {
@@ -86,9 +72,11 @@ def build_hint() -> Dict[str, Any]:
         "env_status": env_status,
         "candidate_repositories": candidate_repos,
         "likely_repositories": likely_repos,
+        "candidate_simulators": simulator_candidates,
+        "likely_simulators": likely_simulators,
         "manual_install_hint": [
-            "$env:VIRTUALHOME_REPO_PATH = 'C:\\path\\to\\VirtualHome'",
-            "$env:VIRTUALHOME_SIMULATOR_PATH = 'C:\\path\\to\\VirtualHome.exe'",
+            '$env:VIRTUALHOME_REPO_PATH="C:\\Users\\Alphay\\Documents\\ExternalTools\\virtualhome"',
+            '$env:VIRTUALHOME_SIMULATOR_PATH="C:\\Users\\Alphay\\Documents\\ExternalTools\\virtualhome_simulator\\<actual_exe_name>.exe"',
             "python tools/check_virtualhome_env.py",
             "python tools/test_virtualhome_windows_spike.py",
         ],
@@ -108,6 +96,17 @@ def main() -> int:
         print("Likely VirtualHome repositories:")
         for item in hint["likely_repositories"]:
             print(f"- {item['path']}")
+    else:
+        print("No local VirtualHome repository with simulation/unity_simulator/comm_unity.py was found.")
+    if hint["likely_simulators"]:
+        print("Likely VirtualHome simulator executables:")
+        for item in hint["likely_simulators"]:
+            print(f"- {item['path']}")
+    else:
+        print("No VirtualHome Windows simulator .exe candidate was found.")
+    print("PowerShell setup example:")
+    for command in hint["manual_install_hint"][:2]:
+        print(command)
     return 0
 
 

@@ -35,8 +35,8 @@ virtualhome:
 Environment variables can override the simulator path and port:
 
 ```powershell
-$env:VIRTUALHOME_REPO_PATH = "C:\path\to\VirtualHome"
-$env:VIRTUALHOME_SIMULATOR_PATH = "C:\path\to\VirtualHome.exe"
+$env:VIRTUALHOME_REPO_PATH = "C:\Users\Alphay\Documents\ExternalTools\virtualhome"
+$env:VIRTUALHOME_SIMULATOR_PATH = "C:\Users\Alphay\Documents\ExternalTools\virtualhome_simulator\<actual_exe_name>.exe"
 $env:VIRTUALHOME_PORT = "8080"
 ```
 
@@ -128,6 +128,34 @@ Current `status.json` reason:
 ```text
 missing_virtualhome_python_api
 ```
+
+Latest v0.14.3 local probe on 2026-06-11:
+
+- Common local repository locations were checked:
+  - `C:\Users\Alphay\Documents\VirtualHome`
+  - `C:\Users\Alphay\Documents\virtualhome`
+  - `C:\Users\Alphay\Downloads\virtualhome`
+  - `C:\Users\Alphay\Documents\ExternalTools\virtualhome`
+- No local VirtualHome repository exposing `simulation.unity_simulator.comm_unity` was found.
+- `VIRTUALHOME_REPO_PATH` is not configured to a usable repository.
+- No Windows VirtualHome Unity simulator `.exe` was found under the recommended external simulator folder.
+- `VIRTUALHOME_SIMULATOR_PATH` and `config.yaml` `virtualhome.simulator_path` are still empty.
+- `python tools/setup_virtualhome_hint.py` now writes `outputs/virtualhome_spike/setup_hint.json` with candidate repo paths, candidate simulator paths, and exact PowerShell environment variable examples.
+- `python tools/check_virtualhome_env.py` still reports `missing_virtualhome_python_api`.
+- `python tools/test_virtualhome_windows_spike.py` still exits gracefully with `success=false` and `reason=missing_virtualhome_python_api`.
+- `python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json` passes because the missing dependency is explicit and auditable.
+- Since the simulator did not start, no real `scene_graph.json`, `program_log.json`, `frame_000.png`, `converted_world_model.json`, or `converted_episode_log.jsonl` was generated in this run.
+
+Current v0.14.3 readiness assessment:
+
+- Repo path configured: no.
+- Simulator path configured: no.
+- Python API import: no.
+- Executable exists: no.
+- Scene graph acquired: no.
+- Action program executed: no.
+- Converted world model / episode log generated: no.
+- Recommendation: do not enter v0.14.4 VirtualHome to world-model integration until a local VirtualHome repo and Windows Unity simulator executable are provided outside this EAGC project tree.
 
 Local RTX 5090 runtime note:
 

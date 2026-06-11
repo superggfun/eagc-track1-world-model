@@ -13,6 +13,85 @@ from typing import Any, Dict
 OUTPUT_PATH = Path("outputs/virtualhome_spike/env_status.json")
 
 
+def candidate_repo_paths() -> list[Path]:
+    env_path = os.environ.get("VIRTUALHOME_REPO_PATH", "").strip()
+    candidates: list[Path] = []
+    if env_path:
+        candidates.append(Path(env_path))
+    candidates.extend(
+        [
+            Path.home() / "Documents" / "VirtualHome",
+            Path.home() / "Documents" / "virtualhome",
+            Path.home() / "Downloads" / "virtualhome",
+            Path.home() / "Documents" / "ExternalTools" / "virtualhome",
+            Path.cwd().parent / "virtualhome",
+            Path.cwd().parent / "VirtualHome",
+        ]
+    )
+    return _unique_paths(candidates)
+
+
+def candidate_simulator_paths() -> list[Path]:
+    configured = _load_config_path()
+    candidates: list[Path] = []
+    if configured:
+        candidates.append(Path(configured))
+    roots = [
+        Path.home() / "Documents" / "ExternalTools" / "virtualhome_simulator",
+        Path.home() / "Documents" / "ExternalTools" / "VirtualHomeSimulator",
+        Path.home() / "Downloads" / "virtualhome_simulator",
+        Path.home() / "Downloads" / "VirtualHomeSimulator",
+    ]
+    for root in roots:
+        if root.exists():
+            candidates.extend(sorted(root.glob("*.exe")))
+            candidates.extend(sorted(root.rglob("*.exe")))
+        else:
+            candidates.append(root)
+    return _unique_paths(candidates)
+
+
+def _unique_paths(paths: list[Path]) -> list[Path]:
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for path in paths:
+        key = str(path)
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return unique
+
+
+def repo_has_api(path: Path) -> bool:
+    return any(
+        (path / relative).exists()
+        for relative in [
+            Path("simulation/unity_simulator/comm_unity.py"),
+            Path("virtualhome/simulation/unity_simulator/comm_unity.py"),
+        ]
+    )
+
+
+def _auto_detect_repo_path() -> str:
+    explicit = os.environ.get("VIRTUALHOME_REPO_PATH", "").strip()
+    if explicit:
+        return explicit
+    for candidate in candidate_repo_paths():
+        if candidate.exists() and repo_has_api(candidate):
+            return str(candidate)
+    return ""
+
+
+def _auto_detect_simulator_path() -> str:
+    configured = _load_config_path()
+    if configured:
+        return configured
+    for candidate in candidate_simulator_paths():
+        if candidate.exists() and candidate.is_file() and candidate.suffix.lower() == ".exe":
+            return str(candidate)
+    return ""
+
+
 def _load_config_path() -> str:
     env_path = os.environ.get("VIRTUALHOME_SIMULATOR_PATH", "")
     if env_path:
@@ -51,11 +130,11 @@ def _load_config_value(section: str, key: str, default: str = "") -> str:
 
 
 def get_virtualhome_repo_path() -> str:
-    return os.environ.get("VIRTUALHOME_REPO_PATH", "").strip()
+    return _auto_detect_repo_path()
 
 
 def get_virtualhome_simulator_path() -> str:
-    return _load_config_path()
+    return _auto_detect_simulator_path()
 
 
 def _prepare_repo_import_path(repo_path: str) -> bool:
@@ -107,6 +186,7 @@ def collect_status() -> Dict[str, Any]:
         "python_version": platform.python_version(),
         "virtualhome_repo_path": repo_path,
         "virtualhome_repo_path_exists": bool(repo_path) and Path(repo_path).exists(),
+        "virtualhome_repo_path_has_api_file": bool(repo_path) and Path(repo_path).exists() and repo_has_api(Path(repo_path)),
         "virtualhome_repo_path_added_to_pythonpath": repo_path_added,
         "virtualhome_simulator_path": simulator_path,
         "virtualhome_port": port,
@@ -116,6 +196,22 @@ def collect_status() -> Dict[str, Any]:
         "simulator_executable_size_bytes": executable_size,
         "module_import_available": module_status,
         "virtualhome_api_available": any(module_status.values()),
+        "candidate_repo_paths": [
+            {
+                "path": str(path),
+                "exists": path.exists(),
+                "looks_like_virtualhome_repo": path.exists() and repo_has_api(path),
+            }
+            for path in candidate_repo_paths()
+        ],
+        "candidate_simulator_paths": [
+            {
+                "path": str(path),
+                "exists": path.exists(),
+                "is_executable_candidate": path.exists() and path.is_file() and path.suffix.lower() == ".exe",
+            }
+            for path in candidate_simulator_paths()
+        ],
         "success": False,
         "reason": "",
         "download_hint": "",

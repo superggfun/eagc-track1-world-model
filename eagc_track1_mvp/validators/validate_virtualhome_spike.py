@@ -37,6 +37,7 @@ def validate(status_path: Path) -> List[str]:
 
     required = [
         output_dir / "scene_graph.json",
+        output_dir / "program_log.json",
         output_dir / "converted_world_model.json",
         output_dir / "converted_episode_log.jsonl",
     ]
