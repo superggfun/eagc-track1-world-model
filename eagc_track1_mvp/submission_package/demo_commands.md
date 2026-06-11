@@ -74,6 +74,7 @@ Notes:
 - MazeSim is a synthetic topology stress test, not an official EAGC runtime.
 - Latest medium generated maze result: `success=True`, `goal_found=True`, `steps_taken=28`, `shortest_path_length=14`, `map_coverage=0.88`, `blocked_edges_encountered=2`, `replans=7`.
 - The anti-loop tier adds loop lure, comb dead-end, blocked-shortcut, and unreachable-goal cases. The unreachable goal case is expected to fail gracefully with a non-empty termination reason rather than loop forever.
+- Latest anti-loop results: `loop_lure_maze` succeeded in 8 steps; `dead_end_comb_maze` succeeded in 26 steps with `repeated_state_count=10` and `replans=10`; `blocked_shortcut_maze` succeeded in 11 steps with `blocked_edges_encountered=1` and `replans=2`; `unreachable_goal_maze` produced expected graceful failure with `goal_unreachable_or_budget_exhausted` in 3 steps.
 
 ## Visual Evidence Demo
 

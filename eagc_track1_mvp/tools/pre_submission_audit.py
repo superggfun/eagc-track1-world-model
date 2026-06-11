@@ -65,6 +65,21 @@ MAZE_OUTPUT_ARTIFACTS = [
     "maze_metrics.json",
     "status.json",
 ]
+MAZE_ANTI_LOOP_HELPERS = [
+    "tools/run_maze_anti_loop_test.py",
+    "validators/validate_maze_anti_loop_test.py",
+]
+MAZE_ANTI_LOOP_DOCS = [
+    "docs/version_status_v0.17.5.md",
+    "docs/version_status_v0.17.6.md",
+]
+MAZE_ANTI_LOOP_OUTPUT_ARTIFACTS = [
+    "status.json",
+    "world_model.json",
+    "episode_log.jsonl",
+    "maze_metrics.json",
+    "anti_loop_report.md",
+]
 FINAL_SUBMISSION_FILES = [
     "submission_package/final_submission_checklist.md",
     "submission_package/final_artifact_manifest.md",
@@ -212,6 +227,19 @@ def build_report() -> Dict[str, Any]:
     else:
         warnings.append("MazeSim stress outputs are not present locally; this is allowed for source-only submission checks.")
 
+    maze_anti_loop = _maze_anti_loop_status()
+    for item in maze_anti_loop["helpers"]:
+        if not item["exists"]:
+            warnings.append(f"MazeSim anti-loop helper is missing: {item['path']}")
+    if not maze_anti_loop["run_test_suite_includes_targeted_maze_anti_loop"]:
+        warnings.append("tools/run_test_suite.py does not appear to include targeted-maze-anti-loop.")
+    if not any(item["exists"] for item in maze_anti_loop["docs"]):
+        warnings.append("MazeSim v0.17.5/v0.17.6 anti-loop status docs are missing.")
+    if maze_anti_loop["output_dir_exists"]:
+        warnings.append("MazeSim anti-loop outputs exist locally and should remain ignored by git.")
+    else:
+        warnings.append("MazeSim anti-loop outputs are not present locally; this is allowed for source-only submission checks.")
+
     final_submission = _final_submission_status()
     for item in final_submission["files"]:
         if not item["exists"]:
@@ -248,6 +276,7 @@ def build_report() -> Dict[str, Any]:
         "virtualhome_evidence": virtualhome_evidence,
         "resource_profile": resource_profile,
         "maze_sim": maze,
+        "maze_anti_loop": maze_anti_loop,
         "final_submission": final_submission,
         "tracked_violation_count": len(tracked_violations),
         "tracked_violations": tracked_violations,
@@ -321,6 +350,26 @@ def _maze_status() -> Dict[str, Any]:
                 "exists": (output_dir / rel).exists(),
             }
             for rel in MAZE_OUTPUT_ARTIFACTS
+        ],
+    }
+
+
+def _maze_anti_loop_status() -> Dict[str, Any]:
+    output_dir = PROJECT_ROOT / "outputs" / "maze_anti_loop"
+    run_test_suite_path = PROJECT_ROOT / "tools" / "run_test_suite.py"
+    run_test_suite_text = run_test_suite_path.read_text(encoding="utf-8", errors="replace") if run_test_suite_path.exists() else ""
+    return {
+        "description": "MazeSim anti-loop stress artifacts are optional runtime outputs. Presence is recorded for audit, but outputs must stay untracked.",
+        "helpers": [{"path": rel, "exists": (PROJECT_ROOT / rel).exists()} for rel in MAZE_ANTI_LOOP_HELPERS],
+        "docs": [{"path": rel, "exists": (PROJECT_ROOT / rel).exists()} for rel in MAZE_ANTI_LOOP_DOCS],
+        "run_test_suite_includes_targeted_maze_anti_loop": "targeted-maze-anti-loop" in run_test_suite_text,
+        "output_dir_exists": output_dir.exists(),
+        "artifacts": [
+            {
+                "path": f"outputs/maze_anti_loop/{rel}",
+                "exists": (output_dir / rel).exists(),
+            }
+            for rel in MAZE_ANTI_LOOP_OUTPUT_ARTIFACTS
         ],
     }
 
@@ -438,6 +487,29 @@ def _markdown(report: Dict[str, Any]) -> str:
         ]
     )
     for item in maze.get("artifacts", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(["", "## MazeSim Anti-Loop Stress", ""])
+    maze_anti_loop = report.get("maze_anti_loop", {})
+    lines.append(maze_anti_loop.get("description", ""))
+    lines.extend(["", "### Helpers", "", "| file | exists |", "|---|---:|"])
+    for item in maze_anti_loop.get("helpers", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(["", "### Docs", "", "| file | exists |", "|---|---:|"])
+    for item in maze_anti_loop.get("docs", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(
+        [
+            "",
+            f"- run_test_suite_includes_targeted_maze_anti_loop: `{maze_anti_loop.get('run_test_suite_includes_targeted_maze_anti_loop')}`",
+            f"- output_dir_exists: `{maze_anti_loop.get('output_dir_exists')}`",
+            "",
+            "### Local Runtime Artifacts",
+            "",
+            "| artifact | exists |",
+            "|---|---:|",
+        ]
+    )
+    for item in maze_anti_loop.get("artifacts", []):
         lines.append(f"| `{item['path']}` | `{item['exists']}` |")
     lines.extend(["", "## Final Submission Dry Run", ""])
     final = report.get("final_submission", {})

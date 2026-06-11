@@ -38,10 +38,17 @@ This checklist is for a local dry run before an official EAGC Track 1 qualificat
   - `outputs/maze_stress/episode_log.jsonl`
   - `outputs/maze_stress/maze_metrics.json`
   - `outputs/maze_stress/status.json`
+- [ ] MazeSim anti-loop stress outputs:
+  - `outputs/maze_anti_loop/world_model.json`
+  - `outputs/maze_anti_loop/episode_log.jsonl`
+  - `outputs/maze_anti_loop/maze_metrics.json`
+  - `outputs/maze_anti_loop/status.json`
+  - `outputs/maze_anti_loop/anti_loop_report.md`
 - [ ] Test suite reports:
   - `outputs/test_suite_reports/*_fast_report.json`
   - `outputs/test_suite_reports/*_targeted-text_report.json`
   - `outputs/test_suite_reports/*_targeted-maze_report.json`
+  - `outputs/test_suite_reports/*_targeted-maze-anti-loop_report.json`
   - optional VirtualHome targeted reports if the simulator was manually running.
 
 These optional evidence artifacts are local runtime outputs and are not committed to git. Include them only if the official submission instructions request runtime artifacts.
@@ -55,6 +62,7 @@ These optional evidence artifacts are local runtime outputs and are not committe
 - [ ] ProcTHOR / AI2-THOR / Habitat assets.
 - [ ] `outputs/` raw frames.
 - [ ] `outputs/maze_stress/` runtime artifacts.
+- [ ] `outputs/maze_anti_loop/` runtime artifacts.
 - [ ] Raw Qwen responses.
 - [ ] `dist/` directory contents in git.
 - [ ] `submission_bundle/` in git.
@@ -67,6 +75,7 @@ These optional evidence artifacts are local runtime outputs and are not committe
 - No container changes were made.
 - No model training or fine-tuning was performed.
 - MazeSim targeted topology stress passed with success=true, goal_found=true, steps_taken=28, shortest_path_length=14, map_coverage=0.88, blocked_edges_encountered=2, and replans=7.
+- MazeSim anti-loop stress passed: loop_lure_maze succeeded in 8 steps; dead_end_comb_maze succeeded in 26 steps with repeated_state_count=10 and replans=10; blocked_shortcut_maze succeeded in 11 steps with blocked_edges_encountered=1 and replans=2; unreachable_goal_maze terminated gracefully with goal_unreachable_or_budget_exhausted in 3 steps.
 - MazeSim is synthetic and does not claim official EAGC runtime validation.
 
 ## Final Local Checks
@@ -79,6 +88,7 @@ python tools/build_report_pdf.py
 python tools/run_test_suite.py --tier fast
 python tools/run_test_suite.py --tier targeted-text --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted-maze --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-maze-anti-loop --timeout-seconds 300
 python tools/pre_submission_audit.py
 python tools/check_github_push_readiness.py
 ```

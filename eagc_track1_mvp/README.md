@@ -2,14 +2,15 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.17.4 final submission refresh after MazeSim topology stress test.
+Current version: v0.17.6 final submission refresh after MazeSim anti-loop stress test.
 
-Current stable tag: `v0.17.4-final-submission-refresh-maze`
+Current stable tag: `v0.17.6-final-submission-refresh-maze-anti-loop`
 
 Current status:
 
 - LocalSim Track 1 MVP
 - MazeSim synthetic topology stress benchmark
+- MazeSim anti-loop and dead-end recovery stress benchmark
 - Official-style Track1 procedure runner
 - Visual-local hybrid prototype with evidence reporting
 - Real Qwen3.6 vLLM integration
@@ -352,6 +353,13 @@ MazeSim is a lightweight synthetic LocalSim-style benchmark for unknown-topology
 Latest targeted-maze result: `success=True`, `goal_found=True`, `steps_taken=28`, `shortest_path_length=14`, `map_coverage=0.88`, `blocked_edges_encountered=2`, and `replans=7`.
 
 The anti-loop tier writes `outputs/maze_anti_loop/status.json`, `world_model.json`, `episode_log.jsonl`, `maze_metrics.json`, and `anti_loop_report.md`. It adds adversarial synthetic cases for loop lure, comb dead ends, blocked shortcuts, and unreachable goals. Its metrics include repeated states, oscillations, no-progress windows, dead-end reentries, blocked-edge retries, and graceful termination reasons.
+
+Latest targeted-maze-anti-loop results:
+
+- `loop_lure_maze`: success, goal_found, steps=8
+- `dead_end_comb_maze`: success, goal_found, steps=26, repeated_state_count=10, replans=10
+- `blocked_shortcut_maze`: success, goal_found, steps=11, blocked_edges_encountered=1, replans=2
+- `unreachable_goal_maze`: expected graceful failure, terminated with `goal_unreachable_or_budget_exhausted`, steps=3
 
 Sequence frames should be local files named in deterministic order:
 

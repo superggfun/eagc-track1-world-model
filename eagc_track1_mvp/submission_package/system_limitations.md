@@ -8,6 +8,7 @@ Known limitations:
 - LocalSim is a self-built environment and is simpler than realistic embodied simulators.
 - MazeSim is a synthetic topology stress test. It validates exploration, graph-building, dead-end handling, and blocked-corridor replanning mechanics, not official simulator performance.
 - MazeSim anti-loop cases are synthetic adversarial topology tests. They validate no-progress termination and repeated-state accounting, not official simulator performance or official scoring.
+- The v0.17.5 anti-loop results are useful local robustness evidence, but they do not replace official hidden-environment evaluation.
 - The visual-local hybrid module is symbolic and does not perform physical manipulation.
 - Physical actions in visual-only mode are intentionally unsupported.
 - AI2-THOR / Habitat / ProcTHOR environment integration remains blocked or unvalidated and is not part of the validated path.

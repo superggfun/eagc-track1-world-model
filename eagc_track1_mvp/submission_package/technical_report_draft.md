@@ -6,7 +6,7 @@ This project develops a local MVP and evaluation baseline for EAGC 2026 Track 1.
 
 The inference path uses a local Qwen3.6-35B-A3B-NVFP4 model served through an OpenAI-compatible vLLM endpoint. No model training, fine-tuning, distillation, or online model API calls are used in the validated local runs.
 
-Current readiness state as of v0.17.4: LocalSim, the official-style Track1 procedure runner, visual-local hybrid evidence reporting, Docker/source packaging, ALFRED synthetic fixture conversion, VirtualHome manual-play evidence smoke, and MazeSim synthetic topology stress are prepared. Official EAGC runtime, hidden evaluation environments, real ProcTHOR/Habitat/AI2-THOR execution, fully automated VirtualHome startup, real ALFRED dataset conversion, lightweight vLLM, and model training remain unvalidated.
+Current readiness state as of v0.17.6: LocalSim, the official-style Track1 procedure runner, visual-local hybrid evidence reporting, Docker/source packaging, ALFRED synthetic fixture conversion, VirtualHome manual-play evidence smoke, MazeSim synthetic topology stress, and MazeSim anti-loop/dead-end recovery stress are prepared. Official EAGC runtime, hidden evaluation environments, real ProcTHOR/Habitat/AI2-THOR execution, fully automated VirtualHome startup, real ALFRED dataset conversion, lightweight vLLM, and model training remain unvalidated.
 
 v0.17 resource audit status: the validated VirtualHome evidence path works with the existing long-context Qwen/vLLM endpoint. The resource snapshot recorded an RTX 5090 with 32607 MiB total memory, 31674 MiB used, and 514 MiB free; `openclaw-vllm` was running on `127.0.0.1:8000`; VirtualHome manual-play was listening on `127.0.0.1:8080`; Qwen text smoke latency was about 0.141 seconds; VirtualHome frame vision smoke latency was about 0.696 seconds; multi-frame grounding averaged about 2.722 seconds per frame. No container changes were made, and lightweight vLLM remains a documented fallback only.
 
@@ -231,6 +231,13 @@ Latest targeted-maze validation result for the medium generated maze: `success=T
 
 v0.17.5 extends MazeSim with adversarial anti-loop cases: `loop_lure_maze`, `dead_end_comb_maze`, `blocked_shortcut_maze`, and `unreachable_goal_maze`. These scenarios test topology memory, dead-end avoidance, loop detection, no-progress termination, blocked-edge retry suppression, and graceful failure when the goal cannot be reached. The anti-loop report records repeated-state count, maximum cell visit count, oscillation count, no-progress windows, dead-end reentries, blocked-edge retries, and termination reason.
 
+Latest targeted-maze-anti-loop validation results:
+
+- `loop_lure_maze`: success, goal_found, steps=8.
+- `dead_end_comb_maze`: success, goal_found, steps=26, repeated_state_count=10, replans=10.
+- `blocked_shortcut_maze`: success, goal_found, steps=11, blocked_edges_encountered=1, replans=2.
+- `unreachable_goal_maze`: expected graceful failure, terminated with `goal_unreachable_or_budget_exhausted`, steps=3.
+
 ## Local Evaluation
 
 Current local gates include:
@@ -255,6 +262,7 @@ Recent validated status:
 - Submission bundle generation passed.
 - VirtualHome manual-play evidence smoke passed through scene graph extraction, 4/4 household task execution, frame export, single-frame Qwen vision comparison, and 5/5 multi-frame Qwen grounding.
 - MazeSim targeted topology stress passed; the medium generated maze found the goal with map coverage 0.88 while encountering 2 blocked edges and triggering 7 replans.
+- MazeSim anti-loop stress passed; reachable adversarial mazes terminated successfully and the unreachable-goal case terminated gracefully instead of looping.
 
 These are local MVP results, not official EAGC scores.
 

@@ -33,5 +33,6 @@ This checklist maps the current local MVP to likely EAGC qualification submissio
 | VirtualHome + vLLM resource profile | Prepared | v0.17 recorded RTX 5090 memory, existing `openclaw-vllm` endpoint, VirtualHome 8080 status, Qwen text latency, and frame vision latency. |
 | Lightweight vLLM | Not used | Documented as fallback only; not started for current dry-run package. |
 | MazeSim topology stress | Validated synthetic benchmark | `targeted-maze` passed. Medium generated maze result: success=true, goal_found=true, steps_taken=28, shortest_path_length=14, map_coverage=0.88, blocked_edges_encountered=2, replans=7. |
+| MazeSim anti-loop stress | Validated synthetic benchmark | `targeted-maze-anti-loop` passed. Reachable loop/dead-end/blocked-shortcut mazes succeeded, and unreachable_goal_maze terminated gracefully with goal_unreachable_or_budget_exhausted. |
 | MazeSim official status | Not official runtime | Synthetic topology stress only; no external simulator, no Qwen/vLLM, no training. |
 | Pre-submission audit | Prepared | `python tools/pre_submission_audit.py`. |

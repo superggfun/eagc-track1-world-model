@@ -63,6 +63,15 @@ python -m validators.validate_maze_stress_test outputs/maze_stress/status.json
 
 MazeSim is deterministic and synthetic. It does not call Qwen/vLLM, does not use external simulator assets, and is not an official EAGC runtime. The latest medium generated maze result was `success=True`, `goal_found=True`, `steps_taken=28`, `shortest_path_length=14`, `map_coverage=0.88`, `blocked_edges_encountered=2`, and `replans=7`.
 
+Targeted MazeSim anti-loop and dead-end recovery stress:
+
+```powershell
+python tools/run_test_suite.py --tier targeted-maze-anti-loop --timeout-seconds 300
+python -m validators.validate_maze_anti_loop_test outputs/maze_anti_loop/status.json
+```
+
+This is also deterministic and synthetic. It does not call Qwen/vLLM, does not use external simulator assets, and is not an official EAGC runtime. Latest validated results: `loop_lure_maze` succeeded in 8 steps; `dead_end_comb_maze` succeeded in 26 steps with `repeated_state_count=10` and `replans=10`; `blocked_shortcut_maze` succeeded in 11 steps with `blocked_edges_encountered=1` and `replans=2`; `unreachable_goal_maze` terminated as an expected graceful failure with `goal_unreachable_or_budget_exhausted` in 3 steps.
+
 VirtualHome manual-play evidence tiers, optional:
 
 ```powershell
