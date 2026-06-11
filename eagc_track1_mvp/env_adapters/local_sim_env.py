@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any, Dict, List
 
-from env_adapters.base import BaseEnvAdapter
+from env_adapters.base import BaseEnvAdapter, adapter_capabilities
 from planner.action_schema import parse_action
 
 
@@ -323,6 +323,19 @@ class LocalSimEnv(BaseEnvAdapter):
 
     def close(self) -> None:
         return None
+
+    def capabilities(self) -> Dict[str, Any]:
+        return adapter_capabilities(
+            adapter_name="local_sim",
+            validated=True,
+            validation_status="validated_local_track1_mvp_backend",
+            requires_rendering=False,
+            supports_scene_graph=True,
+            supports_frame_export=False,
+            supports_action_execution=True,
+            supports_online_closed_loop=True,
+            known_blockers=[],
+        )
 
     def _explore(self, room: str, action: str) -> Dict[str, Any]:
         self.known_frontiers.update(TOPOLOGY.get(self.current_room, []))

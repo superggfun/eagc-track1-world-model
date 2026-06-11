@@ -25,11 +25,28 @@ The system separates perception, memory, planning, execution, evaluation, and au
 
 This design keeps the core agent logic replaceable when official Track 1 adapters become available.
 
+## Backend-Agnostic Adapter Interface
+
+v0.17.3 freezes a small environment adapter interface so the agent can remain backend-agnostic. The interface covers `reset`, `observe`, `get_scene_graph`, `capture_frame`, `execute_action`, `get_agent_state`, `close`, and `capabilities`.
+
+The `capabilities()` schema records whether a backend is validated, whether it requires rendering, whether it supports scene graph retrieval, frame export, action execution, and online closed-loop operation, plus known blockers. `tools/list_env_adapters.py` writes a static capability report without starting heavy simulators.
+
+Current capability status:
+
+- LocalSim: validated local Track 1 MVP backend.
+- VirtualHome: validated manual-play Windows backend; manual Play is required.
+- ALFRED offline: validated for the synthetic fixture only; real dataset conversion is not validated.
+- AI2-THOR: reserved but not validated; Windows/WSL/cloud rendering stack remains unresolved.
+- Habitat: reserved but not validated; EGL/Vulkan/headless rendering remains unresolved.
+- ProcTHOR: reserved but not validated; depends on AI2-THOR/ProcTHOR runtime availability.
+
+The reserved adapters do not import heavy dependencies during registry listing and do not fake simulator success. If called before real validation, they return explicit blocker packets.
+
 ## System Architecture
 
 Main modules:
 
-- `env_adapters/`: mock, visual sequence, LocalSim, official-adapter placeholder, and experimental AI2-THOR adapter code.
+- `env_adapters/`: mock, visual sequence, LocalSim, validated VirtualHome conversion path, official-adapter placeholder, adapter capability registry, and reserved AI2-THOR/Habitat/ProcTHOR targets.
 - `dataset_adapters/`: optional offline public dataset conversion paths such as ALFRED trajectory parsing.
 - `clients/`: OpenAI-compatible Qwen/vLLM client and deterministic mock client.
 - `perception/`: prompt templates, JSON extraction, text observation extraction, and vision observation extraction.

@@ -34,6 +34,14 @@ List tiers:
 python tools/run_test_suite.py --list-tiers
 ```
 
+List environment adapter capabilities without starting simulators:
+
+```powershell
+python tools/list_env_adapters.py
+```
+
+This writes `outputs/adapter_capabilities/adapter_capabilities.json` and `.md`. LocalSim and VirtualHome are marked as validated backends. ALFRED offline is marked as synthetic-fixture validated. AI2-THOR, Habitat, and ProcTHOR are reserved but not validated.
+
 Targeted text:
 
 ```powershell

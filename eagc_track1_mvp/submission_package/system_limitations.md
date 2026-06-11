@@ -9,6 +9,7 @@ Known limitations:
 - The visual-local hybrid module is symbolic and does not perform physical manipulation.
 - Physical actions in visual-only mode are intentionally unsupported.
 - AI2-THOR / Habitat / ProcTHOR environment integration remains blocked or unvalidated and is not part of the validated path.
+- AI2-THOR, Habitat, and ProcTHOR adapters are reserved interface targets only. They report capabilities and graceful blockers but are not validated backends.
 - ALFRED support is currently an offline trajectory parser only; it does not run AI2-THOR or validate online closed-loop execution.
 - ALFRED offline conversion is approximate and may not expose complete visual state, object locations, or simulator metadata.
 - The included ALFRED-like fixture is synthetic and only verifies adapter mechanics.
@@ -35,4 +36,4 @@ Known limitations:
 
 Current safest claim:
 
-The system is a local Track 1 MVP and readiness baseline that demonstrates auditable world-model construction, planning, exception recovery, visual evidence reporting, and reproducible local testing.
+The system is a backend-agnostic local Track 1 MVP and readiness baseline that demonstrates auditable world-model construction, planning, exception recovery, visual evidence reporting, and reproducible local testing on validated LocalSim and VirtualHome paths.

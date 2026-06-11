@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.17.2 final submission handoff package.
+Current version: v0.17.3 simulator adapter interface freeze.
 
-Current stable tag: `v0.17.2-final-submission-handoff`
+Current stable tag: `v0.17.3-adapter-interface-freeze`
 
 Current status:
 
@@ -17,6 +17,7 @@ Current status:
 - VirtualHome + existing Qwen/vLLM resource profile and coexistence audit
 - Final submission dry-run checklist and email draft
 - Final artifact manifest and GitHub push readiness check
+- Backend-agnostic simulator adapter capability registry
 - Docker/source package readiness
 - No training yet
 - Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, fully automated VirtualHome startup, and real ALFRED dataset conversion are not validated yet
@@ -32,6 +33,42 @@ The demo loop:
 7. `Replanner` creates a recovery plan when an execution exception occurs.
 8. `EpisodeLogger` writes `outputs/episode_log.jsonl`.
 9. `validators/` checks output structure and auditability.
+
+## Simulator Adapter Interface
+
+v0.17.3 freezes a lightweight backend-agnostic adapter interface. The shared interface covers:
+
+- `reset()`
+- `observe()`
+- `get_scene_graph()`
+- `capture_frame()`
+- `execute_action(action)`
+- `get_agent_state()`
+- `close()`
+- `capabilities()`
+
+The registry reports capabilities without starting heavy simulators:
+
+```powershell
+python tools/list_env_adapters.py
+```
+
+Validated backends:
+
+- `local_sim`: validated local Track 1 MVP backend.
+- `virtualhome`: validated Windows manual-play backend for scene graph, frame export, and action-program smoke.
+
+Offline adapter:
+
+- `alfred_offline`: validated only for the synthetic fixture; real ALFRED dataset conversion is not yet validated.
+
+Reserved but not validated:
+
+- `ai2thor`: blocked by unresolved Windows/WSL/cloud rendering stack.
+- `habitat`: blocked by unresolved EGL/Vulkan/headless rendering path.
+- `procthor`: depends on AI2-THOR/ProcTHOR runtime availability.
+
+The project does not claim success for reserved simulators. Stub adapters return graceful blockers rather than fake scene graphs, frames, or action success.
 
 ## Pre-Submission Package
 

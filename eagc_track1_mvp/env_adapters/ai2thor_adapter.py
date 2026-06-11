@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
-from env_adapters.base import BaseEnvAdapter
+from env_adapters.base import BaseEnvAdapter, adapter_capabilities
 
 
 class AI2ThorAdapterError(RuntimeError):
@@ -99,11 +99,51 @@ class AI2ThorAdapter(BaseEnvAdapter):
 
     def step(self, action: str) -> Dict[str, Any]:
         return {
-            "success": True,
-            "result": "success",
-            "message": f"AI2-THOR smoke executed {action}.",
-            "observation": "AI2-THOR smoke test does not execute simulator navigation actions.",
+            "success": False,
+            "result": "unsupported",
+            "reason": "ai2thor_action_execution_not_validated",
+            "message": (
+                "AI2-THOR action execution is reserved but not validated in this project. "
+                f"Requested action: {action}"
+            ),
         }
+
+    def get_scene_graph(self) -> Dict[str, Any]:
+        if self.event is None:
+            return {
+                "success": False,
+                "reason": "ai2thor_not_started",
+                "message": "Call reset() first; AI2-THOR rendering is not validated on the current local/remote environments.",
+            }
+        metadata = _to_jsonable(getattr(self.event, "metadata", {}))
+        return {
+            "success": True,
+            "source": "ai2thor_metadata",
+            "scene_graph": metadata,
+        }
+
+    def capture_frame(self) -> Dict[str, Any]:
+        if self.event is None:
+            return {
+                "success": False,
+                "reason": "ai2thor_not_started",
+                "message": "Call reset() first; AI2-THOR rendering is not validated on the current local/remote environments.",
+            }
+        self._save_frame(getattr(self.event, "frame", None))
+        return {"success": True, "frame_path": str(self.frame_path)}
+
+    def capabilities(self) -> Dict[str, Any]:
+        return adapter_capabilities(
+            adapter_name="ai2thor",
+            validated=False,
+            validation_status="reserved_not_validated",
+            requires_rendering=True,
+            supports_scene_graph=True,
+            supports_frame_export=True,
+            supports_action_execution=False,
+            supports_online_closed_loop=False,
+            known_blockers=["Windows/WSL/cloud rendering stack unresolved"],
+        )
 
     def close(self) -> None:
         if self.controller is not None:
