@@ -390,6 +390,44 @@ Latest v0.16.5 Qwen vision comparison probe on 2026-06-11:
   - Hallucinated visual objects are warnings, not failures of the VirtualHome symbolic pipeline.
 - v0.16.5 uses the already-running local Qwen endpoint only. It does not start lightweight vLLM, does not modify GPU memory settings, and does not train or fine-tune any model.
 
+Latest v0.16.6 episode-level multi-frame grounding probe on 2026-06-11:
+
+- The single-frame comparison was extended into an optional episode-level tier:
+  `python tools/run_test_suite.py --tier targeted-virtualhome-multiframe`
+- The tier first checks whether `127.0.0.1:8080` is listening.
+- If the simulator is not in manual Play mode, it writes `outputs/virtualhome_spike/multiframe_suite_status.json` and exits as a graceful skip.
+- If available, it runs:
+  - `python tools/test_virtualhome_windows_spike.py --export-task-frames --max-task-frames 8`
+  - `python tools/test_virtualhome_multiframe_qwen_vision.py`
+  - `python tools/compare_virtualhome_multiframe_symbolic.py`
+  - `python -m validators.validate_virtualhome_multiframe_grounding outputs/virtualhome_spike/multiframe_qwen_status.json`
+- Task frames are written under:
+  `outputs/virtualhome_spike/task_frames/`
+- Status and reports:
+  - `outputs/virtualhome_spike/task_frame_export_status.json`
+  - `outputs/virtualhome_spike/multiframe_qwen_status.json`
+  - `outputs/virtualhome_spike/multiframe_qwen_vision.json`
+  - `outputs/virtualhome_spike/multiframe_qwen_raw_responses.json`
+  - `outputs/virtualhome_spike/episode_visual_symbolic_comparison.json`
+  - `outputs/virtualhome_spike/episode_visual_symbolic_comparison.md`
+- Latest run result:
+  - task frame export: success
+  - exported task frames: 5 (`initial`, `sit_on_sofa`, `grab_object`, `open_object`, `place_object`)
+  - multi-frame Qwen vision: 5/5 frames succeeded
+  - total visible object mentions: 40
+  - unique visible objects: 32
+  - matched object count: 33
+  - unmatched visual object count: 7
+  - action evidence count: 5
+  - matched relation count: 8
+  - average Qwen latency: 2.784 seconds per frame
+- The comparison is still evidence-driven:
+  - selected frames are not expected to cover the full scene graph,
+  - scene graph objects not visible in selected frames are recorded as not visible, not as Qwen errors,
+  - unmatched visual objects are warnings,
+  - per-frame Qwen failures are recorded without forcing all frames to fail.
+- v0.16.6 still does not train, fine-tune, start lightweight vLLM, or run official EAGC hidden evaluation.
+
 ## Assessment Criteria
 
 VirtualHome becomes a useful Windows-friendly household simulator candidate if:

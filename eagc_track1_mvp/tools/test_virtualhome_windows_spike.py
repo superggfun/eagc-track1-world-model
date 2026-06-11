@@ -48,6 +48,8 @@ def run_spike(
     port: int,
     export_frame: bool = False,
     frame_output: Path | None = None,
+    export_task_frames: bool = False,
+    max_task_frames: int = 8,
 ) -> Dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     status = _status_template()
@@ -100,7 +102,14 @@ def run_spike(
         scene_graph_path.write_text(json.dumps(scene_graph, indent=2, ensure_ascii=False), encoding="utf-8")
         status["scene_graph_saved"] = True
 
-        task_results = _run_task_suite(comm, scene_graph, scene_id)
+        frame_capture = _init_task_frame_capture(output_dir, max_task_frames) if export_task_frames else None
+        if frame_capture is not None:
+            _capture_task_frame(comm, frame_capture, "initial")
+        task_results = _run_task_suite(comm, scene_graph, scene_id, frame_capture=frame_capture)
+        if frame_capture is not None:
+            task_frame_status = _write_task_frame_status(output_dir, frame_capture)
+            status["task_frame_export_status"] = task_frame_status
+            status["task_frame_count"] = task_frame_status.get("saved_frame_count", 0)
         successful_tasks = [item for item in task_results if item.get("status") == "success"]
         failed_tasks = [item for item in task_results if item.get("status") == "failed"]
         unsupported_tasks = [item for item in task_results if item.get("status") == "unsupported_in_scene"]
@@ -255,7 +264,12 @@ def _get_scene_graph(comm: Any) -> Dict[str, Any]:
     raise RuntimeError("VirtualHome communication object does not expose a known scene graph method.")
 
 
-def _run_task_suite(comm: Any, scene_graph: Dict[str, Any], scene_id: int) -> List[Dict[str, Any]]:
+def _run_task_suite(
+    comm: Any,
+    scene_graph: Dict[str, Any],
+    scene_id: int,
+    frame_capture: Dict[str, Any] | None = None,
+) -> List[Dict[str, Any]]:
     results: List[Dict[str, Any]] = []
     for spec in _task_specs(scene_graph):
         row: Dict[str, Any] = {
@@ -279,6 +293,8 @@ def _run_task_suite(comm: Any, scene_graph: Dict[str, Any], scene_id: int) -> Li
             render_result = _render_program(comm, spec["program"])
             row["result"] = render_result
             row["status"] = "success" if _virtualhome_success(render_result) else "failed"
+            if row["status"] == "success" and frame_capture is not None:
+                _capture_task_frame(comm, frame_capture, str(spec["frame_label"]))
         except Exception as exc:
             row["status"] = "failed"
             row["error_type"] = type(exc).__name__
@@ -297,21 +313,25 @@ def _task_specs(scene_graph: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         {
             "task_name": "walk_to_and_sit_on_sofa",
+            "frame_label": "sit_on_sofa",
             "required_objects": ["sofa"],
             "program": ["<char0> [Walk] <sofa> (1)", "<char0> [Sit] <sofa> (1)"],
         },
         {
             "task_name": "walk_to_and_grab_object",
+            "frame_label": "grab_object",
             "required_objects": [object_for_grab],
             "program": [f"<char0> [Walk] <{object_for_grab}> (1)", f"<char0> [Grab] <{object_for_grab}> (1)"],
         },
         {
             "task_name": "walk_to_and_open_object",
+            "frame_label": "open_object",
             "required_objects": [open_target],
             "program": [f"<char0> [Walk] <{open_target}> (1)", f"<char0> [Open] <{open_target}> (1)"],
         },
         {
             "task_name": "place_object_on_surface",
+            "frame_label": "place_object",
             "required_objects": [place_object, surface],
             "program": [
                 f"<char0> [Walk] <{place_object}> (1)",
@@ -378,37 +398,7 @@ def _try_export_frame(comm: Any, output_dir: Path, frame_output: Path) -> Dict[s
     }
     try:
         frame_output.parent.mkdir(parents=True, exist_ok=True)
-        camera_count, camera_indexes = _candidate_camera_indexes(comm)
-        status["camera_count"] = camera_count
-        if not camera_indexes:
-            status["reason"] = "virtualhome_camera_not_configured"
-            return _write_frame_status(output_dir, status)
-        last_error = ""
-        for camera_index in camera_indexes:
-            try:
-                ok, images = comm.camera_image([camera_index], mode="normal", image_width=640, image_height=480)
-                if not ok:
-                    last_error = f"camera_image returned success={ok} for camera {camera_index}"
-                    continue
-                if not images:
-                    last_error = f"camera_image returned no images for camera {camera_index}"
-                    continue
-                saved = _save_frame_payload(images[0], frame_output)
-                status.update(
-                    {
-                        "success": True,
-                        "reason": "virtualhome_frame_export_completed",
-                        "camera_index": camera_index,
-                        "frame_path": str(saved.resolve()),
-                    }
-                )
-                with Image.open(saved) as image:
-                    status["width"], status["height"] = image.size
-                return _write_frame_status(output_dir, status)
-            except Exception as exc:
-                last_error = f"{type(exc).__name__}: {exc}"
-        status["reason"] = "virtualhome_frame_export_unsupported"
-        status["error_message"] = last_error
+        status.update(_capture_frame(comm, frame_output))
     except TimeoutError as exc:
         status["reason"] = "virtualhome_frame_export_timeout"
         status["error_type"] = type(exc).__name__
@@ -418,6 +408,98 @@ def _try_export_frame(comm: Any, output_dir: Path, frame_output: Path) -> Dict[s
         status["error_type"] = type(exc).__name__
         status["error_message"] = str(exc)
     return _write_frame_status(output_dir, status)
+
+
+def _init_task_frame_capture(output_dir: Path, max_task_frames: int) -> Dict[str, Any]:
+    frame_dir = output_dir / "task_frames"
+    frame_dir.mkdir(parents=True, exist_ok=True)
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "success": False,
+        "reason": "",
+        "frame_dir": str(frame_dir),
+        "max_task_frames": max(1, max_task_frames),
+        "frames": [],
+        "warnings": [],
+    }
+
+
+def _capture_task_frame(comm: Any, capture: Dict[str, Any], label: str) -> None:
+    frames = capture.setdefault("frames", [])
+    if not isinstance(frames, list):
+        capture["frames"] = frames = []
+    if len(frames) >= int(capture.get("max_task_frames", 8)):
+        capture.setdefault("warnings", []).append({"label": label, "reason": "max_task_frames_reached"})
+        return
+    index = len(frames)
+    safe_label = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in label.lower()).strip("_") or "frame"
+    frame_path = Path(str(capture["frame_dir"])) / f"{index:03d}_{safe_label}.png"
+    status = _capture_frame(comm, frame_path)
+    status["label"] = label
+    if status.get("success"):
+        frames.append(status)
+    else:
+        capture.setdefault("warnings", []).append(status)
+
+
+def _write_task_frame_status(output_dir: Path, capture: Dict[str, Any]) -> Dict[str, Any]:
+    frames = capture.get("frames", [])
+    warnings = capture.get("warnings", [])
+    capture["saved_frame_count"] = len(frames) if isinstance(frames, list) else 0
+    capture["warning_count"] = len(warnings) if isinstance(warnings, list) else 0
+    capture["success"] = capture["saved_frame_count"] > 0
+    capture["reason"] = "task_frame_export_completed" if capture["success"] else "task_frame_export_unavailable"
+    (output_dir / "task_frame_export_status.json").write_text(
+        json.dumps(capture, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return capture
+
+
+def _capture_frame(comm: Any, frame_output: Path) -> Dict[str, Any]:
+    status: Dict[str, Any] = {
+        "success": False,
+        "reason": "",
+        "error_type": "",
+        "error_message": "",
+        "frame_path": str(frame_output.resolve()),
+        "camera_index": None,
+        "camera_count": None,
+        "width": None,
+        "height": None,
+    }
+    camera_count, camera_indexes = _candidate_camera_indexes(comm)
+    status["camera_count"] = camera_count
+    if not camera_indexes:
+        status["reason"] = "virtualhome_camera_not_configured"
+        return status
+    last_error = ""
+    for camera_index in camera_indexes:
+        try:
+            ok, images = comm.camera_image([camera_index], mode="normal", image_width=640, image_height=480)
+            if not ok:
+                last_error = f"camera_image returned success={ok} for camera {camera_index}"
+                continue
+            if not images:
+                last_error = f"camera_image returned no images for camera {camera_index}"
+                continue
+            saved = _save_frame_payload(images[0], frame_output)
+            status.update(
+                {
+                    "success": True,
+                    "reason": "virtualhome_frame_export_completed",
+                    "camera_index": camera_index,
+                    "frame_path": str(saved.resolve()),
+                }
+            )
+            with Image.open(saved) as image:
+                status["width"], status["height"] = image.size
+            return status
+        except Exception as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
+    status["reason"] = "virtualhome_frame_export_unsupported"
+    status["error_message"] = last_error
+    return status
 
 
 def _candidate_camera_indexes(comm: Any) -> tuple[int | None, List[int]]:
@@ -505,6 +587,8 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=int(os.environ.get("VIRTUALHOME_PORT", "8080")))
     parser.add_argument("--export-frame", action="store_true")
     parser.add_argument("--frame-output", default=str(DEFAULT_FRAME_OUTPUT))
+    parser.add_argument("--export-task-frames", action="store_true")
+    parser.add_argument("--max-task-frames", type=int, default=8)
     args = parser.parse_args()
 
     status = run_spike(
@@ -513,6 +597,8 @@ def main() -> int:
         args.port,
         export_frame=args.export_frame,
         frame_output=Path(args.frame_output),
+        export_task_frames=args.export_task_frames,
+        max_task_frames=args.max_task_frames,
     )
     return 0 if status.get("success") or status.get("reason") in {
         "missing_virtualhome_executable",

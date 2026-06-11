@@ -31,6 +31,8 @@ def build_report(output_dir: Path) -> Dict[str, Any]:
     episode_log_rows = _read_jsonl(output_dir / "converted_episode_log.jsonl")
     comparison = _read_json(output_dir / "visual_symbolic_comparison.json")
     qwen_status = _read_json(output_dir / "qwen_vision_status.json")
+    multiframe_status = _read_json(output_dir / "multiframe_qwen_status.json")
+    episode_comparison = _read_json(output_dir / "episode_visual_symbolic_comparison.json")
     frame_path = output_dir / "frame_000.png"
     frame_status = _read_json(output_dir / "frame_export_status.json")
     frame_info = _frame_info(frame_path)
@@ -54,6 +56,16 @@ def build_report(output_dir: Path) -> Dict[str, Any]:
         "qwen_unmatched_visual_object_count": _summary_value(comparison, "unmatched_visual_object_count"),
         "visual_symbolic_comparison_path": str(output_dir / "visual_symbolic_comparison.json")
         if comparison
+        else "",
+        "multiframe_available": multiframe_status.get("success") is True,
+        "multiframe_count": int(multiframe_status.get("frame_count", 0)) if multiframe_status else 0,
+        "successful_vision_frame_count": int(multiframe_status.get("successful_vision_frame_count", 0))
+        if multiframe_status
+        else 0,
+        "unique_visible_objects": _episode_summary_value(episode_comparison, "unique_visible_objects"),
+        "average_qwen_latency": _episode_summary_value(episode_comparison, "average_qwen_latency"),
+        "episode_visual_symbolic_comparison_path": str(output_dir / "episode_visual_symbolic_comparison.json")
+        if episode_comparison
         else "",
         "frame_export_status": {
             "success": frame_status.get("success") if isinstance(frame_status, dict) else None,
@@ -118,6 +130,13 @@ def _summary_value(comparison: Dict[str, Any], key: str) -> int:
     return int(value) if isinstance(value, (int, float)) else 0
 
 
+def _episode_summary_value(comparison: Dict[str, Any], key: str) -> Any:
+    summary = comparison.get("summary", {}) if isinstance(comparison, dict) else {}
+    if not isinstance(summary, dict):
+        return [] if key == "unique_visible_objects" else 0
+    return summary.get(key, [] if key == "unique_visible_objects" else 0)
+
+
 def _frame_info(path: Path) -> Dict[str, Any]:
     if not path.exists() or path.stat().st_size <= 0:
         return {"available": False}
@@ -144,6 +163,11 @@ def _to_markdown(report: Dict[str, Any]) -> str:
         f"- qwen_visible_object_count: `{report['qwen_visible_object_count']}`",
         f"- qwen_matched_object_count: `{report['qwen_matched_object_count']}`",
         f"- qwen_unmatched_visual_object_count: `{report['qwen_unmatched_visual_object_count']}`",
+        f"- multiframe_available: `{report['multiframe_available']}`",
+        f"- multiframe_count: `{report['multiframe_count']}`",
+        f"- successful_vision_frame_count: `{report['successful_vision_frame_count']}`",
+        f"- unique_visible_objects: `{len(report['unique_visible_objects']) if isinstance(report['unique_visible_objects'], list) else report['unique_visible_objects']}`",
+        f"- average_qwen_latency: `{report['average_qwen_latency']}`",
     ]
     if report.get("frame_dimensions"):
         dimensions = report["frame_dimensions"]

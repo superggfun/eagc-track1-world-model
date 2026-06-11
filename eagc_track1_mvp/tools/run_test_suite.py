@@ -100,6 +100,7 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
     virtualhome_manual = [py, "tools/run_virtualhome_manual_suite.py"]
     virtualhome_frame = [py, "tools/run_virtualhome_frame_suite.py"]
     virtualhome_vision = [py, "tools/run_virtualhome_vision_suite.py"]
+    virtualhome_multiframe = [py, "tools/run_virtualhome_multiframe_suite.py"]
     targeted_replay = [
         py,
         "tools/replay_random_local_sim_failure.py",
@@ -194,6 +195,7 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         "targeted-virtualhome-manual": [virtualhome_manual],
         "targeted-virtualhome-frame": [virtualhome_frame],
         "targeted-virtualhome-vision": [virtualhome_vision],
+        "targeted-virtualhome-multiframe": [virtualhome_multiframe],
         "targeted": [qwen_text, visual_local_hybrid, local_sim, track1],
         "standard": [
             compileall,
@@ -335,6 +337,7 @@ def _tier_descriptions() -> Dict[str, str]:
         "targeted-virtualhome-manual": "Optional VirtualHome manual-play smoke; skips if 127.0.0.1:8080 is not listening.",
         "targeted-virtualhome-frame": "Optional VirtualHome manual-play frame export smoke and visual-symbolic evidence report.",
         "targeted-virtualhome-vision": "Optional Qwen vision extraction on a VirtualHome frame and visual-symbolic comparison.",
+        "targeted-virtualhome-multiframe": "Optional VirtualHome episode-level multi-frame Qwen grounding and evidence comparison.",
         "targeted": "Aggregate targeted smoke: text, vision, LocalSim, Track1 procedure.",
         "standard": "Longer gate: targeted-style coverage plus report/source/demo packaging.",
         "full": "Optional stress suite with longer robustness batches.",

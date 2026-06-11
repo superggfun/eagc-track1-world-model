@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.16.5 VirtualHome Qwen vision extraction and visual-symbolic comparison.
+Current version: v0.16.6 VirtualHome episode-level multi-frame visual grounding.
 
-Current stable tag: `v0.16.5-virtualhome-qwen-vision-comparison`
+Current stable tag: `v0.16.6-virtualhome-multiframe-grounding`
 
 Current status:
 
@@ -13,7 +13,7 @@ Current status:
 - Visual-local hybrid prototype with evidence reporting
 - Real Qwen3.6 vLLM integration
 - ALFRED offline adapter with synthetic fixture conversion
-- VirtualHome manual-play Windows regression smoke validated with scene graph, multi-task program log, converted world model, frame export, and single-frame Qwen vision comparison
+- VirtualHome manual-play Windows regression smoke validated with scene graph, multi-task program log, converted world model, frame export, single-frame Qwen vision comparison, and episode-level multi-frame grounding
 - Docker/source package readiness
 - No training yet
 - Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, fully automated VirtualHome startup, and real ALFRED dataset conversion are not validated yet
@@ -244,6 +244,7 @@ python tools/run_test_suite.py --tier targeted-track1 --timeout-seconds 600
 python tools/run_test_suite.py --tier targeted-virtualhome-manual --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted-virtualhome-frame --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted-virtualhome-vision --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-virtualhome-multiframe --timeout-seconds 600
 python tools/run_test_suite.py --tier targeted --timeout-seconds 900 --continue-on-failure
 python tools/run_test_suite.py --tier standard
 python tools/run_test_suite.py --tier full
@@ -266,6 +267,7 @@ Targeted tests are decomposed:
 - `targeted-virtualhome-manual`: optional VirtualHome manual-play smoke; skips if `127.0.0.1:8080` is not listening.
 - `targeted-virtualhome-frame`: optional VirtualHome manual-play frame export smoke and visual-symbolic evidence report.
 - `targeted-virtualhome-vision`: optional Qwen vision extraction on a VirtualHome frame and visual-symbolic comparison.
+- `targeted-virtualhome-multiframe`: optional episode-level multi-frame Qwen grounding over selected VirtualHome task frames.
 - `targeted`: aggregate of the four targeted smoke groups.
 
 Each command records elapsed time and status under `outputs/test_suite_reports/`. Use `--timeout-seconds` to prevent a long test from hanging the suite and `--continue-on-failure` when you want a complete report across all targeted groups. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
@@ -371,12 +373,16 @@ python tools/setup_virtualhome_hint.py
 python tools/check_virtualhome_env.py
 python tools/test_virtualhome_windows_spike.py
 python tools/test_virtualhome_windows_spike.py --export-frame
+python tools/test_virtualhome_windows_spike.py --export-task-frames --max-task-frames 8
 python tools/test_virtualhome_qwen_vision.py
+python tools/test_virtualhome_multiframe_qwen_vision.py
 python tools/compare_virtualhome_visual_symbolic.py
+python tools/compare_virtualhome_multiframe_symbolic.py
 python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json
 python -m validators.validate_virtualhome_converted_world_model outputs/virtualhome_spike/converted_world_model.json outputs/virtualhome_spike/converted_episode_log.jsonl
 python -m validators.validate_virtualhome_frame_export outputs/virtualhome_spike/frame_export_status.json
 python -m validators.validate_virtualhome_visual_symbolic_comparison outputs/virtualhome_spike/qwen_vision_status.json
+python -m validators.validate_virtualhome_multiframe_grounding outputs/virtualhome_spike/multiframe_qwen_status.json
 python tools/build_virtualhome_evidence_report.py
 ```
 
@@ -405,9 +411,10 @@ The currently validated VirtualHome path is manual Play:
 python tools/run_test_suite.py --tier targeted-virtualhome-manual --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted-virtualhome-frame --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted-virtualhome-vision --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-virtualhome-multiframe --timeout-seconds 600
 ```
 
-The manual tier validates scene graph retrieval, four small household program tasks, conversion to `converted_world_model.json` / `converted_episode_log.jsonl`, and conversion quality checks. The frame tier additionally exports `frame_000.png`, validates `frame_export_status.json`, and builds `visual_symbolic_evidence_report.json` / `.md`. The vision tier uses the already-running local Qwen/vLLM endpoint to extract visible objects from that single frame, then compares Qwen visual evidence against the VirtualHome symbolic scene graph. Latest v0.16.5 smoke: Qwen saw 7 objects, 6 matched symbolic objects, and 1 unmatched visual object was recorded as a warning. It does not start lightweight vLLM, does not change GPU memory settings, and should not be interpreted as official EAGC evaluation.
+The manual tier validates scene graph retrieval, four small household program tasks, conversion to `converted_world_model.json` / `converted_episode_log.jsonl`, and conversion quality checks. The frame tier exports `frame_000.png`, validates `frame_export_status.json`, and builds `visual_symbolic_evidence_report.json` / `.md`. The vision tier uses the already-running local Qwen/vLLM endpoint to extract visible objects from that single frame, then compares Qwen visual evidence against the VirtualHome symbolic scene graph. The multi-frame tier exports up to 8 selected task frames, runs Qwen vision per frame, and builds episode-level visual-symbolic comparison artifacts. These tiers do not start lightweight vLLM, do not change GPU memory settings, and should not be interpreted as official EAGC evaluation.
 
 If you want to test a separate lightweight vLLM profile for sharing GPU memory with VirtualHome, review the dry-run first:
 
