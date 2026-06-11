@@ -266,6 +266,29 @@ Dependency warning:
 - Pip reported compatibility warnings for packages expecting newer `networkx`, including `torch` and `scikit-image`.
 - Future work should isolate VirtualHome in a dedicated virtual environment if it becomes more than a one-off simulator spike.
 
+Latest v0.16.2 manual-play probe on 2026-06-11:
+
+- User manually started `VirtualHome.exe`, selected Windowed mode, and pressed Play.
+- Port `8080` was detected as listening before the smoke run.
+- The smoke script connected to the already-running simulator instead of launching a second process.
+- `python tools/check_virtualhome_env.py` passed.
+- `python tools/test_virtualhome_windows_spike.py` completed successfully.
+- `python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json` passed.
+- Scene graph saved: yes.
+- Program log saved: yes.
+- Simple household program executed successfully:
+
+```text
+<char0> [Walk] <sofa> (1)
+<char0> [Sit] <sofa> (1)
+```
+
+- Converted world model saved: yes.
+- Converted episode log saved: yes.
+- Converted object count: 440.
+- Frame saved: no. Camera frame export remains optional and was not validated in this run.
+- The real VirtualHome smoke is now validated in manual-play mode, but automated simulator startup is still not validated.
+
 ## Assessment Criteria
 
 VirtualHome becomes a useful Windows-friendly household simulator candidate if:

@@ -66,7 +66,11 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
             kwargs["file_name"] = simulator_path
         manual_proc: subprocess.Popen[Any] | None = None
         try:
-            comm = UnityCommunication(**kwargs)
+            if _is_port_open("127.0.0.1", port):
+                status["existing_simulator_connection_used"] = True
+                comm = UnityCommunication(port=str(port), logging=False)
+            else:
+                comm = UnityCommunication(**kwargs)
         except Exception as exc:
             if _can_fallback_manual_launch(exc, simulator_path):
                 manual_proc = _launch_windows_simulator(simulator_path, port, output_dir)
@@ -79,6 +83,9 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
         status["simulator_started"] = True
 
         _call_if_exists(comm, "reset", scene_id)
+        character_result = _call_if_exists(comm, "add_character")
+        status["character_added"] = _virtualhome_success(character_result)
+        status["character_add_result"] = character_result
         scene_graph = _get_scene_graph(comm)
         scene_graph_path = output_dir / "scene_graph.json"
         scene_graph_path.write_text(json.dumps(scene_graph, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -89,6 +96,7 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
         render_result = _render_program(comm, program)
         if render_result is not None:
             program_log = {"program": program, "result": render_result}
+        status["program_execution_success"] = _virtualhome_success(render_result)
         program_log_path = output_dir / "program_log.json"
         program_log_path.write_text(json.dumps(program_log, indent=2, ensure_ascii=False), encoding="utf-8")
         status["program_log_saved"] = True
@@ -105,6 +113,8 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
         status["converted_object_count"] = len(converted_objects) if isinstance(converted_objects, list) else 0
         if status["converted_object_count"] <= 0:
             raise RuntimeError("VirtualHome scene graph conversion produced no world_model objects.")
+        if render_result is not None and not _virtualhome_success(render_result):
+            raise RuntimeError(f"VirtualHome program execution failed: {render_result}")
         status["success"] = True
         status["reason"] = "virtualhome_spike_completed"
     except Exception as exc:  # VirtualHome APIs vary; capture exact failure.
@@ -190,6 +200,16 @@ def _wait_for_port(host: str, port: int, timeout_seconds: int) -> None:
     raise TimeoutError(f"VirtualHome simulator did not open {host}:{port} within {timeout_seconds}s. Last error: {last_error}")
 
 
+def _is_port_open(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1.0)
+        try:
+            sock.connect((host, port))
+            return True
+        except OSError:
+            return False
+
+
 def _get_scene_graph(comm: Any) -> Dict[str, Any]:
     for method_name in ["environment_graph", "get_scene_graph"]:
         method = getattr(comm, method_name, None)
@@ -204,24 +224,55 @@ def _get_scene_graph(comm: Any) -> Dict[str, Any]:
 
 
 def _choose_program(scene_graph: Dict[str, Any]) -> List[str]:
-    names = {
-        str(node.get("class_name", "")).lower()
-        for node in scene_graph.get("nodes", [])
-        if isinstance(node, dict)
-    }
-    if "chair" in names:
-        return ["<char0> [Walk] <chair> (1)", "<char0> [Sit] <chair> (1)"]
-    if "book" in names:
-        return ["<char0> [Walk] <book> (1)", "<char0> [Grab] <book> (1)"]
+    nodes = [node for node in scene_graph.get("nodes", []) if isinstance(node, dict)]
+    names = {str(node.get("class_name", "")).lower() for node in nodes}
+    for target_name, actions in [
+        ("sofa", ["Walk", "Sit"]),
+        ("television", ["Walk"]),
+        ("tv", ["Walk"]),
+        ("book", ["Find"]),
+        ("chair", ["Find"]),
+    ]:
+        if target_name in names:
+            return [f"<char0> [{action}] <{target_name}> (1)" for action in actions]
+    room = next((node for node in nodes if _node_category_name(node) == "rooms"), None)
+    if room and room.get("id") is not None:
+        room_name = str(room.get("class_name") or "living_room").lower()
+        return [f"<char0> [Walk] <{room_name}> ({room['id']})"]
     return ["<char0> [Walk] <living_room> (1)"]
 
 
-def _render_program(comm: Any, program: List[str]) -> Any:
-    for method_name in ["render_script", "execute_script"]:
-        method = getattr(comm, method_name, None)
-        if callable(method):
-            return method(program, recording=False)
+def _first_node_id(nodes: List[Dict[str, Any]], class_name: str) -> Any:
+    for node in nodes:
+        if str(node.get("class_name", "")).lower() == class_name and node.get("id") is not None:
+            return node["id"]
     return None
+
+
+def _node_category_name(node: Dict[str, Any]) -> str:
+    return str(node.get("category") or "").lower()
+
+
+def _render_program(comm: Any, program: List[str]) -> Any:
+    method = getattr(comm, "render_script", None)
+    if callable(method):
+        return method(program, recording=False, skip_animation=True, find_solution=True, processing_time_limit=10)
+    method = getattr(comm, "execute_script", None)
+    if callable(method):
+        return method(program)
+    return None
+
+
+def _virtualhome_success(result: Any) -> bool:
+    if isinstance(result, tuple) and result:
+        return result[0] is True
+    if isinstance(result, list) and result:
+        return result[0] is True
+    if isinstance(result, dict):
+        value = result.get("success")
+        if isinstance(value, bool):
+            return value
+    return result is True
 
 
 def _try_save_frame(comm: Any, output_dir: Path) -> Path | None:
