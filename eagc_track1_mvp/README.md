@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.16.7 VirtualHome evidence submission refresh.
+Current version: v0.17 VirtualHome + vLLM resource profile and coexistence audit.
 
-Current stable tag: `v0.16.7-virtualhome-evidence-submission-refresh`
+Current stable tag: `v0.17-virtualhome-vllm-resource-profile`
 
 Current status:
 
@@ -14,6 +14,7 @@ Current status:
 - Real Qwen3.6 vLLM integration
 - ALFRED offline adapter with synthetic fixture conversion
 - VirtualHome manual-play Windows regression smoke validated with scene graph, multi-task program log, converted world model, frame export, single-frame Qwen vision comparison, and episode-level multi-frame grounding
+- VirtualHome + existing Qwen/vLLM resource profile and coexistence audit
 - Docker/source package readiness
 - No training yet
 - Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, fully automated VirtualHome startup, and real ALFRED dataset conversion are not validated yet
@@ -245,6 +246,7 @@ python tools/run_test_suite.py --tier targeted-virtualhome-manual --timeout-seco
 python tools/run_test_suite.py --tier targeted-virtualhome-frame --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted-virtualhome-vision --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted-virtualhome-multiframe --timeout-seconds 600
+python tools/run_test_suite.py --tier targeted-resource-profile --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted --timeout-seconds 900 --continue-on-failure
 python tools/run_test_suite.py --tier standard
 python tools/run_test_suite.py --tier full
@@ -268,6 +270,7 @@ Targeted tests are decomposed:
 - `targeted-virtualhome-frame`: optional VirtualHome manual-play frame export smoke and visual-symbolic evidence report.
 - `targeted-virtualhome-vision`: optional Qwen vision extraction on a VirtualHome frame and visual-symbolic comparison.
 - `targeted-virtualhome-multiframe`: optional episode-level multi-frame Qwen grounding over selected VirtualHome task frames.
+- `targeted-resource-profile`: optional read-only VirtualHome + vLLM resource profile and coexistence smoke; it does not manage Docker or start lightweight vLLM.
 - `targeted`: aggregate of the four targeted smoke groups.
 
 Each command records elapsed time and status under `outputs/test_suite_reports/`. Use `--timeout-seconds` to prevent a long test from hanging the suite and `--continue-on-failure` when you want a complete report across all targeted groups. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
@@ -417,6 +420,16 @@ python tools/run_test_suite.py --tier targeted-virtualhome-multiframe --timeout-
 The manual tier validates scene graph retrieval, four small household program tasks, conversion to `converted_world_model.json` / `converted_episode_log.jsonl`, and conversion quality checks. The frame tier exports `frame_000.png`, validates `frame_export_status.json`, and builds `visual_symbolic_evidence_report.json` / `.md`. The vision tier uses the already-running local Qwen/vLLM endpoint to extract visible objects from that single frame, then compares Qwen visual evidence against the VirtualHome symbolic scene graph. The multi-frame tier exports up to 8 selected task frames, runs Qwen vision per frame, and builds episode-level visual-symbolic comparison artifacts. These tiers do not start lightweight vLLM, do not change GPU memory settings, and should not be interpreted as official EAGC evaluation.
 
 Latest VirtualHome evidence status: manual-play Windows simulator connection on port `8080` is validated; scene graph extraction succeeded; 4/4 fixed household tasks succeeded; converted world model and converted episode log were generated; frame export succeeded at `640x480`; 5 task frames were exported; single-frame Qwen vision comparison succeeded; episode-level multi-frame Qwen grounding processed 5/5 frames with average latency about `2.8s/frame`. Visual objects are matched against simulator symbolic state, scene graph-only objects are treated as not visible rather than Qwen errors, and unmatched visual objects are warnings. Generated frames, raw Qwen responses, and `outputs/virtualhome_spike/` artifacts are runtime outputs and are not redistributed in git.
+
+Resource audit:
+
+```powershell
+python tools/run_test_suite.py --tier targeted-resource-profile --timeout-seconds 300
+```
+
+This writes `outputs/resource_profile/virtualhome_vllm_resource_profile.json`, `.md`, and `coexistence_smoke_status.json`. It records GPU memory, Docker/container status, VirtualHome port status, Qwen `/models` availability, and minimal text/vision latency if both VirtualHome and Qwen are available. It is read-only: it does not stop, restart, delete, rebuild, or reconfigure the original Qwen/vLLM Docker container, and it does not start lightweight vLLM.
+
+Latest v0.17 audit: RTX 5090 memory snapshot was 32607 MiB total, 31674 MiB used, and 514 MiB free; `openclaw-vllm` was running on `127.0.0.1:8000`; VirtualHome was listening on `127.0.0.1:8080`; Qwen text smoke latency was 0.141s; VirtualHome frame vision smoke latency was 0.696s; multi-frame VirtualHome grounding rerun processed 5/5 frames with 2.722s average Qwen latency. Because v0.16.5 through v0.17 show that the existing local Qwen/vLLM endpoint can complete single-frame and multi-frame VirtualHome vision grounding, a lightweight vLLM profile is a fallback rather than the default route. Consider it only if longer episodes, more frames, or concurrent simulator/model workloads become unstable.
 
 If you want to test a separate lightweight vLLM profile for sharing GPU memory with VirtualHome, review the dry-run first:
 

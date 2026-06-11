@@ -41,6 +41,15 @@ VIRTUALHOME_OUTPUT_ARTIFACTS = [
     "multiframe_qwen_status.json",
     "episode_visual_symbolic_comparison.json",
 ]
+RESOURCE_PROFILE_HELPERS = [
+    "tools/profile_virtualhome_vllm_resources.py",
+    "tools/test_virtualhome_vllm_resource_smoke.py",
+]
+RESOURCE_PROFILE_ARTIFACTS = [
+    "virtualhome_vllm_resource_profile.json",
+    "virtualhome_vllm_resource_profile.md",
+    "coexistence_smoke_status.json",
+]
 RUNTIME_DIRS = [
     "outputs",
     "dist",
@@ -156,6 +165,13 @@ def build_report() -> Dict[str, Any]:
     else:
         warnings.append("VirtualHome evidence outputs are not present locally; this is allowed for source-only submission checks.")
 
+    resource_profile = _resource_profile_status()
+    for item in resource_profile["helpers"]:
+        if not item["exists"]:
+            warnings.append(f"Resource profile helper is missing: {item['path']}")
+    if not all(item["exists"] for item in resource_profile["artifacts"]):
+        warnings.append("One or more resource profile runtime artifacts are missing; run python tools/run_test_suite.py --tier targeted-resource-profile if needed.")
+
     pdf_status_path = PROJECT_ROOT / "submission_bundle" / "reports" / "technical_report_build_status.json"
     pdf_status: Dict[str, Any] = {}
     if pdf_status_path.exists():
@@ -179,6 +195,7 @@ def build_report() -> Dict[str, Any]:
         "expected_tags": [{"tag": tag, "exists": tag in tags} for tag in EXPECTED_TAGS],
         "runtime_dirs": runtime_dirs,
         "virtualhome_evidence": virtualhome_evidence,
+        "resource_profile": resource_profile,
         "tracked_violation_count": len(tracked_violations),
         "tracked_violations": tracked_violations,
         "technical_report_build_status": pdf_status,
@@ -216,6 +233,22 @@ def _virtualhome_evidence_status() -> Dict[str, Any]:
         "required_code": required_code,
         "output_dir_exists": output_dir.exists(),
         "output_artifacts": output_artifacts,
+    }
+
+
+def _resource_profile_status() -> Dict[str, Any]:
+    output_dir = PROJECT_ROOT / "outputs" / "resource_profile"
+    return {
+        "description": "Resource profile artifacts are optional runtime outputs. Presence is recorded for audit, but outputs must stay untracked.",
+        "helpers": [{"path": rel, "exists": (PROJECT_ROOT / rel).exists()} for rel in RESOURCE_PROFILE_HELPERS],
+        "output_dir_exists": output_dir.exists(),
+        "artifacts": [
+            {
+                "path": f"outputs/resource_profile/{rel}",
+                "exists": (output_dir / rel).exists(),
+            }
+            for rel in RESOURCE_PROFILE_ARTIFACTS
+        ],
     }
 
 
@@ -284,6 +317,15 @@ def _markdown(report: Dict[str, Any]) -> str:
         lines.append(f"| `{item['path']}` | `{item['exists']}` |")
     lines.extend(["", "### Local Runtime Artifacts", "", "| artifact | exists |", "|---|---:|"])
     for item in vh.get("output_artifacts", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(["", "## Resource Profile", ""])
+    rp = report.get("resource_profile", {})
+    lines.append(rp.get("description", ""))
+    lines.extend(["", "### Helpers", "", "| file | exists |", "|---|---:|"])
+    for item in rp.get("helpers", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(["", "### Local Runtime Artifacts", "", "| artifact | exists |", "|---|---:|"])
+    for item in rp.get("artifacts", []):
         lines.append(f"| `{item['path']}` | `{item['exists']}` |")
     lines.append("")
     return "\n".join(lines)

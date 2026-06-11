@@ -446,6 +446,26 @@ v0.16.7 submission refresh:
   - average Qwen latency: 2.871 seconds per frame
 - The small metric differences from the v0.16.6 run are expected Qwen vision-output variance; the evidence comparison remains successful and conservative.
 
+v0.17 resource profile and coexistence audit:
+
+- Added read-only resource profile tooling:
+  `python tools/run_test_suite.py --tier targeted-resource-profile --timeout-seconds 300`
+- The audit records GPU memory, compute processes, Docker container summaries, VirtualHome port status, Qwen `/models` availability, and minimal text/vision latency.
+- The audit does not start lightweight vLLM.
+- The audit does not modify, restart, delete, rebuild, or manage the original Qwen/vLLM Docker container.
+- Because the existing endpoint already completed single-frame and multi-frame VirtualHome grounding, lightweight vLLM is documented as a fallback rather than the default route.
+- If future longer episodes or additional frames become unstable, a separate lite profile can be considered on a separate port and container name.
+- Latest resource audit result:
+  - GPU: RTX 5090, 32607 MiB total
+  - profile snapshot: 31674 MiB used, 514 MiB free
+  - existing vLLM-like container: running on `127.0.0.1:8000`
+  - VirtualHome port: `127.0.0.1:8080` listening
+  - Qwen `/models`: available with `qwen3.6-35b-nvfp4`
+  - text smoke latency: 0.141 seconds
+  - frame vision latency: 0.696 seconds
+  - multi-frame grounding rerun: 5/5 frames succeeded, 2.722 seconds average Qwen latency
+- Current recommendation: the validated smoke pipeline can continue using the existing endpoint; lightweight vLLM is not required unless future longer or concurrent workloads become unstable.
+
 ## Assessment Criteria
 
 VirtualHome becomes a useful Windows-friendly household simulator candidate if:

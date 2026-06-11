@@ -101,6 +101,8 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
     virtualhome_frame = [py, "tools/run_virtualhome_frame_suite.py"]
     virtualhome_vision = [py, "tools/run_virtualhome_vision_suite.py"]
     virtualhome_multiframe = [py, "tools/run_virtualhome_multiframe_suite.py"]
+    resource_profile = [py, "tools/profile_virtualhome_vllm_resources.py"]
+    resource_smoke = [py, "tools/test_virtualhome_vllm_resource_smoke.py"]
     targeted_replay = [
         py,
         "tools/replay_random_local_sim_failure.py",
@@ -196,6 +198,7 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         "targeted-virtualhome-frame": [virtualhome_frame],
         "targeted-virtualhome-vision": [virtualhome_vision],
         "targeted-virtualhome-multiframe": [virtualhome_multiframe],
+        "targeted-resource-profile": [resource_profile, resource_smoke],
         "targeted": [qwen_text, visual_local_hybrid, local_sim, track1],
         "standard": [
             compileall,
@@ -338,6 +341,7 @@ def _tier_descriptions() -> Dict[str, str]:
         "targeted-virtualhome-frame": "Optional VirtualHome manual-play frame export smoke and visual-symbolic evidence report.",
         "targeted-virtualhome-vision": "Optional Qwen vision extraction on a VirtualHome frame and visual-symbolic comparison.",
         "targeted-virtualhome-multiframe": "Optional VirtualHome episode-level multi-frame Qwen grounding and evidence comparison.",
+        "targeted-resource-profile": "Read-only VirtualHome + vLLM resource profile and coexistence smoke; does not manage Docker or start lite vLLM.",
         "targeted": "Aggregate targeted smoke: text, vision, LocalSim, Track1 procedure.",
         "standard": "Longer gate: targeted-style coverage plus report/source/demo packaging.",
         "full": "Optional stress suite with longer robustness batches.",
