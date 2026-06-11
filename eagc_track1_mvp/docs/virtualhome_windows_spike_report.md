@@ -35,15 +35,19 @@ virtualhome:
 Environment variables can override the simulator path and port:
 
 ```powershell
+$env:VIRTUALHOME_REPO_PATH = "C:\path\to\VirtualHome"
 $env:VIRTUALHOME_SIMULATOR_PATH = "C:\path\to\VirtualHome.exe"
 $env:VIRTUALHOME_PORT = "8080"
 ```
+
+`VIRTUALHOME_REPO_PATH` is optional but recommended when the VirtualHome Python API is available from a local clone rather than an installed package. The spike scripts add this repository path to `sys.path` for the current process only; they do not modify `requirements.txt` and do not install packages automatically.
 
 ## Commands
 
 Environment probe:
 
 ```powershell
+python tools/setup_virtualhome_hint.py
 python tools/check_virtualhome_env.py
 ```
 
@@ -109,15 +113,24 @@ Latest local probe on 2026-06-11:
 
 - `python tools/check_virtualhome_env.py` completed and wrote `outputs/virtualhome_spike/env_status.json`.
 - VirtualHome Python API import is not currently available.
-- `VIRTUALHOME_SIMULATOR_PATH` / `virtualhome.simulator_path` is not set.
+- `VIRTUALHOME_REPO_PATH` is not set to a usable VirtualHome clone.
+- `VIRTUALHOME_SIMULATOR_PATH` / `virtualhome.simulator_path` is not set, so the Windows Unity simulator executable is also missing.
 - `python tools/test_virtualhome_windows_spike.py` completed gracefully and wrote `outputs/virtualhome_spike/status.json`.
 - `python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json` passed because the missing API/executable state is reported explicitly rather than faked as success.
+- `python tools/setup_virtualhome_hint.py` provides manual setup hints and does not download large files.
 
 Current `status.json` reason:
 
 ```text
-virtualhome_python_api_not_installed
+missing_virtualhome_python_api
 ```
+
+Required user-provided artifacts before a real smoke can run:
+
+1. A local VirtualHome repository or installed Python API exposing `simulation.unity_simulator.comm_unity`.
+2. A Windows VirtualHome Unity simulator executable path, provided via `VIRTUALHOME_SIMULATOR_PATH` or `config.yaml`.
+
+Do not commit the executable, Unity assets, frames, videos, or other large simulator artifacts.
 
 ## Assessment Criteria
 
@@ -130,3 +143,5 @@ VirtualHome becomes a useful Windows-friendly household simulator candidate if:
 - generated scene graph / frame artifacts can be converted into the existing world model and visual pipeline.
 
 Until those conditions are met, VirtualHome remains an optional simulator spike rather than a main backend.
+
+VirtualHome is still only a Windows-friendly household activity simulator candidate. It is useful to explore scene graphs, household programs, and possible visual frames, but this project does not claim it fully replaces ProcTHOR, Habitat, AI2-THOR, or the future official EAGC Track 1 runtime.

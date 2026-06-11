@@ -161,6 +161,7 @@ def main() -> int:
     status = run_spike(Path(args.output_dir), args.scene, args.port)
     return 0 if status.get("success") or status.get("reason") in {
         "missing_virtualhome_executable",
+        "missing_virtualhome_python_api",
         "missing_virtualhome_simulator_path",
         "virtualhome_python_api_not_installed",
     } else 1

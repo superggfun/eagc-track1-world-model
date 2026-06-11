@@ -330,6 +330,7 @@ Run the optional VirtualHome Windows spike:
 
 ```powershell
 python tools/check_gpu_budget.py
+python tools/setup_virtualhome_hint.py
 python tools/check_virtualhome_env.py
 python tools/test_virtualhome_windows_spike.py
 python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json

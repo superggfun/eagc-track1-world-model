@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Set
 
 GRACEFUL_FAILURE_REASONS = {
     "missing_virtualhome_executable",
+    "missing_virtualhome_python_api",
     "missing_virtualhome_simulator_path",
     "virtualhome_python_api_not_installed",
     "virtualhome_environment_not_ready",
@@ -27,6 +28,7 @@ def validate(status_path: Path) -> List[str]:
             errors.append(f"VirtualHome failure reason is not graceful or recognized: {reason!r}")
         if not status.get("download_hint") and reason in {
             "missing_virtualhome_executable",
+            "missing_virtualhome_python_api",
             "missing_virtualhome_simulator_path",
             "virtualhome_python_api_not_installed",
         }:
