@@ -40,7 +40,7 @@ List environment adapter capabilities without starting simulators:
 python tools/list_env_adapters.py
 ```
 
-This writes `outputs/adapter_capabilities/adapter_capabilities.json` and `.md`. LocalSim and VirtualHome are marked as validated backends. ALFRED offline is marked as synthetic-fixture validated. AI2-THOR, Habitat, and ProcTHOR are reserved but not validated.
+This writes `outputs/adapter_capabilities/adapter_capabilities.json` and `.md`. LocalSim and VirtualHome are marked as validated backends. MazeSim is marked as a validated synthetic topology stress backend. ALFRED offline is marked as synthetic-fixture validated. AI2-THOR, Habitat, and ProcTHOR are reserved but not validated.
 
 Targeted text:
 
@@ -53,6 +53,15 @@ Targeted LocalSim:
 ```powershell
 python tools/run_test_suite.py --tier targeted-local-sim --timeout-seconds 600
 ```
+
+Targeted MazeSim topology stress:
+
+```powershell
+python tools/run_test_suite.py --tier targeted-maze --timeout-seconds 300
+python -m validators.validate_maze_stress_test outputs/maze_stress/status.json
+```
+
+MazeSim is deterministic and synthetic. It does not call Qwen/vLLM, does not use external simulator assets, and is not an official EAGC runtime. The latest medium generated maze result was `success=True`, `goal_found=True`, `steps_taken=28`, `shortest_path_length=14`, `map_coverage=0.88`, `blocked_edges_encountered=2`, and `replans=7`.
 
 VirtualHome manual-play evidence tiers, optional:
 

@@ -34,6 +34,7 @@ Known limitations:
 - Docker has been prepared for mock-mode agent smoke testing; real vLLM access depends on host/container networking.
 - The v0.17 resource profile is a local workstation snapshot and is not a guarantee of performance under official infrastructure.
 - The current pipeline works with the existing long-context vLLM endpoint, but longer VirtualHome episodes, more frames, or concurrent workloads may require a separate lightweight endpoint in the future.
+- The latest MazeSim result is useful evidence for topology exploration and replanning mechanics, but it should not be interpreted as official EAGC runtime validation.
 
 Current safest claim:
 

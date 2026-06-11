@@ -50,6 +50,21 @@ RESOURCE_PROFILE_ARTIFACTS = [
     "virtualhome_vllm_resource_profile.md",
     "coexistence_smoke_status.json",
 ]
+MAZE_HELPERS = [
+    "env_adapters/maze_sim_env.py",
+    "tools/run_maze_stress_test.py",
+    "validators/validate_maze_stress_test.py",
+]
+MAZE_DOCS = [
+    "docs/version_status_v0.17.3.md",
+    "docs/version_status_v0.17.4.md",
+]
+MAZE_OUTPUT_ARTIFACTS = [
+    "world_model.json",
+    "episode_log.jsonl",
+    "maze_metrics.json",
+    "status.json",
+]
 FINAL_SUBMISSION_FILES = [
     "submission_package/final_submission_checklist.md",
     "submission_package/final_artifact_manifest.md",
@@ -184,6 +199,19 @@ def build_report() -> Dict[str, Any]:
     if not all(item["exists"] for item in resource_profile["artifacts"]):
         warnings.append("One or more resource profile runtime artifacts are missing; run python tools/run_test_suite.py --tier targeted-resource-profile if needed.")
 
+    maze = _maze_status()
+    for item in maze["helpers"]:
+        if not item["exists"]:
+            warnings.append(f"MazeSim helper is missing: {item['path']}")
+    if not maze["run_test_suite_includes_targeted_maze"]:
+        warnings.append("tools/run_test_suite.py does not appear to include targeted-maze.")
+    if not any(item["exists"] for item in maze["docs"]):
+        warnings.append("MazeSim v0.17.3/v0.17.4 status docs are missing.")
+    if maze["output_dir_exists"]:
+        warnings.append("MazeSim stress outputs exist locally and should remain ignored by git.")
+    else:
+        warnings.append("MazeSim stress outputs are not present locally; this is allowed for source-only submission checks.")
+
     final_submission = _final_submission_status()
     for item in final_submission["files"]:
         if not item["exists"]:
@@ -219,6 +247,7 @@ def build_report() -> Dict[str, Any]:
         "runtime_dirs": runtime_dirs,
         "virtualhome_evidence": virtualhome_evidence,
         "resource_profile": resource_profile,
+        "maze_sim": maze,
         "final_submission": final_submission,
         "tracked_violation_count": len(tracked_violations),
         "tracked_violations": tracked_violations,
@@ -272,6 +301,26 @@ def _resource_profile_status() -> Dict[str, Any]:
                 "exists": (output_dir / rel).exists(),
             }
             for rel in RESOURCE_PROFILE_ARTIFACTS
+        ],
+    }
+
+
+def _maze_status() -> Dict[str, Any]:
+    output_dir = PROJECT_ROOT / "outputs" / "maze_stress"
+    run_test_suite_path = PROJECT_ROOT / "tools" / "run_test_suite.py"
+    run_test_suite_text = run_test_suite_path.read_text(encoding="utf-8", errors="replace") if run_test_suite_path.exists() else ""
+    return {
+        "description": "MazeSim topology stress artifacts are optional runtime outputs. Presence is recorded for audit, but outputs must stay untracked.",
+        "helpers": [{"path": rel, "exists": (PROJECT_ROOT / rel).exists()} for rel in MAZE_HELPERS],
+        "docs": [{"path": rel, "exists": (PROJECT_ROOT / rel).exists()} for rel in MAZE_DOCS],
+        "run_test_suite_includes_targeted_maze": "targeted-maze" in run_test_suite_text,
+        "output_dir_exists": output_dir.exists(),
+        "artifacts": [
+            {
+                "path": f"outputs/maze_stress/{rel}",
+                "exists": (output_dir / rel).exists(),
+            }
+            for rel in MAZE_OUTPUT_ARTIFACTS
         ],
     }
 
@@ -366,6 +415,29 @@ def _markdown(report: Dict[str, Any]) -> str:
         lines.append(f"| `{item['path']}` | `{item['exists']}` |")
     lines.extend(["", "### Local Runtime Artifacts", "", "| artifact | exists |", "|---|---:|"])
     for item in rp.get("artifacts", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(["", "## MazeSim Topology Stress", ""])
+    maze = report.get("maze_sim", {})
+    lines.append(maze.get("description", ""))
+    lines.extend(["", "### Helpers", "", "| file | exists |", "|---|---:|"])
+    for item in maze.get("helpers", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(["", "### Docs", "", "| file | exists |", "|---|---:|"])
+    for item in maze.get("docs", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(
+        [
+            "",
+            f"- run_test_suite_includes_targeted_maze: `{maze.get('run_test_suite_includes_targeted_maze')}`",
+            f"- output_dir_exists: `{maze.get('output_dir_exists')}`",
+            "",
+            "### Local Runtime Artifacts",
+            "",
+            "| artifact | exists |",
+            "|---|---:|",
+        ]
+    )
+    for item in maze.get("artifacts", []):
         lines.append(f"| `{item['path']}` | `{item['exists']}` |")
     lines.extend(["", "## Final Submission Dry Run", ""])
     final = report.get("final_submission", {})

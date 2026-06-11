@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.17.3 maze topology stress test.
+Current version: v0.17.4 final submission refresh after MazeSim topology stress test.
 
-Current stable tag: `v0.17.3-maze-topology-stress-test`
+Current stable tag: `v0.17.4-final-submission-refresh-maze`
 
 Current status:
 
@@ -344,6 +344,8 @@ python tools/run_test_suite.py --tier targeted-maze --timeout-seconds 300
 ```
 
 MazeSim is a lightweight synthetic LocalSim-style benchmark for unknown-topology exploration, dead ends, loops, blocked corridors, replanning, and map coverage metrics. It writes `outputs/maze_stress/world_model.json`, `episode_log.jsonl`, `maze_metrics.json`, and `status.json`. It is not an official EAGC runtime, does not use external simulator assets, does not call Qwen, and does not train a model. It complements VirtualHome: VirtualHome stresses household scene graph/action evidence, while MazeSim stresses topology exploration and planning.
+
+Latest targeted-maze result: `success=True`, `goal_found=True`, `steps_taken=28`, `shortest_path_length=14`, `map_coverage=0.88`, `blocked_edges_encountered=2`, and `replans=7`.
 
 Sequence frames should be local files named in deterministic order:
 

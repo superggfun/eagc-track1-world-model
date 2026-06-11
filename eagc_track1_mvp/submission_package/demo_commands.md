@@ -45,6 +45,28 @@ Key outputs:
 - `outputs/run_audit.json`
 - `track1_score.json` in the isolated run directory
 
+## MazeSim Topology Stress Demo
+
+```powershell
+python tools/run_test_suite.py --tier targeted-maze --timeout-seconds 300
+python -m validators.validate_maze_stress_test outputs/maze_stress/status.json
+```
+
+Key outputs:
+
+- `outputs/maze_stress/world_model.json`
+- `outputs/maze_stress/episode_log.jsonl`
+- `outputs/maze_stress/maze_metrics.json`
+- `outputs/maze_stress/status.json`
+
+Notes:
+
+- `targeted-maze` is not part of the deterministic `fast` tier.
+- MazeSim does not depend on an external simulator.
+- MazeSim does not use Qwen/vLLM.
+- MazeSim is a synthetic topology stress test, not an official EAGC runtime.
+- Latest medium generated maze result: `success=True`, `goal_found=True`, `steps_taken=28`, `shortest_path_length=14`, `map_coverage=0.88`, `blocked_edges_encountered=2`, `replans=7`.
+
 ## Visual Evidence Demo
 
 ```powershell

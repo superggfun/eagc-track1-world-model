@@ -33,9 +33,15 @@ This checklist is for a local dry run before an official EAGC Track 1 qualificat
   - `outputs/resource_profile/virtualhome_vllm_resource_profile.json`
   - `outputs/resource_profile/virtualhome_vllm_resource_profile.md`
   - `outputs/resource_profile/coexistence_smoke_status.json`
+- [ ] MazeSim topology stress outputs:
+  - `outputs/maze_stress/world_model.json`
+  - `outputs/maze_stress/episode_log.jsonl`
+  - `outputs/maze_stress/maze_metrics.json`
+  - `outputs/maze_stress/status.json`
 - [ ] Test suite reports:
   - `outputs/test_suite_reports/*_fast_report.json`
   - `outputs/test_suite_reports/*_targeted-text_report.json`
+  - `outputs/test_suite_reports/*_targeted-maze_report.json`
   - optional VirtualHome targeted reports if the simulator was manually running.
 
 These optional evidence artifacts are local runtime outputs and are not committed to git. Include them only if the official submission instructions request runtime artifacts.
@@ -48,6 +54,7 @@ These optional evidence artifacts are local runtime outputs and are not committe
 - [ ] ALFRED dataset.
 - [ ] ProcTHOR / AI2-THOR / Habitat assets.
 - [ ] `outputs/` raw frames.
+- [ ] `outputs/maze_stress/` runtime artifacts.
 - [ ] Raw Qwen responses.
 - [ ] `dist/` directory contents in git.
 - [ ] `submission_bundle/` in git.
@@ -59,6 +66,8 @@ These optional evidence artifacts are local runtime outputs and are not committe
 - Lightweight vLLM: documented as fallback only; not started.
 - No container changes were made.
 - No model training or fine-tuning was performed.
+- MazeSim targeted topology stress passed with success=true, goal_found=true, steps_taken=28, shortest_path_length=14, map_coverage=0.88, blocked_edges_encountered=2, and replans=7.
+- MazeSim is synthetic and does not claim official EAGC runtime validation.
 
 ## Final Local Checks
 
@@ -69,6 +78,7 @@ python tools/create_submission_bundle.py
 python tools/build_report_pdf.py
 python tools/run_test_suite.py --tier fast
 python tools/run_test_suite.py --tier targeted-text --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-maze --timeout-seconds 300
 python tools/pre_submission_audit.py
 python tools/check_github_push_readiness.py
 ```

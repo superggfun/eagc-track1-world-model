@@ -1,6 +1,6 @@
 # Final Artifact Manifest
 
-This manifest describes the intended v0.17.2 final handoff artifacts for the EAGC Track 1 local MVP dry run. It is a source-controlled checklist; generated runtime artifacts remain outside git.
+This manifest describes the intended v0.17.4 final handoff artifacts for the EAGC Track 1 local MVP dry run after the MazeSim topology stress refresh. It is a source-controlled checklist; generated runtime artifacts remain outside git.
 
 ## Core Submission Artifacts
 
@@ -23,7 +23,7 @@ This manifest describes the intended v0.17.2 final handoff artifacts for the EAG
 
 - Baseline commit before this handoff: `64030ec`
 - Baseline tag before this handoff: `v0.17.1-final-submission-dry-run`
-- Intended handoff tag: `v0.17.2-final-submission-handoff`
+- Intended handoff tag: `v0.17.4-final-submission-refresh-maze`
 - For the exact handoff commit after tagging, run:
 
 ```powershell
@@ -38,6 +38,7 @@ These artifacts are useful for review but are not committed to git:
 - VirtualHome evidence report: `outputs/virtualhome_spike/visual_symbolic_evidence_report.md`
 - VirtualHome resource profile: `outputs/resource_profile/virtualhome_vllm_resource_profile.md`
 - Coexistence smoke status: `outputs/resource_profile/coexistence_smoke_status.json`
+- MazeSim stress outputs: `outputs/maze_stress/world_model.json`, `episode_log.jsonl`, `maze_metrics.json`, and `status.json`
 - Test suite reports: `outputs/test_suite_reports/`
 - Pre-submission audit: `outputs/pre_submission_audit/audit_report.md`
 - GitHub readiness report: `outputs/final_submission/github_push_readiness.md`
@@ -53,6 +54,7 @@ These artifacts are useful for review but are not committed to git:
 - `dist/`, except as a generated local artifact.
 - `submission_bundle/`, except as a generated local artifact.
 - `source_pack/`.
+- `outputs/maze_stress/` runtime artifacts.
 
 ## Handoff Notes
 
@@ -60,3 +62,5 @@ These artifacts are useful for review but are not committed to git:
 - Lightweight vLLM is documented only as a fallback.
 - No local vLLM container changes were made.
 - No model training or fine-tuning was performed.
+- MazeSim targeted topology stress passed with success=true, goal_found=true, steps_taken=28, shortest_path_length=14, map_coverage=0.88, blocked_edges_encountered=2, and replans=7.
+- MazeSim is synthetic and does not claim official EAGC runtime validation.

@@ -6,7 +6,7 @@ This project develops a local MVP and evaluation baseline for EAGC 2026 Track 1.
 
 The inference path uses a local Qwen3.6-35B-A3B-NVFP4 model served through an OpenAI-compatible vLLM endpoint. No model training, fine-tuning, distillation, or online model API calls are used in the validated local runs.
 
-Current readiness state as of v0.16.7: LocalSim, the official-style Track1 procedure runner, visual-local hybrid evidence reporting, Docker/source packaging, ALFRED synthetic fixture conversion, and VirtualHome manual-play evidence smoke are prepared. Official EAGC runtime, hidden evaluation environments, real ProcTHOR/Habitat/AI2-THOR execution, fully automated VirtualHome startup, real ALFRED dataset conversion, and model training remain unvalidated.
+Current readiness state as of v0.17.4: LocalSim, the official-style Track1 procedure runner, visual-local hybrid evidence reporting, Docker/source packaging, ALFRED synthetic fixture conversion, VirtualHome manual-play evidence smoke, and MazeSim synthetic topology stress are prepared. Official EAGC runtime, hidden evaluation environments, real ProcTHOR/Habitat/AI2-THOR execution, fully automated VirtualHome startup, real ALFRED dataset conversion, lightweight vLLM, and model training remain unvalidated.
 
 v0.17 resource audit status: the validated VirtualHome evidence path works with the existing long-context Qwen/vLLM endpoint. The resource snapshot recorded an RTX 5090 with 32607 MiB total memory, 31674 MiB used, and 514 MiB free; `openclaw-vllm` was running on `127.0.0.1:8000`; VirtualHome manual-play was listening on `127.0.0.1:8080`; Qwen text smoke latency was about 0.141 seconds; VirtualHome frame vision smoke latency was about 0.696 seconds; multi-frame grounding averaged about 2.722 seconds per frame. No container changes were made, and lightweight vLLM remains a documented fallback only.
 
@@ -226,6 +226,8 @@ The maze stress runner writes:
 
 Metrics include goal success, steps taken, shortest-path length, path efficiency, visited cells, map coverage, dead ends entered, backtracks, replans, and blocked edges encountered. This benchmark is not an official EAGC runtime and does not replace ProcTHOR, Habitat, AI2-THOR, or VirtualHome. It complements VirtualHome by focusing on topology exploration and planning rather than household scene graph or visual grounding.
 
+Latest targeted-maze validation result for the medium generated maze: `success=True`, `goal_found=True`, `steps_taken=28`, `shortest_path_length=14`, `map_coverage=0.88`, `blocked_edges_encountered=2`, and `replans=7`.
+
 ## Local Evaluation
 
 Current local gates include:
@@ -248,6 +250,7 @@ Recent validated status:
 - Source zip clean reproducibility check passed.
 - Submission bundle generation passed.
 - VirtualHome manual-play evidence smoke passed through scene graph extraction, 4/4 household task execution, frame export, single-frame Qwen vision comparison, and 5/5 multi-frame Qwen grounding.
+- MazeSim targeted topology stress passed; the medium generated maze found the goal with map coverage 0.88 while encountering 2 blocked edges and triggering 7 replans.
 
 These are local MVP results, not official EAGC scores.
 
@@ -307,6 +310,7 @@ The final official submission format remains pending organizer clarification.
 ## Limitations
 
 - LocalSim is self-built and is not official hidden evaluation.
+- MazeSim is synthetic and is not official hidden evaluation or an official runtime.
 - `local_heuristic_score` is a local debugging metric, not an official score.
 - No official EAGC runtime/API/schema is integrated yet.
 - AI2-THOR/ProcTHOR remains blocked by platform/runtime issues and is not part of the stable path.
