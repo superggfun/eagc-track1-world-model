@@ -155,6 +155,36 @@ Conclusion:
 - The blocker is a missing Vulkan runtime dependency (`libvulkan1`), not an AI2-THOR Python import problem.
 - No additional AI2-THOR versions were tried.
 
+Remote Vulkan dependency fix attempt:
+
+- `libvulkan1` and `vulkan-tools` were installed on the remote Ubuntu host.
+- `vulkaninfo --summary` runs, but it only reports an llvmpipe CPU Vulkan device:
+
+  ```text
+  deviceName = llvmpipe (LLVM 15.0.7, 256 bits)
+  deviceType = PHYSICAL_DEVICE_TYPE_CPU
+  ```
+
+- After installing Vulkan runtime packages, CloudRendering advanced past prerequisite validation and downloaded the Unity build.
+- The Unity process then exited with `returncode=-11`.
+- `status.json` was saved.
+- `frame.png` saved: no.
+- `metadata.json` saved: no.
+- New failure reason:
+
+  ```text
+  Unity process has exited - check ~/.config/unity3d/Allen\ Institute\ for\ Artificial\ Intelligence/AI2-THOR/Player.log for errors. Confirm that Vulkan is properly configured on this system using vulkaninfo from the vulkan-utils package. returncode=-11
+  ```
+
+Updated conclusion:
+
+- Installing `libvulkan1` fixes the immediate missing-runtime validation error.
+- The remote host still does not expose NVIDIA Vulkan through `vulkaninfo`; only llvmpipe is visible.
+- AI2-THOR CloudRendering still fails before frame/metadata generation.
+- The remote RTX 4090 CUDA compute path is healthy (`nvidia-smi` works), but CUDA availability does not imply that Vulkan/EGL graphics rendering is available to Unity.
+- This points to a missing NVIDIA Vulkan/EGL graphics stack in the remote image rather than an EAGC agent-code problem.
+- No further dependency changes were attempted in this pass.
+
 ## Latest Results
 
 | Route | Result | Notes |
@@ -168,6 +198,7 @@ Conclusion:
 | Docker CloudRendering after Vulkan fix | timeout | After adding `libvulkan1`, `vulkan-tools`, and `NVIDIA_DRIVER_CAPABILITIES=all`, CloudRendering proceeded to AI2-THOR build download but still exceeded 180 seconds. |
 | Docker CloudRendering with persistent cache | timeout | With `/root/.ai2thor` persisted and timeout increased to 420 seconds, the CloudRendering build reached 100 percent download but still did not initialize or save frame/metadata. A second cached retry with 240 seconds also timed out. |
 | Remote RTX 4090 CloudRendering | failed prerequisite validation | AI2-THOR 5.0.0 imports successfully, but CloudRendering requires missing system package `libvulkan1`; no frame/metadata was saved. |
+| Remote RTX 4090 after Vulkan dependency fix | Unity crash | `libvulkan1` and `vulkan-tools` are installed; `vulkaninfo` only shows llvmpipe CPU Vulkan, and CloudRendering exits with `returncode=-11`; no frame/metadata was saved. |
 
 ## Error Logs
 
@@ -190,6 +221,7 @@ Current recommendation:
 - Do not spend more time on Windows native AI2-THOR for this branch; AI2-THOR 5.0.0 reports no Windows build for the tested commit.
 - WSL2 CloudRendering is still blocked by Controller initialization timeout despite Python/AI2-THOR/GPU availability.
 - The isolated Docker route is the most promising local route because GPU and Vulkan prerequisites can be satisfied, but it still times out during/after Unity build download and initialization. A longer offline build-cache strategy or pre-downloaded AI2-THOR build may be needed before another attempt.
-- The remote RTX 4090 Ubuntu route imports AI2-THOR and CloudRendering successfully, but fails prerequisite validation because `libvulkan1` is missing.
+- The remote RTX 4090 Ubuntu route imports AI2-THOR and CloudRendering successfully. After installing `libvulkan1` and `vulkan-tools`, prerequisite validation passes, but `vulkaninfo` only exposes llvmpipe CPU Vulkan and Unity exits with `returncode=-11`.
+- Treat this as a remote image graphics-stack limitation: CUDA compute is available, but NVIDIA Vulkan/EGL rendering is not exposed to Unity.
 - For near-term EAGC Track 1 progress, keep LocalSim and visual-local hybrid as the stable local MVP baseline.
-- For future simulator integration, prefer a clean remote/native Linux GPU machine or a purpose-built Linux Docker image with Vulkan/EGL/OpenGL dependencies installed and, ideally, a pre-seeded AI2-THOR build cache. If AI2-THOR remains unstable, evaluate Habitat or another simulator separately.
+- For future simulator integration, use either a simulator-ready Ubuntu image or a native Linux GPU environment with NVIDIA Vulkan ICD and EGL/OpenGL graphics libraries installed and visible through `vulkaninfo`, ideally with a pre-seeded AI2-THOR build cache. If AI2-THOR remains unstable, evaluate Habitat or another simulator separately.

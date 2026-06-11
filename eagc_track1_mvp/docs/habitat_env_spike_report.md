@@ -314,6 +314,7 @@ Conclusion:
 - Remote Ubuntu RTX 4090 validates Habitat-Sim install/import and test-scene availability.
 - Remote Ubuntu RTX 4090 Habitat-Sim RGB smoke did not succeed.
 - The remaining blocker is renderer/EGL configuration, not Python package installation.
+- As with AI2-THOR, `nvidia-smi` confirms CUDA compute visibility, but that does not guarantee headless EGL rendering or NVIDIA graphics ICD availability.
 
 ## Latest Results
 
@@ -377,7 +378,7 @@ Observed failure reasons in this run:
 
 ## Recommendation
 
-Habitat is not yet fully validated. The Windows conda route did not provide a usable `habitat-sim` package. The WSL2 route installs and imports Habitat-Sim and downloads official test scenes, but headless RGB rendering fails at EGL context creation. The remote RTX 4090 Ubuntu route also installs/imports Habitat-Sim and has test scenes available, but RGB rendering fails at headless EGL display creation.
+Habitat is not yet fully validated. The Windows conda route did not provide a usable `habitat-sim` package. The WSL2 route installs and imports Habitat-Sim and downloads official test scenes, but headless RGB rendering fails at EGL context creation. The remote RTX 4090 Ubuntu route also installs/imports Habitat-Sim and has test scenes available, but RGB rendering fails at headless EGL display creation. CUDA compute visibility is therefore not sufficient evidence that the simulator rendering stack is ready.
 
 Recommended next steps:
 
@@ -404,6 +405,6 @@ Current direction assessment:
 - Habitat remains a plausible public simulator direction, but this Windows machine has not yet reached the rendering layer.
 - WSL2 has now reached the rendering layer and fails specifically at headless EGL context creation.
 - Remote Ubuntu RTX 4090 has also reached the rendering layer and fails specifically at headless EGL context creation.
-- The most likely viable next route is EGL/OpenGL system-library configuration or a simulator-ready Docker image with known-good EGL support.
+- The most likely viable next route is a simulator-ready Ubuntu image, a native Linux GPU host with NVIDIA EGL/OpenGL/Vulkan ICDs correctly exposed, or a Docker GPU image with known-good headless rendering support.
 - For near-term EAGC Track 1 work, keep LocalSim and visual-local hybrid as the stable baseline.
 - `data/`, scene files, and generated outputs are ignored and must not be committed.
