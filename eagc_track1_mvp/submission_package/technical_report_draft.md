@@ -6,6 +6,8 @@ This project develops a local MVP and evaluation baseline for EAGC 2026 Track 1.
 
 The inference path uses a local Qwen3.6-35B-A3B-NVFP4 model served through an OpenAI-compatible vLLM endpoint. No model training, fine-tuning, distillation, or online model API calls are used in the validated local runs.
 
+Current readiness state as of v0.15.3: LocalSim, the official-style Track1 procedure runner, visual-local hybrid evidence reporting, Docker/source packaging, and ALFRED synthetic fixture conversion are prepared. Official EAGC runtime, hidden evaluation environments, real ProcTHOR/Habitat/AI2-THOR execution, real VirtualHome executable smoke, real ALFRED dataset conversion, and model training remain unvalidated.
+
 ## Method Overview
 
 The system separates perception, memory, planning, execution, evaluation, and auditing:
@@ -46,6 +48,21 @@ The Docker package builds a lightweight agent image and expects external model s
 An optional ALFRED offline trajectory adapter is prepared as a public household-task alignment path. It reads local `traj_data.json` files when the user has manually provided ALFRED data, extracts task instructions, high-level subgoals, low-level actions, object mentions, and scene metadata, then writes approximate `world_model.json`, `episode_log.jsonl`, and `alfred_task_summary.json` artifacts.
 
 This path does not launch AI2-THOR, does not render frames, does not execute actions online, and does not train a model. ALFRED data is not redistributed with this project.
+
+The included fixture `tests/fixtures/alfred/sample_traj_data.json` is explicitly synthetic (`fixture_type = synthetic_alfred_like`). It validates conversion logic only and is not benchmark evidence or real ALFRED data.
+
+## Test Suite Status
+
+The test suite is decomposed to keep development checks bounded:
+
+- `fast`: deterministic; compiles source, runs mock-only smoke, and converts the synthetic ALFRED fixture. It does not call real Qwen, real vision, external simulators, local images, or real ALFRED data.
+- `targeted-text`: minimal real Qwen text endpoint smoke.
+- `targeted-vision`: real Qwen vision smoke for visual-local hybrid tasks.
+- `targeted-local-sim`: LocalSim real smoke; latest observed runtime is approximately 283 seconds.
+- `targeted-track1`: official-style Track1 procedure smoke.
+- `standard` and `full`: longer checks for packaging and robustness; these are not routine edit gates.
+
+Each `tools/run_test_suite.py` run writes JSON and Markdown reports under `outputs/test_suite_reports/`.
 
 ## World Model Design
 

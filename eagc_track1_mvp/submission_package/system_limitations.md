@@ -11,6 +11,10 @@ Known limitations:
 - AI2-THOR / ProcTHOR environment integration remains blocked and is not part of the validated path.
 - ALFRED support is currently an offline trajectory parser only; it does not run AI2-THOR or validate online closed-loop execution.
 - ALFRED offline conversion is approximate and may not expose complete visual state, object locations, or simulator metadata.
+- The included ALFRED-like fixture is synthetic and only verifies adapter mechanics.
+- Real ALFRED dataset conversion has not been validated on this machine.
+- VirtualHome remains setup diagnostics only; no real Windows executable smoke has succeeded yet.
+- The official EAGC runtime, official hidden evaluation environments, and official scoring are not available in this local package.
 - There is no trained student model.
 - No model fine-tuning or distillation has been performed.
 - Performance is not yet optimized.

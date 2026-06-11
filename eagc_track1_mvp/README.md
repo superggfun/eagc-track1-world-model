@@ -2,17 +2,21 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.11.2 technical report submission docs.
+Current version: v0.15.3 submission readiness refresh and audit.
 
-Current stable tag: `v0.11.2-technical-report-submission-docs`
+Current stable tag: `v0.15.2-targeted-suite-controls`
 
 Current status:
 
 - LocalSim Track 1 MVP
+- Official-style Track1 procedure runner
+- Visual-local hybrid prototype with evidence reporting
 - Real Qwen3.6 vLLM integration
-- Randomized LocalSim robustness evaluation
+- ALFRED offline adapter with synthetic fixture conversion
+- VirtualHome setup diagnostics only
+- Docker/source package readiness
 - No training yet
-- ProcTHOR/AI2-THOR not integrated yet
+- Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, real VirtualHome executable smoke, and real ALFRED dataset conversion are not validated yet
 
 The demo loop:
 
@@ -39,6 +43,14 @@ The pre-submission readiness materials are in `submission_package/`:
 - `checklist.md`
 
 This package is for qualification-submission preparation, teacher review, and technical report drafting. It does not claim official EAGC results. LocalSim remains a self-built local environment, visual-local hybrid remains symbolic, and no model training has been performed.
+
+Run the pre-submission audit after packaging:
+
+```powershell
+python tools/pre_submission_audit.py
+```
+
+The audit writes `outputs/pre_submission_audit/audit_report.json` and `.md`, checks key submission documents, reports dirty git state, verifies that `v0.15.2-targeted-suite-controls` exists, and warns about ignored runtime artifact directories such as `outputs/`, `dist/`, `submission_bundle/`, and local datasets.
 
 ## Requirements
 

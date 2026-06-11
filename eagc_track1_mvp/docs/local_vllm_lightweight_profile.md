@@ -61,3 +61,7 @@ If VirtualHome and vLLM cannot share GPU memory reliably:
 3. Run Qwen / vLLM post-processing afterward.
 
 This time-sliced workflow is preferred over modifying the original long-context vLLM container.
+
+## v0.15.3 Status
+
+The lightweight vLLM profile is documentation only. The original local Qwen vLLM Docker container should not be modified, restarted, deleted, or managed by this project automation. Current validated test tiers use the existing external endpoint only when explicitly running targeted real-Qwen checks such as `targeted-text`, `targeted-vision`, `targeted-local-sim`, or `targeted-track1`.

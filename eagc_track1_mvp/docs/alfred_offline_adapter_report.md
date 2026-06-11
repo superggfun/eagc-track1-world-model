@@ -98,6 +98,12 @@ python tests/smoke_test_alfred_offline_adapter.py
 
 The v0.15.1 adapter, checker, converter, validator, synthetic fixture smoke test, real-data graceful smoke test, and documentation are prepared.
 
+v0.15.3 status:
+
+- Synthetic fixture conversion is part of the deterministic fast tier.
+- Real ALFRED dataset conversion is supported by CLI but has not been validated locally because no real ALFRED data path is configured.
+- The adapter remains an offline converter only and does not run AI2-THOR.
+
 The synthetic fixture is located at:
 
 ```text

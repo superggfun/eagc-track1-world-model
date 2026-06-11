@@ -26,11 +26,33 @@ Fast tier:
 python tools/run_test_suite.py --tier fast
 ```
 
-Targeted tier:
+Fast is deterministic and does not call real Qwen, real vision, external simulators, local images, or real ALFRED data.
+
+List tiers:
 
 ```powershell
-python tools/run_test_suite.py --tier targeted
+python tools/run_test_suite.py --list-tiers
 ```
+
+Targeted text:
+
+```powershell
+python tools/run_test_suite.py --tier targeted-text --timeout-seconds 300
+```
+
+Targeted LocalSim:
+
+```powershell
+python tools/run_test_suite.py --tier targeted-local-sim --timeout-seconds 600
+```
+
+Aggregate targeted tier:
+
+```powershell
+python tools/run_test_suite.py --tier targeted --timeout-seconds 900 --continue-on-failure
+```
+
+The aggregate targeted tier can take several minutes and records per-command runtime reports under `outputs/test_suite_reports/`.
 
 Standard tier:
 
@@ -90,6 +112,12 @@ Clean source package check:
 
 ```powershell
 python tools/check_source_package_repro.py --zip-path dist/eagc_track1_mvp_source.zip
+```
+
+Pre-submission audit:
+
+```powershell
+python tools/pre_submission_audit.py
 ```
 
 ## Docker Reproducibility

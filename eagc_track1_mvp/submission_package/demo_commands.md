@@ -15,7 +15,15 @@ python tools/run_test_suite.py --tier fast
 ## Targeted Gate
 
 ```powershell
-python tools/run_test_suite.py --tier targeted
+python tools/run_test_suite.py --list-tiers
+python tools/run_test_suite.py --tier targeted-text --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-local-sim --timeout-seconds 600
+```
+
+Aggregate targeted smoke is available, but may take several minutes:
+
+```powershell
+python tools/run_test_suite.py --tier targeted --timeout-seconds 900 --continue-on-failure
 ```
 
 ## Standard Gate
@@ -68,6 +76,8 @@ Expected output:
 ```powershell
 python tools/generate_project_report.py
 python tools/package_source.py
+python tools/create_submission_bundle.py
+python tools/pre_submission_audit.py
 ```
 
 Expected output:

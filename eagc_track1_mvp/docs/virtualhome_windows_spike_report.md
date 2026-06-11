@@ -157,6 +157,13 @@ Current v0.14.3 readiness assessment:
 - Converted world model / episode log generated: no.
 - Recommendation: do not enter v0.14.4 VirtualHome to world-model integration until a local VirtualHome repo and Windows Unity simulator executable are provided outside this EAGC project tree.
 
+v0.15.3 refresh:
+
+- VirtualHome remains diagnostics/setup-readiness only.
+- No real Windows executable smoke has succeeded.
+- No VirtualHome scene graph, program log, frame, or converted world model should be described as validated.
+- VirtualHome is not included in fast, targeted, standard, or full submission gates.
+
 Local RTX 5090 runtime note:
 
 - The workstation has one RTX 5090 32GB GPU.

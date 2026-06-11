@@ -24,3 +24,8 @@ This checklist maps the current local MVP to likely EAGC qualification submissio
 | AI2-THOR / ProcTHOR | Not validated | Blocked by platform/runtime issue; not in stable path. |
 | Training | None | No model training or fine-tuning has been performed. |
 | Hardware disclosure | Available | RTX 5090 32GB local development/testing. |
+| Test tiers | Prepared | `fast`, `targeted-text`, `targeted-vision`, `targeted-local-sim`, `targeted-track1`, `targeted`, `standard`, and `full` are available. |
+| Fast tier | Stable | Deterministic; no real Qwen, real vision, local images, external simulators, or real ALFRED data. |
+| ALFRED adapter | Fixture validated | Synthetic fixture conversion passes; real ALFRED dataset conversion is not yet validated. |
+| VirtualHome | Diagnostics only | Real Windows executable smoke has not succeeded. |
+| Pre-submission audit | Prepared | `python tools/pre_submission_audit.py`. |

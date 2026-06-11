@@ -6,6 +6,8 @@ No model training or fine-tuning has been performed yet.
 
 The current project uses inference only.
 
+No student model, distillation run, reinforcement learning run, or supervised fine-tuning run has been produced for this readiness package.
+
 ## Model Used For Inference
 
 - Model family/name used locally: Qwen3.6-35B-A3B-NVFP4.
@@ -20,6 +22,7 @@ The current project uses inference only.
 - Visual sequence smoke tests: local bedroom images placed under `assets/test_sequences/bedroom_sequence/`.
 - The visual images are local smoke-test resources and are not committed to git.
 - ALFRED offline adapter: optional parsing of user-provided local ALFRED `traj_data.json` files for public household task trajectory alignment.
+- Synthetic ALFRED-like fixture: `tests/fixtures/alfred/sample_traj_data.json` is a tiny synthetic conversion test fixture, not real ALFRED data and not benchmark evidence.
 - ALFRED data is not downloaded automatically, not redistributed, and not committed to git.
 
 ## Simulator Status
