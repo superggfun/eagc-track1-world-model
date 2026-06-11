@@ -85,10 +85,26 @@ def _auto_detect_simulator_path() -> str:
     configured = _load_config_path()
     if configured:
         return configured
-    for candidate in candidate_simulator_paths():
-        if candidate.exists() and candidate.is_file() and candidate.suffix.lower() == ".exe":
-            return str(candidate)
+    candidates = [
+        candidate
+        for candidate in candidate_simulator_paths()
+        if candidate.exists() and candidate.is_file() and candidate.suffix.lower() == ".exe"
+    ]
+    candidates.sort(key=_simulator_exe_rank)
+    for candidate in candidates:
+        return str(candidate)
     return ""
+
+
+def _simulator_exe_rank(path: Path) -> tuple[int, str]:
+    name = path.name.lower()
+    if "crashhandler" in name:
+        return (100, name)
+    if "virtualhome" in name:
+        return (0, name)
+    if "unity" in name:
+        return (10, name)
+    return (50, name)
 
 
 def _load_config_path() -> str:

@@ -4,6 +4,8 @@ import argparse
 import importlib
 import json
 import os
+import socket
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -58,11 +60,22 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
     try:
         comm_module = _import_comm_module()
         UnityCommunication = getattr(comm_module, "UnityCommunication")
-        kwargs = {"port": port}
+        kwargs = {"port": str(port), "logging": False}
         simulator_path = str(env_status["virtualhome_simulator_path"])
         if simulator_path:
             kwargs["file_name"] = simulator_path
-        comm = UnityCommunication(**kwargs)
+        manual_proc: subprocess.Popen[Any] | None = None
+        try:
+            comm = UnityCommunication(**kwargs)
+        except Exception as exc:
+            if _can_fallback_manual_launch(exc, simulator_path):
+                manual_proc = _launch_windows_simulator(simulator_path, port, output_dir)
+                _wait_for_port("127.0.0.1", port, timeout_seconds=60)
+                status["manual_windows_launch_used"] = True
+                status["manual_windows_launch_pid"] = manual_proc.pid
+                comm = UnityCommunication(port=str(port))
+            else:
+                raise
         status["simulator_started"] = True
 
         _call_if_exists(comm, "reset", scene_id)
@@ -95,10 +108,24 @@ def run_spike(output_dir: Path, scene_id: int, port: int) -> Dict[str, Any]:
         status["success"] = True
         status["reason"] = "virtualhome_spike_completed"
     except Exception as exc:  # VirtualHome APIs vary; capture exact failure.
-        status["reason"] = "virtualhome_runtime_error"
+        if isinstance(exc, TimeoutError):
+            status["reason"] = "virtualhome_simulator_connection_timeout"
+            status["manual_start_hint"] = (
+                "The Windows executable exists and can be launched, but the Python API could not connect "
+                "to the HTTP port. Try starting VirtualHome.exe manually, choose Windowed mode if prompted, "
+                "press Play, then rerun this smoke."
+            )
+        else:
+            status["reason"] = "virtualhome_runtime_error"
         status["error_type"] = type(exc).__name__
         status["error_message"] = str(exc)
     finally:
+        if "manual_proc" in locals() and manual_proc is not None and manual_proc.poll() is None:
+            manual_proc.terminate()
+            try:
+                manual_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                manual_proc.kill()
         _write_status(output_dir, status)
     return status
 
@@ -117,6 +144,50 @@ def _call_if_exists(obj: Any, name: str, *args: Any) -> Any:
     if callable(method):
         return method(*args)
     return None
+
+
+def _can_fallback_manual_launch(exc: Exception, simulator_path: str) -> bool:
+    if not simulator_path or os.name != "nt":
+        return False
+    message = str(exc).lower()
+    return "could not be launched" in message or "environment was found" in message
+
+
+def _launch_windows_simulator(simulator_path: str, port: int, output_dir: Path) -> subprocess.Popen[Any]:
+    exe = Path(simulator_path)
+    log_path = output_dir / f"VirtualHome_Player_{port}.log"
+    args = [
+        str(exe),
+        "-screen-fullscreen",
+        "0",
+        "-screen-quality",
+        "4",
+        f"-http-port={port}",
+        "-logFile",
+        str(log_path),
+    ]
+    return subprocess.Popen(
+        args,
+        cwd=str(exe.parent),
+        env=os.environ.copy(),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _wait_for_port(host: str, port: int, timeout_seconds: int) -> None:
+    deadline = time.time() + timeout_seconds
+    last_error = ""
+    while time.time() < deadline:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.0)
+            try:
+                sock.connect((host, port))
+                return
+            except OSError as exc:
+                last_error = str(exc)
+        time.sleep(1.0)
+    raise TimeoutError(f"VirtualHome simulator did not open {host}:{port} within {timeout_seconds}s. Last error: {last_error}")
 
 
 def _get_scene_graph(comm: Any) -> Dict[str, Any]:

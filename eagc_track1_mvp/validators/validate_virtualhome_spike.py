@@ -12,6 +12,8 @@ GRACEFUL_FAILURE_REASONS = {
     "missing_virtualhome_simulator_path",
     "virtualhome_python_api_not_installed",
     "virtualhome_environment_not_ready",
+    "virtualhome_simulator_connection_timeout",
+    "virtualhome_runtime_error",
 }
 
 

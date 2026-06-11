@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.16 VirtualHome real Windows smoke diagnostics.
+Current version: v0.16.1 VirtualHome external resources and runtime blocker.
 
-Current stable tag: `v0.15.3-submission-readiness-audit`
+Current stable tag: `v0.16-virtualhome-real-smoke-blocker`
 
 Current status:
 
@@ -13,10 +13,10 @@ Current status:
 - Visual-local hybrid prototype with evidence reporting
 - Real Qwen3.6 vLLM integration
 - ALFRED offline adapter with synthetic fixture conversion
-- VirtualHome setup diagnostics with real Windows smoke readiness checks
+- VirtualHome external repo/API and Windows executable prepared; runtime connection still blocked
 - Docker/source package readiness
 - No training yet
-- Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, successful real VirtualHome executable smoke, and real ALFRED dataset conversion are not validated yet
+- Official EAGC runtime, ProcTHOR, Habitat, AI2-THOR, successful VirtualHome scene-graph/program execution, and real ALFRED dataset conversion are not validated yet
 
 The demo loop:
 

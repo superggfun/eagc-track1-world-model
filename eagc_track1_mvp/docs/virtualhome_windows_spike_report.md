@@ -227,6 +227,45 @@ Latest v0.16 local probe on 2026-06-11:
 - Frame saved: no.
 - Recommendation: provide the real VirtualHome repo/API and Windows Unity executable outside the project tree before retrying real smoke.
 
+Latest v0.16.1 local probe on 2026-06-11:
+
+- The official VirtualHome repository was cloned outside the EAGC project:
+  `C:\Users\Alphay\Documents\ExternalTools\virtualhome`
+- The repository exposes `virtualhome/simulation/unity_simulator/comm_unity.py`.
+- VirtualHome dependencies were installed from `virtualhome/requirements.txt`.
+- Python API import succeeded:
+  `from simulation.unity_simulator import comm_unity`
+- The official Windows simulator archive was downloaded from the VirtualHome README link:
+  `http://virtual-home.org//release/simulator/v2.0/v2.3.0/windows_exec.zip`
+- The archive was extracted outside the EAGC project under:
+  `C:\Users\Alphay\Documents\ExternalTools\virtualhome_simulator`
+- The selected executable is:
+  `C:\Users\Alphay\Documents\ExternalTools\virtualhome_simulator\windows_exec\windows_exec.v2.3.0\VirtualHome.exe`
+- `python tools/check_virtualhome_env.py` completed with:
+  - `python_api_import_success=true`
+  - `simulator_executable_exists=true`
+- `python tools/test_virtualhome_windows_spike.py` reached runtime launch/connection but did not retrieve a scene graph.
+- The project smoke script works around a Windows launcher issue in the upstream VirtualHome API, where the launcher uses an empty environment and raises WinError 87. With a normal inherited environment, the executable process can be launched.
+- The launched executable did not open the API HTTP port within 60 seconds.
+- Final `status.json` reason:
+
+```text
+virtualhome_simulator_connection_timeout
+```
+
+- Manual start hint recorded in `status.json`: start `VirtualHome.exe` manually, choose Windowed mode if prompted, press Play, then rerun the smoke.
+- Scene graph acquired: no.
+- Program log generated: no.
+- Converted world model / episode log generated: no.
+- Frame saved: no.
+- `python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json` passed because this runtime blocker is explicit and auditable.
+
+Dependency warning:
+
+- Installing VirtualHome requirements in the user Python environment downgraded `networkx` to `2.3`.
+- Pip reported compatibility warnings for packages expecting newer `networkx`, including `torch` and `scikit-image`.
+- Future work should isolate VirtualHome in a dedicated virtual environment if it becomes more than a one-off simulator spike.
+
 ## Assessment Criteria
 
 VirtualHome becomes a useful Windows-friendly household simulator candidate if:
