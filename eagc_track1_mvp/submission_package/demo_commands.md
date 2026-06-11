@@ -59,6 +59,43 @@ Key outputs:
 - `outputs/run_audit.json`
 - `outputs/visual_task_result.json`
 
+## VirtualHome Manual-Play Evidence Demo
+
+This is optional and is not part of the deterministic fast tier. It requires external VirtualHome resources and a manually running Windows simulator:
+
+1. Start `VirtualHome.exe`.
+2. Choose Windowed mode if prompted.
+3. Click Play.
+4. Confirm that `127.0.0.1:8080` is listening.
+
+Then run:
+
+```powershell
+python tools/run_test_suite.py --tier targeted-virtualhome-manual --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-virtualhome-frame --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-virtualhome-vision --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-virtualhome-multiframe --timeout-seconds 600
+python tools/build_virtualhome_evidence_report.py
+```
+
+Notes:
+
+- These commands are not `fast` tier checks.
+- The vision tiers require the already-running local Qwen/vLLM endpoint.
+- They do not start lightweight vLLM.
+- They do not modify, restart, or manage the existing Qwen Docker container.
+- Generated frames, raw Qwen responses, and `outputs/virtualhome_spike/` artifacts are runtime outputs and should not be committed.
+
+Key outputs:
+
+- `outputs/virtualhome_spike/scene_graph.json`
+- `outputs/virtualhome_spike/program_log.json`
+- `outputs/virtualhome_spike/converted_world_model.json`
+- `outputs/virtualhome_spike/converted_episode_log.jsonl`
+- `outputs/virtualhome_spike/frame_000.png`
+- `outputs/virtualhome_spike/task_frames/`
+- `outputs/virtualhome_spike/episode_visual_symbolic_comparison.json`
+
 ## Demo Snapshot
 
 ```powershell

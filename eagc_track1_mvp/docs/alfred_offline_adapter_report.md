@@ -104,6 +104,12 @@ v0.15.3 status:
 - Real ALFRED dataset conversion is supported by CLI but has not been validated locally because no real ALFRED data path is configured.
 - The adapter remains an offline converter only and does not run AI2-THOR.
 
+v0.16.7 status:
+
+- No real ALFRED dataset conversion has been added since v0.15.3.
+- The synthetic ALFRED-like fixture remains the only ALFRED validation used by the deterministic fast tier.
+- VirtualHome evidence updates do not change ALFRED status and do not imply real ALFRED benchmark performance.
+
 The synthetic fixture is located at:
 
 ```text

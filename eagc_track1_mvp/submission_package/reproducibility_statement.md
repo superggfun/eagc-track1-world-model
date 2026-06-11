@@ -46,6 +46,18 @@ Targeted LocalSim:
 python tools/run_test_suite.py --tier targeted-local-sim --timeout-seconds 600
 ```
 
+VirtualHome manual-play evidence tiers, optional:
+
+```powershell
+python tools/run_test_suite.py --tier targeted-virtualhome-manual --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-virtualhome-frame --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-virtualhome-vision --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-virtualhome-multiframe --timeout-seconds 600
+python tools/build_virtualhome_evidence_report.py
+```
+
+These require external VirtualHome resources, a manually running `VirtualHome.exe` in Play mode, and the existing local Qwen/vLLM endpoint for the vision tiers. They do not start lightweight vLLM and do not modify the existing Qwen Docker container.
+
 Aggregate targeted tier:
 
 ```powershell

@@ -6,7 +6,7 @@ This project develops a local MVP and evaluation baseline for EAGC 2026 Track 1.
 
 The inference path uses a local Qwen3.6-35B-A3B-NVFP4 model served through an OpenAI-compatible vLLM endpoint. No model training, fine-tuning, distillation, or online model API calls are used in the validated local runs.
 
-Current readiness state as of v0.15.3: LocalSim, the official-style Track1 procedure runner, visual-local hybrid evidence reporting, Docker/source packaging, and ALFRED synthetic fixture conversion are prepared. Official EAGC runtime, hidden evaluation environments, real ProcTHOR/Habitat/AI2-THOR execution, real VirtualHome executable smoke, real ALFRED dataset conversion, and model training remain unvalidated.
+Current readiness state as of v0.16.7: LocalSim, the official-style Track1 procedure runner, visual-local hybrid evidence reporting, Docker/source packaging, ALFRED synthetic fixture conversion, and VirtualHome manual-play evidence smoke are prepared. Official EAGC runtime, hidden evaluation environments, real ProcTHOR/Habitat/AI2-THOR execution, fully automated VirtualHome startup, real ALFRED dataset conversion, and model training remain unvalidated.
 
 ## Method Overview
 
@@ -172,12 +172,36 @@ Complete visual tasks require explicit supporting evidence. Relation tasks requi
 
 This conservative behavior prevents uncertain visual relations from being reported as success.
 
+## VirtualHome Evidence Pipeline
+
+VirtualHome is now validated as an optional Windows-friendly simulator evidence path using manual Play mode. The simulator is launched outside the project, the user presses Play, and the project connects to `127.0.0.1:8080`.
+
+Validated VirtualHome results:
+
+- Manual-play Windows VirtualHome simulator connection succeeded.
+- Scene graph extraction succeeded.
+- Four fixed household program tasks executed successfully.
+- `converted_world_model.json` and `converted_episode_log.jsonl` were generated from simulator state and program logs.
+- Camera frame export succeeded at 640x480.
+- Five selected task frames were exported for episode-level evidence.
+- Single-frame Qwen vision comparison succeeded using the already-running local Qwen/vLLM endpoint.
+- Episode-level multi-frame Qwen vision grounding processed 5/5 frames.
+- Average Qwen vision latency in the latest multi-frame smoke was about 2.8 seconds per frame.
+
+The comparison is evidence-driven. Visual objects are matched approximately against simulator symbolic scene graph and converted world-model objects. Scene graph-only objects are treated as not visible in the selected camera frame(s), not as Qwen errors. Unmatched visual objects are recorded as warnings rather than hard failures. Single-frame and selected multi-frame observations are not expected to cover all symbolic simulator objects.
+
+VirtualHome artifacts such as exported frames, raw Qwen responses, and `outputs/virtualhome_spike/` reports are runtime diagnostics and are not redistributed in git.
+
 ## Local Evaluation
 
 Current local gates include:
 
-- `fast`: source-directory compile, mock smoke tests, and visual-local hybrid smoke when local frames are available.
-- `targeted`: fast tier, fixed LocalSim, Track 1 procedure smoke, seed replay, and targeted robustness.
+- `fast`: deterministic source-directory compile, mock smoke tests, and synthetic ALFRED fixture conversion; it does not call real Qwen, real vision, local images, or external simulators.
+- `targeted-text`: minimal real Qwen text endpoint smoke.
+- `targeted-vision`: real Qwen vision smoke for visual-local hybrid tasks.
+- `targeted-local-sim`: fixed LocalSim real smoke.
+- `targeted-track1`: official-style Track1 procedure smoke.
+- `targeted-virtualhome-*`: optional manual-play VirtualHome evidence tiers.
 - `standard`: real mock smoke, fixed LocalSim, Track 1 procedure, easy randomized mock batch, visual sequence smoke, and report generation.
 - `docker-smoke`: source-directory compile, Docker smoke check, and mock-only smoke tests inside the agent container.
 
@@ -188,6 +212,7 @@ Recent validated status:
 - Docker container accessed host vLLM through `host.docker.internal` and completed a real LocalSim Track 1 command.
 - Source zip clean reproducibility check passed.
 - Submission bundle generation passed.
+- VirtualHome manual-play evidence smoke passed through scene graph extraction, 4/4 household task execution, frame export, single-frame Qwen vision comparison, and 5/5 multi-frame Qwen grounding.
 
 These are local MVP results, not official EAGC scores.
 

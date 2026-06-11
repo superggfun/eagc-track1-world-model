@@ -8,12 +8,12 @@ Known limitations:
 - LocalSim is a self-built environment and is simpler than realistic embodied simulators.
 - The visual-local hybrid module is symbolic and does not perform physical manipulation.
 - Physical actions in visual-only mode are intentionally unsupported.
-- AI2-THOR / ProcTHOR environment integration remains blocked and is not part of the validated path.
+- AI2-THOR / Habitat / ProcTHOR environment integration remains blocked or unvalidated and is not part of the validated path.
 - ALFRED support is currently an offline trajectory parser only; it does not run AI2-THOR or validate online closed-loop execution.
 - ALFRED offline conversion is approximate and may not expose complete visual state, object locations, or simulator metadata.
 - The included ALFRED-like fixture is synthetic and only verifies adapter mechanics.
 - Real ALFRED dataset conversion has not been validated on this machine.
-- VirtualHome remains setup diagnostics only; no real Windows executable smoke has succeeded yet.
+- VirtualHome manual-play Windows simulator smoke has succeeded for scene graph extraction, four fixed household task executions, frame export, single-frame Qwen vision comparison, and multi-frame grounding, but it still requires manual Play and is not an official runtime.
 - The official EAGC runtime, official hidden evaluation environments, and official scoring are not available in this local package.
 - There is no trained student model.
 - No model fine-tuning or distillation has been performed.
@@ -21,6 +21,10 @@ Known limitations:
 - No full benchmark-scale evaluation has been completed.
 - `local_heuristic_score` is a local debugging metric, not an official score.
 - Visual evidence depends on real Qwen vision extraction, so object/relation counts may vary across runs.
+- VirtualHome single-frame and selected multi-frame observations cannot cover the full symbolic scene graph; scene graph-only objects are treated as not visible rather than Qwen errors.
+- VirtualHome unmatched visual objects are warnings in the evidence report, not hard failures of the symbolic simulator pipeline.
+- No long-horizon video policy has been validated.
+- VirtualHome runtime outputs, exported frames, and raw Qwen responses are not redistributed in git.
 - The source package is not a final Docker submission.
 - The Docker image packages the agent code only and does not include Qwen model weights.
 - The final model endpoint, mounted model, or organizer-hosted inference strategy requires organizer clarification.

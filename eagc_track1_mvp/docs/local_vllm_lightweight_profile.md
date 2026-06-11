@@ -62,6 +62,13 @@ If VirtualHome and vLLM cannot share GPU memory reliably:
 
 This time-sliced workflow is preferred over modifying the original long-context vLLM container.
 
-## v0.15.3 Status
+## v0.16.7 Status
 
-The lightweight vLLM profile is documentation only. The original local Qwen vLLM Docker container should not be modified, restarted, deleted, or managed by this project automation. Current validated test tiers use the existing external endpoint only when explicitly running targeted real-Qwen checks such as `targeted-text`, `targeted-vision`, `targeted-local-sim`, or `targeted-track1`.
+The lightweight vLLM profile is documentation only and was not started for the VirtualHome evidence refresh. The original local Qwen vLLM Docker container should not be modified, restarted, deleted, or managed by this project automation.
+
+Current validated VirtualHome vision tiers use the existing external endpoint only:
+
+- `targeted-virtualhome-vision`
+- `targeted-virtualhome-multiframe`
+
+The latest multi-frame grounding smoke used the already-running endpoint, processed 5/5 VirtualHome task frames, and averaged about 2.8 seconds per frame. It did not start lightweight vLLM and did not change GPU memory settings.

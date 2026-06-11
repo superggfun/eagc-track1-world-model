@@ -428,6 +428,24 @@ Latest v0.16.6 episode-level multi-frame grounding probe on 2026-06-11:
   - per-frame Qwen failures are recorded without forcing all frames to fail.
 - v0.16.6 still does not train, fine-tune, start lightweight vLLM, or run official EAGC hidden evaluation.
 
+v0.16.7 submission refresh:
+
+- The v0.16.2 through v0.16.6 VirtualHome evidence results have been reflected in README and submission package documents.
+- `tools/pre_submission_audit.py` records the presence of VirtualHome evidence helpers and optional local runtime artifacts.
+- VirtualHome outputs remain runtime artifacts. They are useful for local review but should not be tracked in git or redistributed as source.
+- The validated claim is now: VirtualHome manual-play can provide a Windows household simulator evidence path with symbolic scene graph, household program log, converted world model/log, camera frame export, and Qwen visual grounding over selected frames.
+- The unvalidated claim remains: automated VirtualHome startup, official EAGC runtime behavior, long-horizon video policy, and replacement of ProcTHOR/Habitat/AI2-THOR.
+- Latest v0.16.7 refresh rerun:
+  - multi-frame Qwen vision: 5/5 frames succeeded
+  - total visible object mentions: 43
+  - unique visible objects: 36
+  - matched object count: 36
+  - unmatched visual object count: 7
+  - action evidence count: 7
+  - matched relation count: 9
+  - average Qwen latency: 2.871 seconds per frame
+- The small metric differences from the v0.16.6 run are expected Qwen vision-output variance; the evidence comparison remains successful and conservative.
+
 ## Assessment Criteria
 
 VirtualHome becomes a useful Windows-friendly household simulator candidate if:

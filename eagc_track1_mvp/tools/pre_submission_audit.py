@@ -22,6 +22,25 @@ REQUIRED_FILES = [
 ]
 EXPECTED_TAGS = ["v0.15.2-targeted-suite-controls"]
 SOURCE_ZIP = PROJECT_ROOT / "dist" / "eagc_track1_mvp_source.zip"
+VIRTUALHOME_EVIDENCE_FILES = [
+    "docs/version_status_v0.16.6.md",
+    "docs/version_status_v0.16.7.md",
+    "tools/test_virtualhome_windows_spike.py",
+    "tools/test_virtualhome_multiframe_qwen_vision.py",
+    "tools/compare_virtualhome_multiframe_symbolic.py",
+    "validators/validate_virtualhome_multiframe_grounding.py",
+    "tools/build_virtualhome_evidence_report.py",
+]
+VIRTUALHOME_OUTPUT_ARTIFACTS = [
+    "scene_graph.json",
+    "program_log.json",
+    "converted_world_model.json",
+    "converted_episode_log.jsonl",
+    "frame_000.png",
+    "task_frames",
+    "multiframe_qwen_status.json",
+    "episode_visual_symbolic_comparison.json",
+]
 RUNTIME_DIRS = [
     "outputs",
     "dist",
@@ -126,6 +145,17 @@ def build_report() -> Dict[str, Any]:
         if exists:
             warnings.append(f"Runtime/artifact directory exists locally and should remain ignored: {rel}")
 
+    virtualhome_evidence = _virtualhome_evidence_status()
+    if not any(item["exists"] for item in virtualhome_evidence["version_docs"]):
+        warnings.append("VirtualHome v0.16.6/v0.16.7 status docs are missing.")
+    for item in virtualhome_evidence["required_code"]:
+        if not item["exists"]:
+            warnings.append(f"VirtualHome evidence helper is missing: {item['path']}")
+    if virtualhome_evidence["output_dir_exists"]:
+        warnings.append("VirtualHome evidence outputs exist locally and should remain ignored by git.")
+    else:
+        warnings.append("VirtualHome evidence outputs are not present locally; this is allowed for source-only submission checks.")
+
     pdf_status_path = PROJECT_ROOT / "submission_bundle" / "reports" / "technical_report_build_status.json"
     pdf_status: Dict[str, Any] = {}
     if pdf_status_path.exists():
@@ -148,6 +178,7 @@ def build_report() -> Dict[str, Any]:
         "dirty_files": dirty,
         "expected_tags": [{"tag": tag, "exists": tag in tags} for tag in EXPECTED_TAGS],
         "runtime_dirs": runtime_dirs,
+        "virtualhome_evidence": virtualhome_evidence,
         "tracked_violation_count": len(tracked_violations),
         "tracked_violations": tracked_violations,
         "technical_report_build_status": pdf_status,
@@ -155,6 +186,36 @@ def build_report() -> Dict[str, Any]:
             "Ignored runtime outputs/dist/submission bundles are warnings, not failures.",
             "Tracked datasets, images, executables, scene assets, model weights, or zip files are failures.",
         ],
+    }
+
+
+def _virtualhome_evidence_status() -> Dict[str, Any]:
+    version_docs = []
+    required_code = []
+    for rel in VIRTUALHOME_EVIDENCE_FILES:
+        item = {"path": rel, "exists": (PROJECT_ROOT / rel).exists()}
+        if rel.startswith("docs/version_status"):
+            version_docs.append(item)
+        else:
+            required_code.append(item)
+
+    output_dir = PROJECT_ROOT / "outputs" / "virtualhome_spike"
+    output_artifacts = []
+    for rel in VIRTUALHOME_OUTPUT_ARTIFACTS:
+        path = output_dir / rel
+        output_artifacts.append(
+            {
+                "path": f"outputs/virtualhome_spike/{rel}",
+                "exists": path.exists(),
+                "kind": "directory" if path.is_dir() else "file",
+            }
+        )
+    return {
+        "description": "VirtualHome evidence artifacts are optional runtime outputs. Presence is recorded for audit, but outputs must stay untracked.",
+        "version_docs": version_docs,
+        "required_code": required_code,
+        "output_dir_exists": output_dir.exists(),
+        "output_artifacts": output_artifacts,
     }
 
 
@@ -212,6 +273,18 @@ def _markdown(report: Dict[str, Any]) -> str:
     lines.extend(["", "## Tracked Artifact Violations", ""])
     violations = report.get("tracked_violations", [])
     lines.extend([f"- `{item}`" for item in violations] or ["- none"])
+    lines.extend(["", "## VirtualHome Evidence", ""])
+    vh = report.get("virtualhome_evidence", {})
+    lines.append(vh.get("description", ""))
+    lines.extend(["", "### Version Docs", "", "| file | exists |", "|---|---:|"])
+    for item in vh.get("version_docs", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(["", "### Evidence Helpers", "", "| file | exists |", "|---|---:|"])
+    for item in vh.get("required_code", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
+    lines.extend(["", "### Local Runtime Artifacts", "", "| artifact | exists |", "|---|---:|"])
+    for item in vh.get("output_artifacts", []):
+        lines.append(f"| `{item['path']}` | `{item['exists']}` |")
     lines.append("")
     return "\n".join(lines)
 

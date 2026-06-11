@@ -24,10 +24,14 @@ No student model, distillation run, reinforcement learning run, or supervised fi
 - ALFRED offline adapter: optional parsing of user-provided local ALFRED `traj_data.json` files for public household task trajectory alignment.
 - Synthetic ALFRED-like fixture: `tests/fixtures/alfred/sample_traj_data.json` is a tiny synthetic conversion test fixture, not real ALFRED data and not benchmark evidence.
 - ALFRED data is not downloaded automatically, not redistributed, and not committed to git.
+- VirtualHome: optional manual-play Windows simulator evidence smoke using an external VirtualHome repository and Unity executable stored outside this project.
+- VirtualHome exported frames, scene graphs, program logs, raw Qwen responses, and derived runtime reports are local diagnostics under `outputs/` and are not committed to git.
 
 ## Simulator Status
 
-AI2-THOR/ProcTHOR has not been validated in the stable path due to platform/runtime/rendering issues. AI2-THOR adapter code may exist as experimental work, but it is not part of the current validated submission path.
+VirtualHome manual-play Windows simulator evidence has been validated for scene graph extraction, four fixed household task executions, frame export, single-frame Qwen vision comparison, and episode-level multi-frame grounding. This is still an optional simulator smoke, not official EAGC runtime validation.
+
+AI2-THOR/ProcTHOR/Habitat have not been validated in the stable path due to platform/runtime/rendering issues. AI2-THOR adapter code may exist as experimental work, but it is not part of the current validated submission path.
 
 ## Online API Use
 
@@ -42,6 +46,7 @@ Current training resource use:
 - Student model: none.
 - Distillation: none.
 - ALFRED simulator execution: none.
+- VirtualHome model training: none.
 - External online model calls: none during evaluation.
 
 Hardware used for local development/testing:

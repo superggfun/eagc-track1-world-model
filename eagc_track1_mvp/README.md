@@ -2,9 +2,9 @@
 
 Minimal runnable Python MVP for EAGC 2026 Track 1. It uses a mock text-only environment and a replaceable adapter layout until an official EAGC runtime/API/schema is available.
 
-Current version: v0.16.6 VirtualHome episode-level multi-frame visual grounding.
+Current version: v0.16.7 VirtualHome evidence submission refresh.
 
-Current stable tag: `v0.16.6-virtualhome-multiframe-grounding`
+Current stable tag: `v0.16.7-virtualhome-evidence-submission-refresh`
 
 Current status:
 
@@ -50,7 +50,7 @@ Run the pre-submission audit after packaging:
 python tools/pre_submission_audit.py
 ```
 
-The audit writes `outputs/pre_submission_audit/audit_report.json` and `.md`, checks key submission documents, reports dirty git state, verifies that `v0.15.2-targeted-suite-controls` exists, and warns about ignored runtime artifact directories such as `outputs/`, `dist/`, `submission_bundle/`, and local datasets.
+The audit writes `outputs/pre_submission_audit/audit_report.json` and `.md`, checks key submission documents, reports dirty git state, verifies that `v0.15.2-targeted-suite-controls` exists, records optional VirtualHome evidence artifact presence, and warns about ignored runtime artifact directories such as `outputs/`, `dist/`, `submission_bundle/`, and local datasets.
 
 ## Requirements
 
@@ -415,6 +415,8 @@ python tools/run_test_suite.py --tier targeted-virtualhome-multiframe --timeout-
 ```
 
 The manual tier validates scene graph retrieval, four small household program tasks, conversion to `converted_world_model.json` / `converted_episode_log.jsonl`, and conversion quality checks. The frame tier exports `frame_000.png`, validates `frame_export_status.json`, and builds `visual_symbolic_evidence_report.json` / `.md`. The vision tier uses the already-running local Qwen/vLLM endpoint to extract visible objects from that single frame, then compares Qwen visual evidence against the VirtualHome symbolic scene graph. The multi-frame tier exports up to 8 selected task frames, runs Qwen vision per frame, and builds episode-level visual-symbolic comparison artifacts. These tiers do not start lightweight vLLM, do not change GPU memory settings, and should not be interpreted as official EAGC evaluation.
+
+Latest VirtualHome evidence status: manual-play Windows simulator connection on port `8080` is validated; scene graph extraction succeeded; 4/4 fixed household tasks succeeded; converted world model and converted episode log were generated; frame export succeeded at `640x480`; 5 task frames were exported; single-frame Qwen vision comparison succeeded; episode-level multi-frame Qwen grounding processed 5/5 frames with average latency about `2.8s/frame`. Visual objects are matched against simulator symbolic state, scene graph-only objects are treated as not visible rather than Qwen errors, and unmatched visual objects are warnings. Generated frames, raw Qwen responses, and `outputs/virtualhome_spike/` artifacts are runtime outputs and are not redistributed in git.
 
 If you want to test a separate lightweight vLLM profile for sharing GPU memory with VirtualHome, review the dry-run first:
 

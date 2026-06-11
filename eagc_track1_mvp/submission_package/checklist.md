@@ -27,5 +27,7 @@ This checklist maps the current local MVP to likely EAGC qualification submissio
 | Test tiers | Prepared | `fast`, `targeted-text`, `targeted-vision`, `targeted-local-sim`, `targeted-track1`, `targeted`, `standard`, and `full` are available. |
 | Fast tier | Stable | Deterministic; no real Qwen, real vision, local images, external simulators, or real ALFRED data. |
 | ALFRED adapter | Fixture validated | Synthetic fixture conversion passes; real ALFRED dataset conversion is not yet validated. |
-| VirtualHome | Diagnostics only | Real Windows executable smoke has not succeeded. |
+| VirtualHome manual-play smoke | Validated | Manual-play Windows connection, 8080 communication, scene graph extraction, 4/4 fixed household tasks, converted world model/log, frame export, single-frame Qwen vision, and multi-frame grounding have succeeded. |
+| VirtualHome automated startup | Not validated | Manual Play is still required. |
+| VirtualHome outputs in git | Excluded | Frames, raw Qwen responses, and `outputs/virtualhome_spike/` artifacts are runtime diagnostics and should remain ignored. |
 | Pre-submission audit | Prepared | `python tools/pre_submission_audit.py`. |
