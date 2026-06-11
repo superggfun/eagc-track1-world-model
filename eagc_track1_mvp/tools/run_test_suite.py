@@ -133,6 +133,15 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         "outputs/maze_stress",
     ]
     maze_medium_validate = [py, "-m", "validators.validate_maze_stress_test", "outputs/maze_stress/status.json"]
+    maze_anti_loop = [
+        py,
+        "tools/run_maze_anti_loop_test.py",
+        "--episode",
+        "all",
+        "--max-steps",
+        "300",
+    ]
+    maze_anti_loop_validate = [py, "-m", "validators.validate_maze_anti_loop_test", "outputs/maze_anti_loop/status.json"]
     targeted_replay = [
         py,
         "tools/replay_random_local_sim_failure.py",
@@ -230,6 +239,7 @@ def _commands(tier: str, seed: int, difficulty: str) -> List[List[str]]:
         "targeted-virtualhome-multiframe": [virtualhome_multiframe],
         "targeted-resource-profile": [resource_profile, resource_smoke],
         "targeted-maze": [maze_easy, maze_easy_validate, maze_medium, maze_medium_validate],
+        "targeted-maze-anti-loop": [maze_anti_loop, maze_anti_loop_validate],
         "targeted": [qwen_text, visual_local_hybrid, local_sim, track1],
         "standard": [
             compileall,
@@ -374,6 +384,7 @@ def _tier_descriptions() -> Dict[str, str]:
         "targeted-virtualhome-multiframe": "Optional VirtualHome episode-level multi-frame Qwen grounding and evidence comparison.",
         "targeted-resource-profile": "Read-only VirtualHome + vLLM resource profile and coexistence smoke; does not manage Docker or start lite vLLM.",
         "targeted-maze": "Synthetic LocalSim maze topology stress: deterministic easy maze plus medium generated maze.",
+        "targeted-maze-anti-loop": "Synthetic MazeSim anti-loop stress: loop lure, dead-end comb, blocked shortcut, and graceful unreachable goal.",
         "targeted": "Aggregate targeted smoke: text, vision, LocalSim, Track1 procedure.",
         "standard": "Longer gate: targeted-style coverage plus report/source/demo packaging.",
         "full": "Optional stress suite with longer robustness batches.",

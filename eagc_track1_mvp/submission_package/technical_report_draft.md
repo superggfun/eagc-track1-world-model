@@ -81,6 +81,7 @@ The test suite is decomposed to keep development checks bounded:
 - `targeted-local-sim`: LocalSim real smoke; latest observed runtime is approximately 283 seconds.
 - `targeted-track1`: official-style Track1 procedure smoke.
 - `targeted-maze`: synthetic topology stress over one deterministic easy maze and one medium generated maze.
+- `targeted-maze-anti-loop`: synthetic anti-loop and dead-end recovery stress.
 - `standard` and `full`: longer checks for packaging and robustness; these are not routine edit gates.
 
 Each `tools/run_test_suite.py` run writes JSON and Markdown reports under `outputs/test_suite_reports/`.
@@ -228,6 +229,8 @@ Metrics include goal success, steps taken, shortest-path length, path efficiency
 
 Latest targeted-maze validation result for the medium generated maze: `success=True`, `goal_found=True`, `steps_taken=28`, `shortest_path_length=14`, `map_coverage=0.88`, `blocked_edges_encountered=2`, and `replans=7`.
 
+v0.17.5 extends MazeSim with adversarial anti-loop cases: `loop_lure_maze`, `dead_end_comb_maze`, `blocked_shortcut_maze`, and `unreachable_goal_maze`. These scenarios test topology memory, dead-end avoidance, loop detection, no-progress termination, blocked-edge retry suppression, and graceful failure when the goal cannot be reached. The anti-loop report records repeated-state count, maximum cell visit count, oscillation count, no-progress windows, dead-end reentries, blocked-edge retries, and termination reason.
+
 ## Local Evaluation
 
 Current local gates include:
@@ -238,6 +241,7 @@ Current local gates include:
 - `targeted-local-sim`: fixed LocalSim real smoke.
 - `targeted-track1`: official-style Track1 procedure smoke.
 - `targeted-maze`: synthetic MazeSim topology stress.
+- `targeted-maze-anti-loop`: synthetic MazeSim anti-loop and dead-end recovery stress.
 - `targeted-virtualhome-*`: optional manual-play VirtualHome evidence tiers.
 - `standard`: real mock smoke, fixed LocalSim, Track 1 procedure, easy randomized mock batch, visual sequence smoke, and report generation.
 - `docker-smoke`: source-directory compile, Docker smoke check, and mock-only smoke tests inside the agent container.

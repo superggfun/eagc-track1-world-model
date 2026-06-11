@@ -299,6 +299,7 @@ python tools/run_test_suite.py --tier targeted-virtualhome-vision --timeout-seco
 python tools/run_test_suite.py --tier targeted-virtualhome-multiframe --timeout-seconds 600
 python tools/run_test_suite.py --tier targeted-resource-profile --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted-maze --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-maze-anti-loop --timeout-seconds 300
 python tools/run_test_suite.py --tier targeted --timeout-seconds 900 --continue-on-failure
 python tools/run_test_suite.py --tier standard
 python tools/run_test_suite.py --tier full
@@ -324,6 +325,7 @@ Targeted tests are decomposed:
 - `targeted-virtualhome-multiframe`: optional episode-level multi-frame Qwen grounding over selected VirtualHome task frames.
 - `targeted-resource-profile`: optional read-only VirtualHome + vLLM resource profile and coexistence smoke; it does not manage Docker or start lightweight vLLM.
 - `targeted-maze`: synthetic LocalSim-style maze topology stress; runs one deterministic easy maze and one medium generated maze with validators.
+- `targeted-maze-anti-loop`: synthetic MazeSim anti-loop stress; checks ring loops, comb dead ends, blocked shortcuts, and graceful unreachable-goal termination.
 - `targeted`: aggregate of the four targeted smoke groups.
 
 Each command records elapsed time and status under `outputs/test_suite_reports/`. Use `--timeout-seconds` to prevent a long test from hanging the suite and `--continue-on-failure` when you want a complete report across all targeted groups. Run `standard` or `full` only when explicitly requested; `full` is a stress test.
@@ -341,11 +343,15 @@ Run the MazeSim topology stress benchmark:
 python tools/run_maze_stress_test.py --episode generated_grid_maze --seed 42 --difficulty medium --max-steps 200
 python -m validators.validate_maze_stress_test outputs/maze_stress/status.json
 python tools/run_test_suite.py --tier targeted-maze --timeout-seconds 300
+python tools/run_test_suite.py --tier targeted-maze-anti-loop --timeout-seconds 300
+python -m validators.validate_maze_anti_loop_test outputs/maze_anti_loop/status.json
 ```
 
 MazeSim is a lightweight synthetic LocalSim-style benchmark for unknown-topology exploration, dead ends, loops, blocked corridors, replanning, and map coverage metrics. It writes `outputs/maze_stress/world_model.json`, `episode_log.jsonl`, `maze_metrics.json`, and `status.json`. It is not an official EAGC runtime, does not use external simulator assets, does not call Qwen, and does not train a model. It complements VirtualHome: VirtualHome stresses household scene graph/action evidence, while MazeSim stresses topology exploration and planning.
 
 Latest targeted-maze result: `success=True`, `goal_found=True`, `steps_taken=28`, `shortest_path_length=14`, `map_coverage=0.88`, `blocked_edges_encountered=2`, and `replans=7`.
+
+The anti-loop tier writes `outputs/maze_anti_loop/status.json`, `world_model.json`, `episode_log.jsonl`, `maze_metrics.json`, and `anti_loop_report.md`. It adds adversarial synthetic cases for loop lure, comb dead ends, blocked shortcuts, and unreachable goals. Its metrics include repeated states, oscillations, no-progress windows, dead-end reentries, blocked-edge retries, and graceful termination reasons.
 
 Sequence frames should be local files named in deterministic order:
 

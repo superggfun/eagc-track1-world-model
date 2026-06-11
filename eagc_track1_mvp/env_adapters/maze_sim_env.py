@@ -12,7 +12,16 @@ Cell = Tuple[int, int]
 Edge = Tuple[Cell, Cell]
 
 
-EPISODES = {"simple_t_maze", "plus_maze", "radial_arm_maze", "generated_grid_maze"}
+EPISODES = {
+    "simple_t_maze",
+    "plus_maze",
+    "radial_arm_maze",
+    "generated_grid_maze",
+    "loop_lure_maze",
+    "dead_end_comb_maze",
+    "blocked_shortcut_maze",
+    "unreachable_goal_maze",
+}
 DIFFICULTIES = {"easy", "medium", "hard"}
 DIRECTIONS: Dict[str, Cell] = {
     "north": (0, -1),
@@ -243,6 +252,66 @@ class MazeSimEnv(BaseEnvAdapter):
                     prev = cell
             blocked = {_edge((0, 0), (-1, 0))} if self.difficulty in {"medium", "hard"} else set()
             return MazeSpec(self.episode, (0, 0), (3, 0), cells, _edges_from_pairs(pairs), blocked)
+        if self.episode == "loop_lure_maze":
+            cells = {
+                (0, 0),
+                (1, 0),
+                (2, 0),
+                (0, 1),
+                (1, 1),
+                (2, 1),
+                (3, 1),
+                (4, 1),
+                (4, 0),
+            }
+            edges = _edges_from_pairs(
+                [
+                    ((0, 0), (1, 0)),
+                    ((1, 0), (2, 0)),
+                    ((2, 0), (2, 1)),
+                    ((2, 1), (1, 1)),
+                    ((1, 1), (0, 1)),
+                    ((0, 1), (0, 0)),
+                    ((1, 0), (1, 1)),
+                    ((2, 1), (3, 1)),
+                    ((3, 1), (4, 1)),
+                    ((4, 1), (4, 0)),
+                ]
+            )
+            return MazeSpec(self.episode, (0, 0), (4, 0), cells, edges, set())
+        if self.episode == "dead_end_comb_maze":
+            cells = {(x, 0) for x in range(7)}
+            pairs = [((x, 0), (x + 1, 0)) for x in range(6)]
+            for x in range(1, 6):
+                cells.add((x, 1))
+                cells.add((x, 2))
+                pairs.append(((x, 0), (x, 1)))
+                pairs.append(((x, 1), (x, 2)))
+            return MazeSpec(self.episode, (0, 0), (6, 0), cells, _edges_from_pairs(pairs), set())
+        if self.episode == "blocked_shortcut_maze":
+            cells = {(x, 0) for x in range(5)} | {(9, 0), (9, 1), (8, 1), (7, 1), (6, 1), (5, 1), (4, 1)}
+            edges = _edges_from_pairs(
+                [
+                    ((0, 0), (1, 0)),
+                    ((1, 0), (2, 0)),
+                    ((2, 0), (3, 0)),
+                    ((3, 0), (4, 0)),
+                    ((0, 0), (9, 0)),
+                    ((9, 0), (9, 1)),
+                    ((9, 1), (8, 1)),
+                    ((8, 1), (7, 1)),
+                    ((7, 1), (6, 1)),
+                    ((6, 1), (5, 1)),
+                    ((5, 1), (4, 1)),
+                    ((4, 1), (4, 0)),
+                ]
+            )
+            blocked = {_edge((1, 0), (2, 0)), _edge((2, 0), (3, 0))}
+            return MazeSpec(self.episode, (0, 0), (4, 0), cells, edges, blocked)
+        if self.episode == "unreachable_goal_maze":
+            cells = {(0, 0), (1, 0), (2, 0), (3, 0), (10, 10)}
+            edges = _edges_from_pairs([((0, 0), (1, 0)), ((1, 0), (2, 0)), ((2, 0), (3, 0))])
+            return MazeSpec(self.episode, (0, 0), (10, 10), cells, edges, set())
         return self._generated_grid_spec()
 
     def _generated_grid_spec(self) -> MazeSpec:

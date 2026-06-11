@@ -50,6 +50,8 @@ Key outputs:
 ```powershell
 python tools/run_test_suite.py --tier targeted-maze --timeout-seconds 300
 python -m validators.validate_maze_stress_test outputs/maze_stress/status.json
+python tools/run_test_suite.py --tier targeted-maze-anti-loop --timeout-seconds 300
+python -m validators.validate_maze_anti_loop_test outputs/maze_anti_loop/status.json
 ```
 
 Key outputs:
@@ -58,6 +60,11 @@ Key outputs:
 - `outputs/maze_stress/episode_log.jsonl`
 - `outputs/maze_stress/maze_metrics.json`
 - `outputs/maze_stress/status.json`
+- `outputs/maze_anti_loop/world_model.json`
+- `outputs/maze_anti_loop/episode_log.jsonl`
+- `outputs/maze_anti_loop/maze_metrics.json`
+- `outputs/maze_anti_loop/status.json`
+- `outputs/maze_anti_loop/anti_loop_report.md`
 
 Notes:
 
@@ -66,6 +73,7 @@ Notes:
 - MazeSim does not use Qwen/vLLM.
 - MazeSim is a synthetic topology stress test, not an official EAGC runtime.
 - Latest medium generated maze result: `success=True`, `goal_found=True`, `steps_taken=28`, `shortest_path_length=14`, `map_coverage=0.88`, `blocked_edges_encountered=2`, `replans=7`.
+- The anti-loop tier adds loop lure, comb dead-end, blocked-shortcut, and unreachable-goal cases. The unreachable goal case is expected to fail gracefully with a non-empty termination reason rather than loop forever.
 
 ## Visual Evidence Demo
 
