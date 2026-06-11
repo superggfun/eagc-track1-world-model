@@ -7,6 +7,11 @@ use_mock_llm: false
 output_dir: outputs
 max_recovery_steps: 6
 oracle_metadata_mode: false
+virtualhome:
+  simulator_path: ""
+  port: 8080
+  default_scene: 0
+  camera_mode: "FIRST_PERSON"
 track1_budgets:
   exploration_steps: 12
   planning_steps: 3

@@ -326,6 +326,38 @@ pip install ai2thor
 python tools/test_ai2thor_adapter.py --scene FloorPlan1
 ```
 
+Run the optional VirtualHome Windows spike:
+
+```powershell
+python tools/check_gpu_budget.py
+python tools/check_virtualhome_env.py
+python tools/test_virtualhome_windows_spike.py
+python -m validators.validate_virtualhome_spike outputs/virtualhome_spike/status.json
+```
+
+VirtualHome is a Windows-friendly household activity simulator candidate for scene graph, action program, and optional visual-frame smoke tests. It is a complementary route after AI2-THOR/Habitat local rendering blockers, not a claim that VirtualHome fully replaces ProcTHOR, Habitat, AI2-THOR, or the official EAGC runtime.
+
+If you want to test a separate lightweight vLLM profile for sharing GPU memory with VirtualHome, review the dry-run first:
+
+```powershell
+scripts/start_vllm_qwen36_vh_lite.ps1
+```
+
+Only after reviewing the inferred image/mount plan, start the separate container:
+
+```powershell
+scripts/start_vllm_qwen36_vh_lite.ps1 -ForceRun
+python tools/test_vllm_lite_endpoint.py
+scripts/stop_vllm_qwen36_vh_lite.ps1
+```
+
+These scripts use a separate container name, `eagc-vllm-qwen36-vh-lite`, and host port `8001`. They do not delete or modify the original vLLM container. See:
+
+```text
+docs/vllm_virtualhome_gpu_budget.md
+docs/virtualhome_windows_spike_report.md
+```
+
 Run all LocalSim Track 1 episodes:
 
 ```powershell

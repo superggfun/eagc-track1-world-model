@@ -16,3 +16,11 @@ assets/test_sequences/bedroom_sequence/frame_*.png
 assets/test_sequences/bedroom_sequence/frame_*.webp
 dist/
 submission_bundle/
+VirtualHome*/
+virtualhome*/
+*.exe
+*.dll
+*.unity3d
+*.mp4
+*.avi
+*.mov
