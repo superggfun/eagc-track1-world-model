@@ -29,6 +29,8 @@ def build_report(output_dir: Path) -> Dict[str, Any]:
     program_log = _read_json(output_dir / "program_log.json")
     world_model = _read_json(output_dir / "converted_world_model.json")
     episode_log_rows = _read_jsonl(output_dir / "converted_episode_log.jsonl")
+    comparison = _read_json(output_dir / "visual_symbolic_comparison.json")
+    qwen_status = _read_json(output_dir / "qwen_vision_status.json")
     frame_path = output_dir / "frame_000.png"
     frame_status = _read_json(output_dir / "frame_export_status.json")
     frame_info = _frame_info(frame_path)
@@ -46,6 +48,13 @@ def build_report(output_dir: Path) -> Dict[str, Any]:
         "frame_available": frame_info["available"],
         "frame_path": str(frame_path) if frame_info["available"] else "",
         "frame_dimensions": frame_info.get("dimensions"),
+        "qwen_vision_available": qwen_status.get("success") is True,
+        "qwen_visible_object_count": _summary_value(comparison, "visible_object_count"),
+        "qwen_matched_object_count": _summary_value(comparison, "matched_object_count"),
+        "qwen_unmatched_visual_object_count": _summary_value(comparison, "unmatched_visual_object_count"),
+        "visual_symbolic_comparison_path": str(output_dir / "visual_symbolic_comparison.json")
+        if comparison
+        else "",
         "frame_export_status": {
             "success": frame_status.get("success") if isinstance(frame_status, dict) else None,
             "reason": frame_status.get("reason", "") if isinstance(frame_status, dict) else "",
@@ -64,7 +73,9 @@ def build_report(output_dir: Path) -> Dict[str, Any]:
         "limitations": [
             "Scene graph is symbolic simulator state.",
             "Frame export is only a visual observation if available.",
-            "No Qwen vision comparison is performed in this version.",
+            "Qwen vision comparison, when available, uses a single-frame visual observation.",
+            "No video or multi-view visual comparison is performed yet.",
+            "No training or fine-tuning is performed.",
             "No official EAGC runtime validation is performed in this version.",
         ],
     }
@@ -101,6 +112,12 @@ def _count_list(value: Any) -> int:
     return len(value) if isinstance(value, list) else 0
 
 
+def _summary_value(comparison: Dict[str, Any], key: str) -> int:
+    summary = comparison.get("summary", {}) if isinstance(comparison, dict) else {}
+    value = summary.get(key, 0) if isinstance(summary, dict) else 0
+    return int(value) if isinstance(value, (int, float)) else 0
+
+
 def _frame_info(path: Path) -> Dict[str, Any]:
     if not path.exists() or path.stat().st_size <= 0:
         return {"available": False}
@@ -123,6 +140,10 @@ def _to_markdown(report: Dict[str, Any]) -> str:
         f"- executed_task_count: `{report['executed_task_count']}`",
         f"- successful_task_count: `{report['successful_task_count']}`",
         f"- frame_available: `{report['frame_available']}`",
+        f"- qwen_vision_available: `{report['qwen_vision_available']}`",
+        f"- qwen_visible_object_count: `{report['qwen_visible_object_count']}`",
+        f"- qwen_matched_object_count: `{report['qwen_matched_object_count']}`",
+        f"- qwen_unmatched_visual_object_count: `{report['qwen_unmatched_visual_object_count']}`",
     ]
     if report.get("frame_dimensions"):
         dimensions = report["frame_dimensions"]

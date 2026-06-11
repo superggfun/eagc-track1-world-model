@@ -356,6 +356,40 @@ Latest v0.16.4 frame export and visual-symbolic evidence probe on 2026-06-11:
 - v0.16.4 still does not call Qwen vision, does not start lightweight vLLM, and does not perform official EAGC runtime validation.
 - If frame export fails, the failure is captured as `virtualhome_frame_api_unavailable`, `virtualhome_camera_not_configured`, `virtualhome_frame_export_timeout`, or `virtualhome_frame_export_unsupported`; the existing scene graph/program pipeline remains valid.
 
+Latest v0.16.5 Qwen vision comparison probe on 2026-06-11:
+
+- The VirtualHome frame can now be passed through the existing local Qwen/vLLM vision path:
+  `python tools/run_test_suite.py --tier targeted-virtualhome-vision`
+- The tier first checks whether `127.0.0.1:8080` is listening and whether `outputs/virtualhome_spike/frame_000.png` exists.
+- If the simulator or frame is missing, the tier writes `outputs/virtualhome_spike/vision_suite_status.json` and exits as a graceful skip.
+- If Qwen vision is unavailable or unstable, the probe writes `outputs/virtualhome_spike/qwen_vision_status.json` with `success=false` and a reason such as:
+  - `qwen_endpoint_unavailable`
+  - `qwen_vision_call_failed`
+  - `qwen_vision_parse_failed`
+  - `qwen_vision_timeout`
+- If Qwen vision succeeds, the probe writes:
+  - `outputs/virtualhome_spike/qwen_vision_extraction.json`
+  - `outputs/virtualhome_spike/qwen_vision_raw_response.json`
+  - `outputs/virtualhome_spike/visual_symbolic_comparison.json`
+  - `outputs/virtualhome_spike/visual_symbolic_comparison.md`
+- Latest run result:
+  - Qwen vision extraction: success
+  - Qwen call count: 1
+  - Qwen latency: 2.821 seconds
+  - Qwen visible object count: 7
+  - matched visible object count: 6
+  - unmatched visual object count: 1 (`poster`, recorded as a warning)
+  - visible relation count: 6
+  - matched relation count: 2
+  - frame available: yes, 640x480
+- The comparison is evidence-driven:
+  - Qwen-visible objects are matched approximately against scene graph and converted world-model object names.
+  - Qwen-visible relations are matched approximately against converted world-model relations.
+  - Qwen is not expected to see all 440 symbolic objects from one frame.
+  - Scene graph objects outside the rendered frame are counted as `scene_graph_only_not_visible`, not Qwen failures.
+  - Hallucinated visual objects are warnings, not failures of the VirtualHome symbolic pipeline.
+- v0.16.5 uses the already-running local Qwen endpoint only. It does not start lightweight vLLM, does not modify GPU memory settings, and does not train or fine-tune any model.
+
 ## Assessment Criteria
 
 VirtualHome becomes a useful Windows-friendly household simulator candidate if:
