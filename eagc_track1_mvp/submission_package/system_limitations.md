@@ -9,6 +9,8 @@ Known limitations:
 - The visual-local hybrid module is symbolic and does not perform physical manipulation.
 - Physical actions in visual-only mode are intentionally unsupported.
 - AI2-THOR / ProcTHOR environment integration remains blocked and is not part of the validated path.
+- ALFRED support is currently an offline trajectory parser only; it does not run AI2-THOR or validate online closed-loop execution.
+- ALFRED offline conversion is approximate and may not expose complete visual state, object locations, or simulator metadata.
 - There is no trained student model.
 - No model fine-tuning or distillation has been performed.
 - Performance is not yet optimized.

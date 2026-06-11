@@ -26,6 +26,7 @@ This design keeps the core agent logic replaceable when official Track 1 adapter
 Main modules:
 
 - `env_adapters/`: mock, visual sequence, LocalSim, official-adapter placeholder, and experimental AI2-THOR adapter code.
+- `dataset_adapters/`: optional offline public dataset conversion paths such as ALFRED trajectory parsing.
 - `clients/`: OpenAI-compatible Qwen/vLLM client and deterministic mock client.
 - `perception/`: prompt templates, JSON extraction, text observation extraction, and vision observation extraction.
 - `world_model/`: schema, store, update helpers, action effects, consistency logic, and visibility updates.
@@ -39,6 +40,12 @@ Main modules:
 - `tools/`: test suite runner, report generation, source packaging, Docker checks, demo snapshot generation, and submission bundle generation.
 
 The Docker package builds a lightweight agent image and expects external model service access through environment variables. Qwen model weights are not included in the image.
+
+## Public Dataset Alignment
+
+An optional ALFRED offline trajectory adapter is prepared as a public household-task alignment path. It reads local `traj_data.json` files when the user has manually provided ALFRED data, extracts task instructions, high-level subgoals, low-level actions, object mentions, and scene metadata, then writes approximate `world_model.json`, `episode_log.jsonl`, and `alfred_task_summary.json` artifacts.
+
+This path does not launch AI2-THOR, does not render frames, does not execute actions online, and does not train a model. ALFRED data is not redistributed with this project.
 
 ## World Model Design
 

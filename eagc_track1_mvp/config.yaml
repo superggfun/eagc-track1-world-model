@@ -12,6 +12,9 @@ virtualhome:
   port: 8080
   default_scene: 0
   camera_mode: "FIRST_PERSON"
+alfred:
+  dataset_root: ""
+  sample_traj_path: ""
 track1_budgets:
   exploration_steps: 12
   planning_steps: 3

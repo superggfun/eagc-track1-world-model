@@ -71,6 +71,9 @@ episode_id: mock-bedroom-relocated
 use_mock_llm: false
 output_dir: outputs
 oracle_metadata_mode: false
+alfred:
+  dataset_root: ""
+  sample_traj_path: ""
 track1_budgets:
   exploration_steps: 12
   planning_steps: 3
@@ -369,6 +372,27 @@ docs/vllm_virtualhome_gpu_budget.md
 docs/local_vllm_lightweight_profile.md
 docs/virtualhome_windows_spike_report.md
 ```
+
+## ALFRED Offline Adapter
+
+The optional ALFRED offline adapter parses public `traj_data.json` files without launching AI2-THOR. It is intended for public household task trajectory alignment in reports and diagnostics, not online closed-loop simulator evaluation.
+
+Set one of:
+
+```powershell
+$env:ALFRED_DATASET_ROOT="C:\path\to\ALFRED"
+$env:ALFRED_SAMPLE_TRAJ_PATH="C:\path\to\traj_data.json"
+```
+
+Then run:
+
+```powershell
+python tools/check_alfred_dataset.py
+python tools/convert_alfred_offline.py --traj-path C:\path\to\traj_data.json
+python -m validators.validate_alfred_offline_conversion outputs/alfred_offline/status.json
+```
+
+If no local ALFRED data is present, the checker and converter exit gracefully with `reason="missing_alfred_dataset"`. ALFRED data is not downloaded automatically, not redistributed, and must not be committed to git. See `docs/alfred_offline_adapter_report.md`.
 
 Run all LocalSim Track 1 episodes:
 

@@ -19,6 +19,8 @@ The current project uses inference only.
 - Mock environments: deterministic text-only episodes for testing.
 - Visual sequence smoke tests: local bedroom images placed under `assets/test_sequences/bedroom_sequence/`.
 - The visual images are local smoke-test resources and are not committed to git.
+- ALFRED offline adapter: optional parsing of user-provided local ALFRED `traj_data.json` files for public household task trajectory alignment.
+- ALFRED data is not downloaded automatically, not redistributed, and not committed to git.
 
 ## Simulator Status
 
@@ -36,6 +38,7 @@ Current training resource use:
 - Fine-tuning data: none.
 - Student model: none.
 - Distillation: none.
+- ALFRED simulator execution: none.
 - External online model calls: none during evaluation.
 
 Hardware used for local development/testing:
