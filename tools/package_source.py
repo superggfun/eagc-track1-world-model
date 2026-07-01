@@ -47,6 +47,9 @@ EXCLUDED_DIR_PARTS = {
     "source_pack",
 }
 EXCLUDED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".zip", ".pyc", ".pyo"}
+GMAIL_SAFE_ARCHIVE_SUFFIX_RENAMES = {
+    ".ps1": ".ps1.txt",
+}
 ALLOWED_IMAGE_FIXTURES = {
     "assets/test_sequences/bedroom_sequence/frame_000.png",
     "assets/test_sequences/bedroom_sequence/frame_001.png",
@@ -73,12 +76,16 @@ def main() -> int:
     candidates = sorted(_iter_source_files(), key=lambda path: path.as_posix())
     packaged: list[str] = []
     with zipfile.ZipFile(OUTPUT_PATH, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        renamed_entries: dict[str, str] = {}
         for abs_path in candidates:
             rel_path = abs_path.relative_to(PROJECT_ROOT)
             if _is_excluded(rel_path):
                 continue
-            archive.write(abs_path, rel_path.as_posix())
-            packaged.append(rel_path.as_posix())
+            archive_name = _archive_name(rel_path)
+            archive.write(abs_path, archive_name)
+            packaged.append(archive_name)
+            if archive_name != rel_path.as_posix():
+                renamed_entries[rel_path.as_posix()] = archive_name
         manifest = {
             "layout": "flat-src",
             "included_count": len(packaged),
@@ -89,6 +96,7 @@ def main() -> int:
             "excluded_suffixes": sorted(EXCLUDED_SUFFIXES),
             "allowed_image_fixtures": sorted(ALLOWED_IMAGE_FIXTURES),
             "allowed_image_prefixes": sorted(ALLOWED_IMAGE_PREFIXES),
+            "gmail_safe_archive_suffix_renames": renamed_entries,
         }
         archive.writestr("source_manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
         packaged.append("source_manifest.json")
@@ -142,6 +150,14 @@ def _is_excluded(path: Path) -> bool:
     if posix.startswith("assets/images/unused/"):
         return True
     return path.suffix.lower() in EXCLUDED_SUFFIXES
+
+
+def _archive_name(path: Path) -> str:
+    posix = path.as_posix()
+    replacement = GMAIL_SAFE_ARCHIVE_SUFFIX_RENAMES.get(path.suffix.lower())
+    if not replacement:
+        return posix
+    return posix[: -len(path.suffix)] + replacement
 
 
 def _find_violations(paths: list[str]) -> list[str]:
