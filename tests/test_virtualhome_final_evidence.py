@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from harness.virtualhome_exploration import _collect_continuous_episode, _visual_topology_edges, run_replay
+from harness.virtualhome_exploration import _build_audit, _collect_continuous_episode, _visual_topology_edges, run_replay
 from infra.paths import PROJECT_ROOT
 from planner.virtualhome_policy import PolicyContext, VirtualHomeExplorationPolicy
 from validators.validate_virtualhome_exploration import validate_detailed
@@ -240,6 +240,72 @@ def test_replay_validate_final_submission_uses_strict_validator(tmp_path: Path) 
     errors = audit.get("validation_status", {}).get("errors", [])
     assert exit_code == 1
     assert any("final-submission VirtualHome evidence must use" in error for error in errors)
+
+
+def test_partial_diagnostic_audit_separates_artifact_and_evidence_success() -> None:
+    coverage = {
+        "evidence_level": "visual_replay_diagnostic",
+        "world_model_source": "visual_observation_pipeline",
+        "prediction_input_mode": "vlm_frame_extraction",
+        "visual_extractor_mode": "vlm_frame_extraction",
+        "capture_mode": "continuous_episode",
+        "continuous_closed_loop": True,
+        "synthetic_capture": False,
+        "mock_extraction": False,
+        "reference_model_source": "virtualhome_scene_graph_answer_key",
+        "action_policy_source": "agent_policy",
+        "action_decision_count": 5,
+        "policy_action_decision_count": 5,
+        "harness_fallback_count": 0,
+        "harness_fallback_used": False,
+        "policy_failure_count": 0,
+        "policy_failure_closed": False,
+        "action_grounding_mode": "observation_side_only",
+        "grounding_attempt_count": 11,
+        "grounded_action_count": 5,
+        "ungrounded_intent_count": 6,
+        "ungrounded_attempt_count": 6,
+        "grounding_target_sources": ["visual_extraction"],
+        "fallback_reasons": {},
+        "insufficient_grounding": True,
+        "final_status": "partial",
+        "termination_reason": "insufficient_executable_action_grounding",
+        "not_final_evidence": True,
+        "rooms_visited": ["bedroom", "livingroom"],
+        "room_coverage": 0.5,
+        "frames_used": 6,
+        "exploration_trace_length": 6,
+        "verified_topology_edges": 0,
+        "inferred_visual_topology_edges": 1,
+        "inferred_sequence_edges": 1,
+        "exploration_order_edges": 1,
+        "scene_graph_diagnostic_edges": 0,
+        "topology_source": "visual_observation_pipeline",
+        "notes": "diagnostic partial evidence",
+    }
+
+    audit = _build_audit(
+        live_run=True,
+        live_runtime_connected=True,
+        attach_existing=False,
+        launch_attempted=True,
+        runtime_connection={"connected": True},
+        start_time="2026-06-30T00:00:00Z",
+        duration_seconds=1.0,
+        coverage=coverage,
+        validation_summary={"passed": True, "errors": [], "warnings": []},
+    )
+
+    assert audit["success"] is True
+    assert audit["artifact_validation_success"] is True
+    assert audit["task_or_evidence_success"] is False
+    assert audit["final_status"] == "partial"
+    assert audit["insufficient_grounding"] is True
+    assert audit["not_final_evidence"] is True
+    assert audit["policy_action_decision_count"] == 5
+    assert audit["grounding_attempt_count"] == 11
+    assert audit["grounded_action_count"] == 5
+    assert audit["ungrounded_attempt_count"] == 6
 
 
 def test_replay_accepts_manifest_relative_frame_paths_from_sequence_root(tmp_path: Path) -> None:
@@ -564,13 +630,16 @@ def _write_virtualhome_artifacts(root: Path, *, mode: str = "vlm_frame_extractio
         "reference_used_for_validation": True,
         "action_policy_source": "agent_policy" if final_like else "none",
         "action_decision_count": 11 if final_like else 0,
+        "policy_action_decision_count": 11 if final_like else 0,
         "harness_fallback_count": 0,
         "harness_fallback_used": False,
         "policy_failure_count": 0,
         "policy_failure_closed": False,
         "action_grounding_mode": "observation_side_only",
+        "grounding_attempt_count": 11,
         "grounded_action_count": grounded_action_count,
         "ungrounded_intent_count": ungrounded_intent_count,
+        "ungrounded_attempt_count": ungrounded_intent_count,
         "grounding_target_sources": grounding_target_sources,
         "fallback_reasons": [],
         "insufficient_grounding": insufficient_grounding,
@@ -608,6 +677,8 @@ def _write_virtualhome_artifacts(root: Path, *, mode: str = "vlm_frame_extractio
         "episode_id": "virtualhome-multi-room-exploration",
         "env": "virtualhome_live" if final_like else "virtualhome_replay",
         "success": True,
+        "artifact_validation_success": True,
+        "task_or_evidence_success": final_like,
         "virtualhome_live_run": virtualhome_live_run,
         "live_runtime_connected": live_runtime_connected,
         "launch_attempted": False,

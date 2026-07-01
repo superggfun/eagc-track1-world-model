@@ -1300,13 +1300,16 @@ def _write_artifacts(
         "reference_used_for_validation": True,
         "action_policy_source": policy_summary["action_policy_source"],
         "action_decision_count": policy_summary["action_decision_count"],
+        "policy_action_decision_count": policy_summary["action_decision_count"],
         "harness_fallback_count": policy_summary["harness_fallback_count"],
         "harness_fallback_used": policy_summary["harness_fallback_used"],
         "policy_failure_count": policy_summary["policy_failure_count"],
         "policy_failure_closed": False,
         "action_grounding_mode": "observation_side_only",
+        "grounding_attempt_count": grounding_summary["grounding_attempt_count"],
         "grounded_action_count": grounding_summary["grounded_action_count"],
         "ungrounded_intent_count": grounding_summary["ungrounded_intent_count"],
+        "ungrounded_attempt_count": grounding_summary["ungrounded_attempt_count"],
         "grounding_target_sources": grounding_summary["target_sources"],
         "fallback_reasons": grounding_summary["fallback_reasons"],
         "insufficient_grounding": grounding_summary["insufficient_grounding"],
@@ -2059,9 +2062,13 @@ def _grounding_summary(frame_manifest: list[dict[str, Any]]) -> dict[str, Any]:
     final_status = str(terminal_rows[-1].get("terminal_status")) if terminal_rows else "success"
     termination_reason = str(terminal_rows[-1].get("terminal_reason")) if terminal_rows else "completed"
     insufficient_grounding = any(bool(row.get("insufficient_grounding")) for row in frame_manifest)
+    grounded_action_count = sum(1 for event in grounding_events if event.get("executable") is True)
+    ungrounded_attempt_count = sum(1 for event in grounding_events if event.get("executable") is False)
     return {
-        "grounded_action_count": sum(1 for event in grounding_events if event.get("executable") is True),
-        "ungrounded_intent_count": sum(1 for event in grounding_events if event.get("executable") is False),
+        "grounding_attempt_count": len(grounding_events),
+        "grounded_action_count": grounded_action_count,
+        "ungrounded_intent_count": ungrounded_attempt_count,
+        "ungrounded_attempt_count": ungrounded_attempt_count,
         "target_sources": target_sources,
         "harness_fallback_count": len(fallback_events),
         "fallback_reasons": fallback_reasons,
@@ -2137,13 +2144,36 @@ def _build_audit(
     coverage: dict[str, Any],
     validation_summary: dict[str, Any],
 ) -> dict[str, Any]:
+    artifact_validation_success = bool(validation_summary.get("passed", True))
+    final_status = str(coverage.get("final_status", "success"))
+    insufficient_grounding = bool(coverage.get("insufficient_grounding", False))
+    not_final_evidence = bool(coverage.get("not_final_evidence", final_status != "success"))
+    task_or_evidence_success = (
+        artifact_validation_success
+        and final_status == "success"
+        and not insufficient_grounding
+        and not not_final_evidence
+    )
+    grounding_attempt_count = int(
+        coverage.get(
+            "grounding_attempt_count",
+            int(coverage.get("grounded_action_count", 0) or 0)
+            + int(coverage.get("ungrounded_intent_count", 0) or 0),
+        )
+        or 0
+    )
+    ungrounded_attempt_count = int(
+        coverage.get("ungrounded_attempt_count", coverage.get("ungrounded_intent_count", 0)) or 0
+    )
     return {
         "start_time": start_time,
         "end_time": datetime.now(timezone.utc).isoformat(),
         "duration_seconds": duration_seconds,
         "episode_id": "virtualhome-multi-room-exploration",
         "env": "virtualhome_live" if live_run else "virtualhome_replay",
-        "success": bool(validation_summary.get("passed", True)),
+        "success": artifact_validation_success,
+        "artifact_validation_success": artifact_validation_success,
+        "task_or_evidence_success": task_or_evidence_success,
         "virtualhome_live_run": bool(live_run),
         "live_runtime_connected": bool(live_runtime_connected),
         "launch_attempted": bool(launch_attempted),
@@ -2168,14 +2198,20 @@ def _build_audit(
         "policy_failure_count": coverage.get("policy_failure_count", 0),
         "policy_failure_closed": coverage.get("policy_failure_closed", False),
         "action_grounding_mode": coverage.get("action_grounding_mode", "observation_side_only"),
+        "policy_action_decision_count": coverage.get(
+            "policy_action_decision_count",
+            coverage.get("action_decision_count", 0),
+        ),
+        "grounding_attempt_count": grounding_attempt_count,
         "grounded_action_count": coverage.get("grounded_action_count", 0),
         "ungrounded_intent_count": coverage.get("ungrounded_intent_count", 0),
+        "ungrounded_attempt_count": ungrounded_attempt_count,
         "grounding_target_sources": coverage.get("grounding_target_sources", []),
         "fallback_reasons": coverage.get("fallback_reasons", {}),
-        "insufficient_grounding": coverage.get("insufficient_grounding", False),
-        "final_status": coverage.get("final_status", "success"),
+        "insufficient_grounding": insufficient_grounding,
+        "final_status": final_status,
         "termination_reason": coverage.get("termination_reason", ""),
-        "not_final_evidence": coverage.get("not_final_evidence", False),
+        "not_final_evidence": not_final_evidence,
         "rooms_visited_count": len(coverage["rooms_visited"]),
         "room_coverage": coverage["room_coverage"],
         "frames_used": coverage["frames_used"],
