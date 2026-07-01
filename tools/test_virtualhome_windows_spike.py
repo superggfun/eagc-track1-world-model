@@ -1,0 +1,613 @@
+from __future__ import annotations
+
+import argparse
+import importlib
+import json
+import os
+import socket
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List
+
+from PIL import Image
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from env_adapters.virtualhome_adapter import convert_files
+from tools.check_virtualhome_env import collect_status
+
+
+DEFAULT_OUTPUT_DIR = Path("outputs/virtualhome_spike")
+DEFAULT_FRAME_OUTPUT = DEFAULT_OUTPUT_DIR / "frame_000.png"
+
+
+def _status_template() -> Dict[str, Any]:
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "success": False,
+        "reason": "",
+        "error_type": "",
+        "error_message": "",
+        "simulator_started": False,
+        "scene_graph_saved": False,
+        "program_log_saved": False,
+        "frame_saved": False,
+        "converted_world_model_saved": False,
+        "converted_episode_log_saved": False,
+    }
+
+
+def run_spike(
+    output_dir: Path,
+    scene_id: int,
+    port: int,
+    export_frame: bool = False,
+    frame_output: Path | None = None,
+    export_task_frames: bool = False,
+    max_task_frames: int = 8,
+) -> Dict[str, Any]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    status = _status_template()
+    env_status = collect_status()
+    (output_dir / "env_status.json").write_text(json.dumps(env_status, indent=2), encoding="utf-8")
+    status.update(
+        {
+            "virtualhome_simulator_path": env_status.get("virtualhome_simulator_path", ""),
+            "port": port,
+            "scene_id": scene_id,
+        }
+    )
+    if not env_status.get("success"):
+        status["reason"] = env_status.get("reason", "virtualhome_environment_not_ready")
+        status["download_hint"] = env_status.get("download_hint", "")
+        _write_status(output_dir, status)
+        return status
+
+    try:
+        comm_module = _import_comm_module()
+        UnityCommunication = getattr(comm_module, "UnityCommunication")
+        kwargs = {"port": str(port), "logging": False}
+        simulator_path = str(env_status["virtualhome_simulator_path"])
+        if simulator_path:
+            kwargs["file_name"] = simulator_path
+        manual_proc: subprocess.Popen[Any] | None = None
+        try:
+            if _is_port_open("127.0.0.1", port):
+                status["existing_simulator_connection_used"] = True
+                comm = UnityCommunication(port=str(port), logging=False)
+            else:
+                comm = UnityCommunication(**kwargs)
+        except Exception as exc:
+            if _can_fallback_manual_launch(exc, simulator_path):
+                manual_proc = _launch_windows_simulator(simulator_path, port, output_dir)
+                _wait_for_port("127.0.0.1", port, timeout_seconds=60)
+                status["manual_windows_launch_used"] = True
+                status["manual_windows_launch_pid"] = manual_proc.pid
+                comm = UnityCommunication(port=str(port))
+            else:
+                raise
+        status["simulator_started"] = True
+
+        _call_if_exists(comm, "reset", scene_id)
+        character_result = _call_if_exists(comm, "add_character")
+        status["character_added"] = _virtualhome_success(character_result)
+        status["character_add_result"] = character_result
+        scene_graph = _get_scene_graph(comm)
+        scene_graph_path = output_dir / "scene_graph.json"
+        scene_graph_path.write_text(json.dumps(scene_graph, indent=2, ensure_ascii=False), encoding="utf-8")
+        status["scene_graph_saved"] = True
+
+        frame_capture = _init_task_frame_capture(output_dir, max_task_frames) if export_task_frames else None
+        if frame_capture is not None:
+            _capture_task_frame(comm, frame_capture, "initial")
+        task_results = _run_task_suite(comm, scene_graph, scene_id, frame_capture=frame_capture)
+        if frame_capture is not None:
+            task_frame_status = _write_task_frame_status(output_dir, frame_capture)
+            status["task_frame_export_status"] = task_frame_status
+            status["task_frame_count"] = task_frame_status.get("saved_frame_count", 0)
+        successful_tasks = [item for item in task_results if item.get("status") == "success"]
+        failed_tasks = [item for item in task_results if item.get("status") == "failed"]
+        unsupported_tasks = [item for item in task_results if item.get("status") == "unsupported_in_scene"]
+        program = [
+            action
+            for item in task_results
+            if item.get("status") == "success"
+            for action in item.get("program", [])
+        ]
+        program_log = {
+            "tasks": task_results,
+            "program": program,
+            "summary": {
+                "task_count": len(task_results),
+                "success_count": len(successful_tasks),
+                "failed_count": len(failed_tasks),
+                "unsupported_count": len(unsupported_tasks),
+            },
+        }
+        status["task_results"] = task_results
+        status["task_success_count"] = len(successful_tasks)
+        status["task_failed_count"] = len(failed_tasks)
+        status["task_unsupported_count"] = len(unsupported_tasks)
+        status["program_execution_success"] = bool(successful_tasks) and not failed_tasks
+        program_log_path = output_dir / "program_log.json"
+        program_log_path.write_text(json.dumps(program_log, indent=2, ensure_ascii=False), encoding="utf-8")
+        status["program_log_saved"] = True
+        if export_frame:
+            frame_status = _try_export_frame(comm, output_dir, frame_output or (output_dir / "frame_000.png"))
+            status["frame_export_status"] = frame_status
+            status["frame_saved"] = bool(frame_status.get("success"))
+            if frame_status.get("frame_path"):
+                status["frame_path"] = str(frame_status["frame_path"])
+
+        paths = convert_files(scene_graph_path, program_log_path, output_dir)
+        status["converted_world_model_saved"] = paths["world_model"].exists()
+        status["converted_episode_log_saved"] = paths["episode_log"].exists()
+        converted_world_model = json.loads(paths["world_model"].read_text(encoding="utf-8"))
+        converted_objects = converted_world_model.get("objects", [])
+        status["converted_object_count"] = len(converted_objects) if isinstance(converted_objects, list) else 0
+        if status["converted_object_count"] <= 0:
+            raise RuntimeError("VirtualHome scene graph conversion produced no world_model objects.")
+        if not successful_tasks:
+            raise RuntimeError("VirtualHome task suite produced no successful tasks.")
+        if failed_tasks:
+            raise RuntimeError(f"VirtualHome task suite had failed tasks: {failed_tasks}")
+        status["success"] = True
+        status["reason"] = "virtualhome_spike_completed"
+    except Exception as exc:  # VirtualHome APIs vary; capture exact failure.
+        if isinstance(exc, TimeoutError):
+            status["reason"] = "virtualhome_simulator_connection_timeout"
+            status["manual_start_hint"] = (
+                "The Windows executable exists and can be launched, but the Python API could not connect "
+                "to the HTTP port. Try starting VirtualHome.exe manually, choose Windowed mode if prompted, "
+                "press Play, then rerun this smoke."
+            )
+        else:
+            status["reason"] = "virtualhome_runtime_error"
+        status["error_type"] = type(exc).__name__
+        status["error_message"] = str(exc)
+    finally:
+        if "manual_proc" in locals() and manual_proc is not None and manual_proc.poll() is None:
+            manual_proc.terminate()
+            try:
+                manual_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                manual_proc.kill()
+        _write_status(output_dir, status)
+    return status
+
+
+def _import_comm_module() -> Any:
+    for module_name in ["simulation.unity_simulator.comm_unity", "virtualhome.simulation.unity_simulator.comm_unity"]:
+        try:
+            return importlib.import_module(module_name)
+        except ImportError:
+            continue
+    raise ImportError("Could not import VirtualHome UnityCommunication module.")
+
+
+def _call_if_exists(obj: Any, name: str, *args: Any) -> Any:
+    method = getattr(obj, name, None)
+    if callable(method):
+        return method(*args)
+    return None
+
+
+def _can_fallback_manual_launch(exc: Exception, simulator_path: str) -> bool:
+    if not simulator_path or os.name != "nt":
+        return False
+    message = str(exc).lower()
+    return "could not be launched" in message or "environment was found" in message
+
+
+def _launch_windows_simulator(simulator_path: str, port: int, output_dir: Path) -> subprocess.Popen[Any]:
+    exe = Path(simulator_path)
+    log_path = output_dir / f"VirtualHome_Player_{port}.log"
+    args = [
+        str(exe),
+        "-screen-fullscreen",
+        "0",
+        "-screen-quality",
+        "4",
+        f"-http-port={port}",
+        "-logFile",
+        str(log_path),
+    ]
+    return subprocess.Popen(
+        args,
+        cwd=str(exe.parent),
+        env=os.environ.copy(),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _wait_for_port(host: str, port: int, timeout_seconds: int) -> None:
+    deadline = time.time() + timeout_seconds
+    last_error = ""
+    while time.time() < deadline:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.0)
+            try:
+                sock.connect((host, port))
+                return
+            except OSError as exc:
+                last_error = str(exc)
+        time.sleep(1.0)
+    raise TimeoutError(f"VirtualHome simulator did not open {host}:{port} within {timeout_seconds}s. Last error: {last_error}")
+
+
+def _is_port_open(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(1.0)
+        try:
+            sock.connect((host, port))
+            return True
+        except OSError:
+            return False
+
+
+def _get_scene_graph(comm: Any) -> Dict[str, Any]:
+    for method_name in ["environment_graph", "get_scene_graph"]:
+        method = getattr(comm, method_name, None)
+        if not callable(method):
+            continue
+        result = method()
+        if isinstance(result, tuple) and len(result) >= 2:
+            return result[1] if isinstance(result[1], dict) else {"raw_result": result}
+        if isinstance(result, dict):
+            return result
+    raise RuntimeError("VirtualHome communication object does not expose a known scene graph method.")
+
+
+def _run_task_suite(
+    comm: Any,
+    scene_graph: Dict[str, Any],
+    scene_id: int,
+    frame_capture: Dict[str, Any] | None = None,
+) -> List[Dict[str, Any]]:
+    results: List[Dict[str, Any]] = []
+    for spec in _task_specs(scene_graph):
+        row: Dict[str, Any] = {
+            "task_name": spec["task_name"],
+            "program": spec["program"],
+            "required_objects": spec["required_objects"],
+            "status": "pending",
+            "result": None,
+        }
+        missing = [name for name in spec["required_objects"] if not _scene_has_object(scene_graph, name)]
+        if missing:
+            row["status"] = "unsupported_in_scene"
+            row["missing_objects"] = missing
+            results.append(row)
+            continue
+        try:
+            _call_if_exists(comm, "reset", scene_id)
+            add_result = _call_if_exists(comm, "add_character")
+            row["character_added"] = _virtualhome_success(add_result)
+            row["character_add_result"] = add_result
+            render_result = _render_program(comm, spec["program"])
+            row["result"] = render_result
+            row["status"] = "success" if _virtualhome_success(render_result) else "failed"
+            if row["status"] == "success" and frame_capture is not None:
+                _capture_task_frame(comm, frame_capture, str(spec["frame_label"]))
+        except Exception as exc:
+            row["status"] = "failed"
+            row["error_type"] = type(exc).__name__
+            row["error_message"] = str(exc)
+        results.append(row)
+    return results
+
+
+def _task_specs(scene_graph: Dict[str, Any]) -> List[Dict[str, Any]]:
+    nodes = [node for node in scene_graph.get("nodes", []) if isinstance(node, dict)]
+    names = {str(node.get("class_name", "")).lower() for node in nodes}
+    object_for_grab = "book" if "book" in names else "cupcake"
+    open_target = "fridge" if "fridge" in names else "microwave"
+    place_object = "mug" if "mug" in names else "book"
+    surface = "coffeetable" if "coffeetable" in names else "desk"
+    return [
+        {
+            "task_name": "walk_to_and_sit_on_sofa",
+            "frame_label": "sit_on_sofa",
+            "required_objects": ["sofa"],
+            "program": ["<char0> [Walk] <sofa> (1)", "<char0> [Sit] <sofa> (1)"],
+        },
+        {
+            "task_name": "walk_to_and_grab_object",
+            "frame_label": "grab_object",
+            "required_objects": [object_for_grab],
+            "program": [f"<char0> [Walk] <{object_for_grab}> (1)", f"<char0> [Grab] <{object_for_grab}> (1)"],
+        },
+        {
+            "task_name": "walk_to_and_open_object",
+            "frame_label": "open_object",
+            "required_objects": [open_target],
+            "program": [f"<char0> [Walk] <{open_target}> (1)", f"<char0> [Open] <{open_target}> (1)"],
+        },
+        {
+            "task_name": "place_object_on_surface",
+            "frame_label": "place_object",
+            "required_objects": [place_object, surface],
+            "program": [
+                f"<char0> [Walk] <{place_object}> (1)",
+                f"<char0> [Grab] <{place_object}> (1)",
+                f"<char0> [Walk] <{surface}> (1)",
+                f"<char0> [PutBack] <{place_object}> (1) <{surface}> (1)",
+            ],
+        },
+    ]
+
+
+def _scene_has_object(scene_graph: Dict[str, Any], class_name: str) -> bool:
+    return any(
+        isinstance(node, dict) and str(node.get("class_name", "")).lower() == class_name
+        for node in scene_graph.get("nodes", [])
+    )
+
+
+def _first_node_id(nodes: List[Dict[str, Any]], class_name: str) -> Any:
+    for node in nodes:
+        if str(node.get("class_name", "")).lower() == class_name and node.get("id") is not None:
+            return node["id"]
+    return None
+
+
+def _node_category_name(node: Dict[str, Any]) -> str:
+    return str(node.get("category") or "").lower()
+
+
+def _render_program(comm: Any, program: List[str]) -> Any:
+    method = getattr(comm, "render_script", None)
+    if callable(method):
+        return method(program, recording=False, skip_animation=True, find_solution=True, processing_time_limit=10)
+    method = getattr(comm, "execute_script", None)
+    if callable(method):
+        return method(program)
+    return None
+
+
+def _virtualhome_success(result: Any) -> bool:
+    if isinstance(result, tuple) and result:
+        return result[0] is True
+    if isinstance(result, list) and result:
+        return result[0] is True
+    if isinstance(result, dict):
+        value = result.get("success")
+        if isinstance(value, bool):
+            return value
+    return result is True
+
+
+def _try_export_frame(comm: Any, output_dir: Path, frame_output: Path) -> Dict[str, Any]:
+    status: Dict[str, Any] = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "success": False,
+        "reason": "",
+        "error_type": "",
+        "error_message": "",
+        "frame_path": str(frame_output.resolve()),
+        "camera_index": None,
+        "camera_count": None,
+        "width": None,
+        "height": None,
+    }
+    try:
+        frame_output.parent.mkdir(parents=True, exist_ok=True)
+        status.update(_capture_frame(comm, frame_output))
+    except TimeoutError as exc:
+        status["reason"] = "virtualhome_frame_export_timeout"
+        status["error_type"] = type(exc).__name__
+        status["error_message"] = str(exc)
+    except Exception as exc:
+        status["reason"] = "virtualhome_frame_api_unavailable"
+        status["error_type"] = type(exc).__name__
+        status["error_message"] = str(exc)
+    return _write_frame_status(output_dir, status)
+
+
+def _init_task_frame_capture(output_dir: Path, max_task_frames: int) -> Dict[str, Any]:
+    frame_dir = output_dir / "task_frames"
+    frame_dir.mkdir(parents=True, exist_ok=True)
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "success": False,
+        "reason": "",
+        "frame_dir": str(frame_dir),
+        "max_task_frames": max(1, max_task_frames),
+        "frames": [],
+        "warnings": [],
+    }
+
+
+def _capture_task_frame(comm: Any, capture: Dict[str, Any], label: str) -> None:
+    frames = capture.setdefault("frames", [])
+    if not isinstance(frames, list):
+        capture["frames"] = frames = []
+    if len(frames) >= int(capture.get("max_task_frames", 8)):
+        capture.setdefault("warnings", []).append({"label": label, "reason": "max_task_frames_reached"})
+        return
+    index = len(frames)
+    safe_label = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in label.lower()).strip("_") or "frame"
+    frame_path = Path(str(capture["frame_dir"])) / f"{index:03d}_{safe_label}.png"
+    status = _capture_frame(comm, frame_path)
+    status["label"] = label
+    if status.get("success"):
+        frames.append(status)
+    else:
+        capture.setdefault("warnings", []).append(status)
+
+
+def _write_task_frame_status(output_dir: Path, capture: Dict[str, Any]) -> Dict[str, Any]:
+    frames = capture.get("frames", [])
+    warnings = capture.get("warnings", [])
+    capture["saved_frame_count"] = len(frames) if isinstance(frames, list) else 0
+    capture["warning_count"] = len(warnings) if isinstance(warnings, list) else 0
+    capture["success"] = capture["saved_frame_count"] > 0
+    capture["reason"] = "task_frame_export_completed" if capture["success"] else "task_frame_export_unavailable"
+    (output_dir / "task_frame_export_status.json").write_text(
+        json.dumps(capture, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return capture
+
+
+def _capture_frame(comm: Any, frame_output: Path) -> Dict[str, Any]:
+    status: Dict[str, Any] = {
+        "success": False,
+        "reason": "",
+        "error_type": "",
+        "error_message": "",
+        "frame_path": str(frame_output.resolve()),
+        "camera_index": None,
+        "camera_count": None,
+        "width": None,
+        "height": None,
+    }
+    camera_count, camera_indexes = _candidate_camera_indexes(comm)
+    status["camera_count"] = camera_count
+    if not camera_indexes:
+        status["reason"] = "virtualhome_camera_not_configured"
+        return status
+    last_error = ""
+    for camera_index in camera_indexes:
+        try:
+            ok, images = comm.camera_image([camera_index], mode="normal", image_width=640, image_height=480)
+            if not ok:
+                last_error = f"camera_image returned success={ok} for camera {camera_index}"
+                continue
+            if not images:
+                last_error = f"camera_image returned no images for camera {camera_index}"
+                continue
+            saved = _save_frame_payload(images[0], frame_output)
+            status.update(
+                {
+                    "success": True,
+                    "reason": "virtualhome_frame_export_completed",
+                    "camera_index": camera_index,
+                    "frame_path": str(saved.resolve()),
+                }
+            )
+            with Image.open(saved) as image:
+                status["width"], status["height"] = image.size
+            return status
+        except Exception as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
+    status["reason"] = "virtualhome_frame_export_unsupported"
+    status["error_message"] = last_error
+    return status
+
+
+def _candidate_camera_indexes(comm: Any) -> tuple[int | None, List[int]]:
+    ok, camera_count = comm.camera_count()
+    if not ok or not isinstance(camera_count, int) or camera_count <= 0:
+        return None, []
+    candidates = []
+    for index in [camera_count - 1, 0, max(0, camera_count - 8)]:
+        if index not in candidates and 0 <= index < camera_count:
+            candidates.append(index)
+    return camera_count, candidates
+
+
+def _save_frame_payload(payload: Any, frame_output: Path) -> Path:
+    if isinstance(payload, Image.Image):
+        payload.save(frame_output)
+        return frame_output
+    if isinstance(payload, bytes):
+        frame_output.write_bytes(payload)
+        return frame_output
+    shape = getattr(payload, "shape", None)
+    if shape is not None:
+        array = payload
+        if len(shape) == 3 and shape[2] >= 3:
+            array = payload[:, :, :3][:, :, ::-1]
+        Image.fromarray(array).save(frame_output)
+        return frame_output
+    extracted = _extract_frame_payload(payload)
+    if extracted:
+        frame_output.write_bytes(extracted)
+        return frame_output
+    raise TypeError(f"Unsupported frame payload type: {type(payload).__name__}")
+
+
+def _write_frame_status(output_dir: Path, status: Dict[str, Any]) -> Dict[str, Any]:
+    (output_dir / "frame_export_status.json").write_text(json.dumps(status, indent=2), encoding="utf-8")
+    return status
+
+
+def _try_save_frame(comm: Any, output_dir: Path) -> Path | None:
+    for method_name in ["get_camera_image", "get_image", "screenshot"]:
+        method = getattr(comm, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            result = method()
+        except Exception:
+            continue
+        payload = _extract_frame_payload(result)
+        if not payload:
+            continue
+        frame_path = output_dir / "frame_000.png"
+        frame_path.write_bytes(payload)
+        return frame_path
+    return None
+
+
+def _extract_frame_payload(result: Any) -> bytes | None:
+    if isinstance(result, bytes):
+        return result
+    if isinstance(result, tuple):
+        for item in result:
+            payload = _extract_frame_payload(item)
+            if payload:
+                return payload
+    if isinstance(result, dict):
+        for key in ["image", "frame", "png", "bytes"]:
+            payload = _extract_frame_payload(result.get(key))
+            if payload:
+                return payload
+    return None
+
+
+def _write_status(output_dir: Path, status: Dict[str, Any]) -> None:
+    status["elapsed_written_at"] = datetime.now(timezone.utc).isoformat()
+    (output_dir / "status.json").write_text(json.dumps(status, indent=2), encoding="utf-8")
+    print(f"VirtualHome spike status written to {output_dir / 'status.json'}")
+    print(json.dumps(status, indent=2))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run a graceful VirtualHome Windows simulator spike.")
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    parser.add_argument("--scene", type=int, default=0)
+    parser.add_argument("--port", type=int, default=int(os.environ.get("VIRTUALHOME_PORT", "8080")))
+    parser.add_argument("--export-frame", action="store_true")
+    parser.add_argument("--frame-output", default=str(DEFAULT_FRAME_OUTPUT))
+    parser.add_argument("--export-task-frames", action="store_true")
+    parser.add_argument("--max-task-frames", type=int, default=8)
+    args = parser.parse_args()
+
+    status = run_spike(
+        Path(args.output_dir),
+        args.scene,
+        args.port,
+        export_frame=args.export_frame,
+        frame_output=Path(args.frame_output),
+        export_task_frames=args.export_task_frames,
+        max_task_frames=args.max_task_frames,
+    )
+    return 0 if status.get("success") or status.get("reason") in {
+        "missing_virtualhome_executable",
+        "missing_virtualhome_python_api",
+        "missing_virtualhome_simulator_path",
+        "virtualhome_python_api_not_installed",
+    } else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

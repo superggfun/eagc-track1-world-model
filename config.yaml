@@ -1,0 +1,22 @@
+base_url: http://127.0.0.1:8000/v1
+model: qwen3.6-35b-nvfp4
+temperature: 0.2
+max_tokens: 2048
+episode_id: mock-bedroom-relocated
+use_mock_llm: false
+output_dir: outputs
+max_recovery_steps: 6
+oracle_metadata_mode: false
+virtualhome:
+  simulator_path: ""
+  port: 8080
+  default_scene: 0
+  camera_mode: "FIRST_PERSON"
+alfred:
+  dataset_root: ""
+  sample_traj_path: ""
+track1_budgets:
+  exploration_steps: 12
+  planning_steps: 3
+  execution_steps: 50
+  max_recovery_steps: 8

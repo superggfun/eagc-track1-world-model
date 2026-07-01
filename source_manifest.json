@@ -1,0 +1,59 @@
+{
+  "layout": "flat-src",
+  "included_count": 228,
+  "included_roots": [
+    "src",
+    "tests",
+    "tools",
+    "assets",
+    "docs",
+    "submission_package",
+    "docker",
+    "scripts",
+    "reports"
+  ],
+  "included_files": [
+    ".dockerignore",
+    ".gitignore",
+    "README.md",
+    "Dockerfile",
+    "main.py",
+    "sitecustomize.py",
+    "pyproject.toml",
+    "requirements.txt",
+    "requirements-report.txt",
+    "requirements-optional-sim.txt",
+    "SUBMISSION_VERSION.txt",
+    "config.yaml"
+  ],
+  "missing_expected_paths": [],
+  "excluded": [
+    ".git",
+    ".pytest_cache",
+    ".venv",
+    ".venv-ai2thor",
+    "__pycache__",
+    "build",
+    "dist",
+    "outputs",
+    "source_pack",
+    "submission_bundle"
+  ],
+  "excluded_suffixes": [
+    ".jpeg",
+    ".jpg",
+    ".png",
+    ".pyc",
+    ".pyo",
+    ".webp",
+    ".zip"
+  ],
+  "allowed_image_fixtures": [
+    "assets/test_sequences/bedroom_sequence/frame_000.png",
+    "assets/test_sequences/bedroom_sequence/frame_001.png",
+    "assets/test_sequences/bedroom_sequence/frame_002.png"
+  ],
+  "allowed_image_prefixes": [
+    "assets/test_sequences/virtualhome_exploration/frames/frame_"
+  ]
+}

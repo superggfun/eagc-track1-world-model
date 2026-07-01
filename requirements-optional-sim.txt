@@ -1,0 +1,10 @@
+# Optional simulator dependencies.
+# These adapters are NOT validated and NOT required for the core pipeline.
+# Install individually only if you are attempting to unblock the corresponding backend.
+
+# AI2-THOR (blocked: Windows/WSL/cloud rendering stack)
+# ai2thor
+
+# Habitat (blocked: EGL/Vulkan/headless rendering)
+# habitat-sim
+# habitat-lab

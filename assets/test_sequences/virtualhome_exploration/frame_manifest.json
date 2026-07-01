@@ -1,0 +1,196 @@
+{
+  "frames": [
+    {
+      "frame": "frames/frame_000.jpg",
+      "step": 0,
+      "room": "bathroom",
+      "action": "enter_room",
+      "camera_movement": "forward",
+      "anchor_object": "sink",
+      "notes": "Keyframe 1 in bathroom. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "sink",
+        "toilet"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_001.jpg",
+      "step": 1,
+      "room": "bathroom",
+      "action": "inspect_key_objects",
+      "camera_movement": "pan",
+      "anchor_object": "toilet",
+      "notes": "Keyframe 2 in bathroom. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "toilet",
+        "mirror"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_002.jpg",
+      "step": 2,
+      "room": "bathroom",
+      "action": "inspect_key_objects",
+      "camera_movement": "pan",
+      "anchor_object": "mirror",
+      "notes": "Keyframe 3 in bathroom. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "mirror",
+        "sink"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_003.jpg",
+      "step": 3,
+      "room": "bedroom",
+      "action": "enter_room",
+      "camera_movement": "forward",
+      "anchor_object": "bed",
+      "notes": "Keyframe 1 in bedroom. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "bed",
+        "table"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_004.jpg",
+      "step": 4,
+      "room": "bedroom",
+      "action": "inspect_key_objects",
+      "camera_movement": "pan",
+      "anchor_object": "table",
+      "notes": "Keyframe 2 in bedroom. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "table",
+        "book"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_005.jpg",
+      "step": 5,
+      "room": "bedroom",
+      "action": "inspect_key_objects",
+      "camera_movement": "pan",
+      "anchor_object": "book",
+      "notes": "Keyframe 3 in bedroom. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "book",
+        "bed"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_006.jpg",
+      "step": 6,
+      "room": "kitchen",
+      "action": "enter_room",
+      "camera_movement": "forward",
+      "anchor_object": "fridge",
+      "notes": "Keyframe 1 in kitchen. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "fridge",
+        "counter"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_007.jpg",
+      "step": 7,
+      "room": "kitchen",
+      "action": "inspect_key_objects",
+      "camera_movement": "pan",
+      "anchor_object": "counter",
+      "notes": "Keyframe 2 in kitchen. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "counter",
+        "cabinet"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_008.jpg",
+      "step": 8,
+      "room": "kitchen",
+      "action": "inspect_key_objects",
+      "camera_movement": "pan",
+      "anchor_object": "cabinet",
+      "notes": "Keyframe 3 in kitchen. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "cabinet",
+        "fridge"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_009.jpg",
+      "step": 9,
+      "room": "livingroom",
+      "action": "enter_room",
+      "camera_movement": "forward",
+      "anchor_object": "sofa",
+      "notes": "Keyframe 1 in livingroom. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "sofa",
+        "television"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_010.jpg",
+      "step": 10,
+      "room": "livingroom",
+      "action": "inspect_key_objects",
+      "camera_movement": "pan",
+      "anchor_object": "television",
+      "notes": "Keyframe 2 in livingroom. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "television",
+        "coffee_table"
+      ],
+      "synthetic_capture": true
+    },
+    {
+      "frame": "frames/frame_011.jpg",
+      "step": 11,
+      "room": "livingroom",
+      "action": "inspect_key_objects",
+      "camera_movement": "pan",
+      "anchor_object": "coffee_table",
+      "notes": "Keyframe 3 in livingroom. Synthetic CI replay fixture; not final VirtualHome/VLM evidence.",
+      "capture_mode": "continuous_run",
+      "continuous_closed_loop": true,
+      "expected_visible_objects": [
+        "coffee_table",
+        "sofa"
+      ],
+      "synthetic_capture": true
+    }
+  ]
+}

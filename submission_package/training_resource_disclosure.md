@@ -1,0 +1,57 @@
+# Training Resource Disclosure
+
+## Training Status
+
+No model training or fine-tuning has been performed yet.
+
+The current project uses inference only.
+
+No student model, distillation run, reinforcement learning run, or supervised fine-tuning run has been produced for this readiness package.
+
+## Model Used For Inference
+
+- Model family/name used locally: Qwen3.6-35B-A3B-NVFP4.
+- Configured model identifier: `qwen3.6-35b-nvfp4`.
+- Serving stack: local vLLM OpenAI-compatible endpoint.
+- Default endpoint: `http://127.0.0.1:8000/v1`.
+
+## Environment And Data Sources
+
+- LocalSim: self-built symbolic/local environment for Track 1-style development and evaluation.
+- Mock environments: deterministic text-only episodes for testing.
+- Visual sequence smoke tests: local bedroom images placed under `assets/test_sequences/bedroom_sequence/`.
+- The visual images are local smoke-test resources and are not committed to git.
+- ALFRED offline adapter: optional parsing of user-provided local ALFRED `traj_data.json` files for public household task trajectory alignment.
+- Synthetic ALFRED-like fixture: `tests/fixtures/alfred/sample_traj_data.json` is a tiny synthetic conversion test fixture, not real ALFRED data and not benchmark evidence.
+- ALFRED data is not downloaded automatically, not redistributed, and not committed to git.
+- VirtualHome: optional manual-play Windows simulator evidence smoke using an external VirtualHome repository and Unity executable stored outside this project.
+- VirtualHome exported frames, scene graphs, program logs, raw Qwen responses, and derived runtime reports are local diagnostics under `outputs/` and are not committed to git.
+
+## Simulator Status
+
+VirtualHome manual-play Windows simulator evidence has been validated for scene graph extraction, four fixed household task executions, frame export, single-frame Qwen vision comparison, and episode-level multi-frame grounding. This is still an optional simulator smoke, not official EAGC runtime validation.
+
+AI2-THOR/ProcTHOR/Habitat have not been validated in the stable path due to platform/runtime/rendering issues. AI2-THOR adapter code may exist as experimental work, but it is not part of the current validated submission path.
+
+The v0.17 resource audit used the existing `openclaw-vllm` endpoint and did not modify, restart, rebuild, delete, or manage that container. Lightweight vLLM was not started. The current conclusion is that the validated VirtualHome evidence pipeline works with the existing endpoint, so a lightweight endpoint is only a future fallback.
+
+## Online API Use
+
+No online model APIs are used during evaluation runs. The system is designed to call a local vLLM endpoint.
+
+## Training Resources
+
+Current training resource use:
+
+- Training data: none.
+- Fine-tuning data: none.
+- Student model: none.
+- Distillation: none.
+- ALFRED simulator execution: none.
+- VirtualHome model training: none.
+- Lightweight vLLM run: none.
+- External online model calls: none during evaluation.
+
+Hardware used for local development/testing:
+
+- RTX 5090 32GB.

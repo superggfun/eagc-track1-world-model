@@ -1,0 +1,6 @@
+# Report generation dependencies (optional).
+# Only needed when running `python tools/build_report_pdf.py`.
+# Both are lazy-imported; the pipeline runs fine without them.
+
+weasyprint
+playwright

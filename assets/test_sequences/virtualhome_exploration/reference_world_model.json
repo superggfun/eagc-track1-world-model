@@ -1,0 +1,139 @@
+{
+  "episode_id": "virtualhome-multi-room-exploration-reference",
+  "source": "virtualhome_manifest_reference_fallback",
+  "official_score": false,
+  "reference_model": true,
+  "used_for_generation": false,
+  "used_for_validation": true,
+  "used_for_prediction_generation": false,
+  "rooms": [
+    "bathroom",
+    "bedroom",
+    "kitchen",
+    "livingroom"
+  ],
+  "objects": [
+    {
+      "id": "ref_bathroom_sink",
+      "name": "sink",
+      "room": "bathroom",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_bathroom_toilet",
+      "name": "toilet",
+      "room": "bathroom",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_bathroom_mirror",
+      "name": "mirror",
+      "room": "bathroom",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_bedroom_bed",
+      "name": "bed",
+      "room": "bedroom",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_bedroom_table",
+      "name": "table",
+      "room": "bedroom",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_bedroom_book",
+      "name": "book",
+      "room": "bedroom",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_kitchen_fridge",
+      "name": "fridge",
+      "room": "kitchen",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_kitchen_counter",
+      "name": "counter",
+      "room": "kitchen",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_kitchen_cabinet",
+      "name": "cabinet",
+      "room": "kitchen",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_livingroom_sofa",
+      "name": "sofa",
+      "room": "livingroom",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_livingroom_television",
+      "name": "television",
+      "room": "livingroom",
+      "source": "virtualhome_manifest_reference_fallback"
+    },
+    {
+      "id": "ref_livingroom_coffee_table",
+      "name": "coffee_table",
+      "room": "livingroom",
+      "source": "virtualhome_manifest_reference_fallback"
+    }
+  ],
+  "relations": [],
+  "topology": {
+    "nodes": [
+      {
+        "room": "bathroom"
+      },
+      {
+        "room": "bedroom"
+      },
+      {
+        "room": "kitchen"
+      },
+      {
+        "room": "livingroom"
+      }
+    ],
+    "edges": [
+      {
+        "from": "bathroom",
+        "to": "bedroom",
+        "relation": "connected_to",
+        "status": "diagnostic",
+        "evidence_source": "manifest_reference_fallback",
+        "evidence_frames": [],
+        "action": "fixture reference only",
+        "confidence": 0.9
+      },
+      {
+        "from": "bedroom",
+        "to": "kitchen",
+        "relation": "connected_to",
+        "status": "diagnostic",
+        "evidence_source": "manifest_reference_fallback",
+        "evidence_frames": [],
+        "action": "fixture reference only",
+        "confidence": 0.9
+      },
+      {
+        "from": "kitchen",
+        "to": "livingroom",
+        "relation": "connected_to",
+        "status": "diagnostic",
+        "evidence_source": "manifest_reference_fallback",
+        "evidence_frames": [],
+        "action": "fixture reference only",
+        "confidence": 0.9
+      }
+    ],
+    "topology_source": "manifest_reference_fallback"
+  }
+}
