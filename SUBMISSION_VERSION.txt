@@ -1,1 +1,6 @@
-v0.17.6
+Repository: https://github.com/superggfun/eagc-track1-world-model
+Submission commit: see Git tag v0.17.6 target commit
+Submission tag: v0.17.6
+Track: EAGC 2026 Track 1
+Source layout: flat src
+VirtualHome final evidence: not included; optional diagnostics only

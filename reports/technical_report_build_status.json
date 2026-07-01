@@ -1,0 +1,19 @@
+{
+  "source": "C:\\Users\\Alphay\\Documents\\New project\\submission_package\\technical_report.md",
+  "pdf_path": "C:\\Users\\Alphay\\Documents\\New project\\reports\\technical_report.pdf",
+  "html_path": "C:\\Users\\Alphay\\Documents\\New project\\reports\\technical_report.html",
+  "pdf_built": true,
+  "pdf_generated": true,
+  "html_built": true,
+  "html_fallback_path": "C:\\Users\\Alphay\\Documents\\New project\\reports\\technical_report.html",
+  "manual_export_required": false,
+  "manual_export_steps": [],
+  "method": "builtin_simple_pdf",
+  "warnings": [
+    "pandoc not found.",
+    "WeasyPrint not available.",
+    "wkhtmltopdf not found.",
+    "Playwright is installed, but Chromium is missing. Run playwright install to enable automatic PDF export.",
+    "Used built-in simple PDF fallback because no full PDF backend was available. HTML remains the layout-fidelity report artifact."
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "pytest_result": "175 passed",
+  "compileall_result": "passed",
+  "docker_smoke_result": "passed",
+  "source_repro_result": "passed",
+  "checksum_result": "passed",
+  "source_zip_clean": true,
+  "local_path_leak_scan": "passed",
+  "local_sim": {
+    "success": true,
+    "score": "100.0 / 100",
+    "total_steps": 17,
+    "exploration_steps": 8,
+    "planning_steps": 1,
+    "execution_steps": 3,
+    "recovery_steps": 5
+  },
+  "maze_stress": {
+    "goal_reached": true,
+    "steps_taken": 28,
+    "shortest_path_length": 14,
+    "map_coverage": 0.88,
+    "edge_precision": 1.0,
+    "edge_recall": 0.926
+  },
+  "maze_anti_loop": {
+    "scenarios_run": 4,
+    "scenarios_passed": 4,
+    "average_edge_precision": 1.0,
+    "average_edge_recall": 0.979,
+    "total_replans": 13,
+    "total_backtracks": 11,
+    "total_oscillation_count": 0
+  },
+  "virtualhome": {
+    "final_evidence_included": false,
+    "mock_replay_included": true,
+    "mock_evidence_level": "mock_ci_smoke",
+    "mock_prediction_input_mode": "mock_visual_extraction",
+    "partial_live_included": true,
+    "partial_live_status": "partial",
+    "partial_live_frames": 7,
+    "partial_live_qwen_calls": 7,
+    "partial_live_reason": "insufficient executable action grounding"
+  },
+  "official_adapter": {
+    "included": true,
+    "status": "fail-closed placeholder",
+    "silent_fallback_to_localsim": false
+  }
+}

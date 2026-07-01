@@ -321,6 +321,15 @@ def test_replay_accepts_manifest_relative_frame_paths_from_sequence_root(tmp_pat
 
     assert exit_code == 0
     assert (output_dir / "frames" / "frame_000.jpg").exists()
+    audit = json.loads((output_dir / "run_audit.json").read_text(encoding="utf-8"))
+    coverage = json.loads((output_dir / "coverage_report.json").read_text(encoding="utf-8"))
+    assert audit["evidence_level"] == "mock_ci_smoke"
+    assert audit["not_final_evidence"] is True
+    assert audit["artifact_validation_success"] is True
+    assert audit["task_or_evidence_success"] is False
+    assert coverage["not_final_evidence"] is True
+    assert coverage["artifact_validation_success"] is True
+    assert coverage["task_or_evidence_success"] is False
 
 
 def test_virtualhome_policy_prefers_observation_derived_navigation() -> None:

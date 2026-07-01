@@ -100,18 +100,41 @@ def _copy_source_zip(bundle_root: Path, source_zip: Path) -> None:
 def _copy_reports(bundle_root: Path) -> None:
     reports_dir = bundle_root / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
-    _copy_required(PROJECT_ROOT / "submission_package" / "technical_report_draft.md", reports_dir / "technical_report_draft.md")
+    _copy_required(PROJECT_ROOT / "submission_package" / "technical_report.md", reports_dir / "technical_report.md")
+    html_candidates = [
+        PROJECT_ROOT / "submission_package" / "technical_report.html",
+        PROJECT_ROOT / "reports" / "technical_report.html",
+        PROJECT_ROOT / "submission_bundle" / "reports" / "technical_report.html",
+    ]
+    html_included = False
+    for candidate in html_candidates:
+        if candidate.exists():
+            shutil.copy2(candidate, reports_dir / "technical_report.html")
+            html_included = True
+            break
     pdf_candidates = [
-        PROJECT_ROOT / "submission_package" / "technical_report_draft.pdf",
-        PROJECT_ROOT / "reports" / "technical_report_draft.pdf",
+        PROJECT_ROOT / "submission_package" / "technical_report.pdf",
+        PROJECT_ROOT / "reports" / "technical_report.pdf",
+        PROJECT_ROOT / "submission_bundle" / "reports" / "technical_report.pdf",
     ]
     for candidate in pdf_candidates:
         if candidate.exists():
-            shutil.copy2(candidate, reports_dir / "technical_report_draft.pdf")
-            _write_technical_report_status(reports_dir / "technical_report_build_status.json", pdf_included=True)
+            shutil.copy2(candidate, reports_dir / "technical_report.pdf")
+            _write_technical_report_status(
+                reports_dir / "technical_report_build_status.json",
+                pdf_included=True,
+                html_included=html_included,
+            )
             break
     else:
-        _write_technical_report_status(reports_dir / "technical_report_build_status.json", pdf_included=False)
+        _write_technical_report_status(
+            reports_dir / "technical_report_build_status.json",
+            pdf_included=False,
+            html_included=html_included,
+        )
+    metrics_path = PROJECT_ROOT / "reports" / "report_metrics.json"
+    if metrics_path.exists():
+        shutil.copy2(metrics_path, reports_dir / "report_metrics.json")
 
 
 def _copy_disclosures(bundle_root: Path) -> None:
@@ -227,6 +250,7 @@ def _copy_sample_outputs(
         require_virtualhome_final=require_virtualhome_final,
         allow_mock_virtualhome_sample=allow_mock_virtualhome_sample,
     )
+    _copy_virtualhome_optional_diagnostics(bundle_root, manifest)
     manifest["official_runtime_adapter"] = {
         "placeholder_implemented": True,
         "hidden_evaluation_results_included": False,
@@ -362,6 +386,77 @@ def _copy_virtualhome_if_final(
         }
 
 
+def _copy_virtualhome_optional_diagnostics(bundle_root: Path, manifest: dict[str, Any]) -> None:
+    optional_manifest = manifest.setdefault("optional_diagnostics", {})
+    _copy_one_virtualhome_diagnostic(
+        bundle_root,
+        optional_manifest,
+        name="virtualhome_mock_replay",
+        candidates=[PROJECT_ROOT / "outputs" / "virtualhome_mock_replay"],
+        final_submission=False,
+    )
+    _copy_one_virtualhome_diagnostic(
+        bundle_root,
+        optional_manifest,
+        name="virtualhome_partial_live",
+        candidates=[
+            PROJECT_ROOT / "outputs" / "virtualhome_partial_live",
+            PROJECT_ROOT / "outputs" / "virtualhome_live_attach_check",
+        ],
+        final_submission=False,
+        allow_failure_only=True,
+    )
+
+
+def _copy_one_virtualhome_diagnostic(
+    bundle_root: Path,
+    optional_manifest: dict[str, Any],
+    *,
+    name: str,
+    candidates: list[Path],
+    final_submission: bool,
+    allow_failure_only: bool = False,
+) -> None:
+    source_dir = next((candidate for candidate in candidates if candidate.exists() and any(candidate.iterdir())), None)
+    if source_dir is None:
+        optional_manifest[name] = {"included": False, "reason": "diagnostic output directory was not present"}
+        return
+
+    has_full_artifacts = all((source_dir / rel).exists() for rel in VIRTUALHOME_REQUIRED_FILES)
+    if has_full_artifacts:
+        validation = _validate_virtualhome_exploration_output(source_dir, final_submission=final_submission)
+    elif allow_failure_only and ((source_dir / "live_connection_error.json").exists() or (source_dir / "harness_result.json").exists()):
+        validation = {
+            "passed": False,
+            "errors": [],
+            "warnings": ["failure-only or partial live diagnostic; not final evidence"],
+        }
+    else:
+        optional_manifest[name] = {
+            "included": False,
+            "source": source_dir.relative_to(PROJECT_ROOT).as_posix(),
+            "reason": "diagnostic output was incomplete",
+        }
+        return
+
+    target_dir = bundle_root / "optional_diagnostics" / name
+    copied = _copy_output_tree(source_dir, target_dir)
+    audit: dict[str, Any] = {}
+    if (source_dir / "run_audit.json").exists():
+        audit = _read_json(source_dir / "run_audit.json")
+    elif (source_dir / "live_connection_error.json").exists():
+        audit = _read_json(source_dir / "live_connection_error.json")
+    optional_manifest[name] = {
+        "included": True,
+        "source": source_dir.relative_to(PROJECT_ROOT).as_posix(),
+        "copied": copied,
+        "validation": validation,
+        "evidence_level": audit.get("evidence_level"),
+        "prediction_input_mode": audit.get("prediction_input_mode"),
+        "not_final_evidence": True,
+    }
+
+
 def _assert_virtualhome_final_evidence(source_dir: Path, *, allow_mock_virtualhome_sample: bool) -> None:
     audit = _read_json(source_dir / "run_audit.json")
     required = {
@@ -431,17 +526,19 @@ def _is_ignored_output_file(path: Path) -> bool:
     return "__pycache__" in path.parts or ".pytest_cache" in path.parts or path.suffix.lower() in {".pyc", ".pyo", ".zip"}
 
 
-def _write_technical_report_status(path: Path, pdf_included: bool) -> None:
+def _write_technical_report_status(path: Path, pdf_included: bool, html_included: bool) -> None:
     status = {
-        "source": "submission_package/technical_report_draft.md",
-        "technical_report_markdown": "reports/technical_report_draft.md",
-        "technical_report_pdf": "reports/technical_report_draft.pdf" if pdf_included else "",
+        "source": "submission_package/technical_report.md",
+        "technical_report_markdown": "reports/technical_report.md",
+        "technical_report_html": "reports/technical_report.html" if html_included else "",
+        "technical_report_pdf": "reports/technical_report.pdf" if pdf_included else "",
+        "html_included": html_included,
         "pdf_included": pdf_included,
         "manual_export_required": not pdf_included,
         "manual_export_steps": [
-            "Open submission_package/technical_report_draft.md or the generated HTML in a browser.",
+            "Open submission_bundle/reports/technical_report.html in a browser, or open submission_package/technical_report.md.",
             "Use Print / Save as PDF.",
-            "Place the exported file at submission_bundle/reports/technical_report_draft.pdf.",
+            "Place the exported file at submission_bundle/reports/technical_report.pdf.",
         ]
         if not pdf_included
         else [],

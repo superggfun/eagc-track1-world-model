@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Iterable, List
 
+from world_model.index import WorldModelIndex
+
 
 RELATION_ALIASES = {
     "near": {"near", "beside", "next_to", "adjacent_to"},
@@ -22,6 +24,7 @@ ACTIVE_STATUSES = {"active"}
 
 def evaluate_visual_task(task: str, world_model: Dict[str, Any], confidence_threshold: float = 0.45) -> Dict[str, Any]:
     task_lower = task.lower().strip()
+    index = WorldModelIndex.from_world_model(world_model)
     relation_query = _parse_relation_query(task_lower)
     near_query = _parse_find_near(task_lower)
     identify = _parse_identify_location(task_lower)
@@ -29,14 +32,14 @@ def evaluate_visual_task(task: str, world_model: Dict[str, Any], confidence_thre
 
     if relation_query:
         subject, relation, target = relation_query
-        return _evaluate_relation(task, world_model, subject, relation, target, confidence_threshold)
+        return _evaluate_relation(task, world_model, index, subject, relation, target, confidence_threshold)
     if near_query:
         subject, target = near_query
-        return _evaluate_relation(task, world_model, subject, "near", target, confidence_threshold)
+        return _evaluate_relation(task, world_model, index, subject, "near", target, confidence_threshold)
     if identify:
-        return _evaluate_location(task, world_model, identify, confidence_threshold)
+        return _evaluate_location(task, world_model, index, identify, confidence_threshold)
     if find:
-        return _evaluate_find(task, world_model, find, confidence_threshold)
+        return _evaluate_find(task, world_model, index, find, confidence_threshold)
     return _result(
         task=task,
         status="failed",
@@ -56,11 +59,11 @@ def evaluate_visual_task(task: str, world_model: Dict[str, Any], confidence_thre
 
 def _evaluate_find(
     task: str,
-    world_model: Dict[str, Any],
+    index: WorldModelIndex,
     object_name: str,
     confidence_threshold: float,
 ) -> Dict[str, Any]:
-    obj = _find_object(world_model, object_name)
+    obj = _find_visual_object(index, object_name)
     if not obj:
         return _result(
             task=task,
@@ -117,10 +120,11 @@ def _evaluate_find(
 def _evaluate_location(
     task: str,
     world_model: Dict[str, Any],
+    index: WorldModelIndex,
     object_name: str,
     confidence_threshold: float,
 ) -> Dict[str, Any]:
-    obj = _find_object(world_model, object_name)
+    obj = _find_visual_object(index, object_name)
     if not obj:
         return _result(
             task=task,
@@ -196,13 +200,14 @@ def _evaluate_location(
 def _evaluate_relation(
     task: str,
     world_model: Dict[str, Any],
+    index: WorldModelIndex,
     subject: str,
     relation: str,
     target: str,
     confidence_threshold: float,
 ) -> Dict[str, Any]:
-    subject_obj = _find_object(world_model, subject)
-    target_obj = _find_object(world_model, target)
+    subject_obj = _find_visual_object(index, subject)
+    target_obj = _find_visual_object(index, target)
     queried_relation = f"{subject} {relation} {target}"
     supporting: List[Dict[str, Any]] = []
     missing: List[Dict[str, Any]] = []
@@ -460,12 +465,14 @@ def _normalize_relation(text: str) -> str:
     return "inside" if text == "in" else text
 
 
-def _find_object(world_model: Dict[str, Any], object_name: str) -> Dict[str, Any] | None:
+def _find_visual_object(index: WorldModelIndex, object_name: str) -> Dict[str, Any] | None:
     candidates = OBJECT_ALIASES.get(object_name, [object_name])
     normalized_candidates = {_normalize_object(candidate) for candidate in candidates}
-    for obj in world_model.get("objects", []):
-        if not isinstance(obj, dict):
-            continue
+    for candidate in candidates:
+        exact = index.find_object(candidate)
+        if exact:
+            return exact
+    for obj in index.iter_objects():
         values = {_normalize_object(str(obj.get("name") or "")), _normalize_object(str(obj.get("id") or ""))}
         if values & normalized_candidates:
             return obj

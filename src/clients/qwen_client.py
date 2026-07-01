@@ -269,5 +269,5 @@ def _response_preview(exc: requests.exceptions.RequestException) -> str:
         return ""
     try:
         return response.text[:800]
-    except Exception:
-        return ""
+    except Exception as preview_exc:
+        return f"<response preview unavailable: {type(preview_exc).__name__}: {preview_exc}>"

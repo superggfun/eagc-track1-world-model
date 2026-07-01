@@ -12,7 +12,7 @@ from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE = PROJECT_ROOT / "submission_package" / "technical_report_draft.md"
+DEFAULT_SOURCE = PROJECT_ROOT / "submission_package" / "technical_report.md"
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "submission_bundle" / "reports"
 
 
@@ -25,8 +25,9 @@ def main() -> int:
     source = _resolve_path(args.source)
     output_dir = _resolve_path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    pdf_path = output_dir / "technical_report_draft.pdf"
-    html_path = output_dir / "technical_report_draft.html"
+    output_stem = source.stem
+    pdf_path = output_dir / f"{output_stem}.pdf"
+    html_path = output_dir / f"{output_stem}.html"
     status_path = output_dir / "technical_report_build_status.json"
 
     status: dict[str, Any] = {
@@ -62,6 +63,9 @@ def main() -> int:
         elif _try_playwright(html_path, pdf_path, status):
             status["pdf_built"] = True
             status["method"] = "playwright"
+        elif _try_builtin_pdf(markdown, pdf_path, status):
+            status["pdf_built"] = True
+            status["method"] = "builtin_simple_pdf"
         else:
             status["manual_export_required"] = True
             status["manual_export_steps"] = [
@@ -180,13 +184,143 @@ def _run_pdf_command(command: list[str], status: dict[str, Any]) -> bool:
     return completed.returncode == 0
 
 
+def _try_builtin_pdf(markdown: str, pdf_path: Path, status: dict[str, Any]) -> bool:
+    try:
+        _write_simple_pdf(markdown, pdf_path)
+        status["warnings"].append(
+            "Used built-in simple PDF fallback because no full PDF backend was available. "
+            "HTML remains the layout-fidelity report artifact."
+        )
+        return pdf_path.exists() and pdf_path.stat().st_size > 0
+    except Exception as exc:
+        status["warnings"].append(f"Built-in simple PDF fallback failed: {exc}")
+        return False
+
+
+def _write_simple_pdf(markdown: str, pdf_path: Path) -> None:
+    pages = _paginate_pdf_lines(_markdown_to_plain_lines(markdown))
+    objects: list[bytes] = []
+
+    def add_object(payload: bytes) -> int:
+        objects.append(payload)
+        return len(objects)
+
+    catalog_id = add_object(b"<< /Type /Catalog /Pages 2 0 R >>")
+    pages_id = add_object(b"")
+    font_id = add_object(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    page_ids: list[int] = []
+    for page_lines in pages:
+        stream = _pdf_text_stream(page_lines)
+        content_id = add_object(
+            f"<< /Length {len(stream)} >>\nstream\n".encode("ascii")
+            + stream
+            + b"\nendstream"
+        )
+        page_id = add_object(
+            (
+                f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 595 842] "
+                f"/Resources << /Font << /F1 {font_id} 0 R >> >> /Contents {content_id} 0 R >>"
+            ).encode("ascii")
+        )
+        page_ids.append(page_id)
+    kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
+    objects[pages_id - 1] = f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>".encode("ascii")
+    _write_pdf_objects(pdf_path, objects, catalog_id)
+
+
+def _markdown_to_plain_lines(markdown: str) -> list[str]:
+    lines: list[str] = []
+    in_code = False
+    for raw_line in markdown.splitlines():
+        line = raw_line.rstrip()
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            continue
+        if not in_code:
+            line = line.lstrip("#").strip() if line.startswith("#") else line
+            if line.startswith("- "):
+                line = "* " + line[2:]
+        lines.extend(_wrap_pdf_line(line, width=92))
+    return lines
+
+
+def _wrap_pdf_line(line: str, *, width: int) -> list[str]:
+    if not line:
+        return [""]
+    chunks: list[str] = []
+    current = ""
+    for word in line.split():
+        if not current:
+            current = word
+        elif len(current) + 1 + len(word) <= width:
+            current += " " + word
+        else:
+            chunks.append(current)
+            current = word
+    if current:
+        chunks.append(current)
+    return chunks or [""]
+
+
+def _paginate_pdf_lines(lines: list[str]) -> list[list[str]]:
+    pages: list[list[str]] = []
+    page: list[str] = []
+    max_lines = 48
+    for line in lines:
+        if len(page) >= max_lines:
+            pages.append(page)
+            page = []
+        page.append(line)
+    if page:
+        pages.append(page)
+    return pages or [["Technical Report"]]
+
+
+def _pdf_text_stream(lines: list[str]) -> bytes:
+    stream_lines = ["BT", "/F1 10 Tf", "50 790 Td", "14 TL"]
+    for index, line in enumerate(lines):
+        if index:
+            stream_lines.append("T*")
+        stream_lines.append(f"({_pdf_escape_text(line)}) Tj")
+    stream_lines.append("ET")
+    return "\n".join(stream_lines).encode("ascii", errors="replace")
+
+
+def _pdf_escape_text(value: str) -> str:
+    safe = value.encode("latin-1", errors="replace").decode("latin-1")
+    return safe.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _write_pdf_objects(pdf_path: Path, objects: list[bytes], catalog_id: int) -> None:
+    output = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
+    offsets = [0]
+    for index, payload in enumerate(objects, start=1):
+        offsets.append(len(output))
+        output.extend(f"{index} 0 obj\n".encode("ascii"))
+        output.extend(payload)
+        output.extend(b"\nendobj\n")
+    xref_offset = len(output)
+    output.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    output.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        output.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    output.extend(
+        (
+            f"trailer\n<< /Size {len(objects) + 1} /Root {catalog_id} 0 R >>\n"
+            f"startxref\n{xref_offset}\n%%EOF\n"
+        ).encode("ascii")
+    )
+    pdf_path.write_bytes(bytes(output))
+
+
 def _markdown_to_html(markdown: str) -> str:
     body = "\n".join(_markdown_lines_to_html(markdown.splitlines()))
+    title = _html_title(markdown)
     return f"""<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Technical Report Draft</title>
+  <title>{html.escape(title)}</title>
   <style>
     body {{ font-family: Arial, sans-serif; line-height: 1.55; margin: 48px; max-width: 920px; }}
     h1, h2, h3 {{ color: #1f2937; }}
@@ -200,6 +334,14 @@ def _markdown_to_html(markdown: str) -> str:
 </body>
 </html>
 """
+
+
+def _html_title(markdown: str) -> str:
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped[2:].strip() or "Technical Report"
+    return "Technical Report"
 
 
 def _markdown_lines_to_html(lines: list[str]) -> list[str]:

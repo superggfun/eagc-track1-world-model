@@ -1277,6 +1277,17 @@ def _write_artifacts(
     )
     if grounding_summary["final_status"] != "success" and evidence_level != EVIDENCE_MOCK_CI:
         evidence_level = EVIDENCE_VISUAL_REPLAY
+    not_final_evidence = (
+        evidence_level != EVIDENCE_CLOSED_LOOP
+        or grounding_summary["final_status"] != "success"
+    )
+    artifact_validation_success = True
+    task_or_evidence_success = (
+        artifact_validation_success
+        and grounding_summary["final_status"] == "success"
+        and not grounding_summary["insufficient_grounding"]
+        and not not_final_evidence
+    )
     reference_source = str(reference_world_model.get("source") or "virtualhome_manifest_reference_fallback")
     reference_note = (
         "VirtualHome scene graph data is reference-only."
@@ -1315,7 +1326,9 @@ def _write_artifacts(
         "insufficient_grounding": grounding_summary["insufficient_grounding"],
         "final_status": grounding_summary["final_status"],
         "termination_reason": grounding_summary["termination_reason"],
-        "not_final_evidence": grounding_summary["final_status"] != "success",
+        "not_final_evidence": not_final_evidence,
+        "artifact_validation_success": artifact_validation_success,
+        "task_or_evidence_success": task_or_evidence_success,
         "rooms_expected": reference_rooms,
         "predicted_rooms": predicted_rooms,
         "rooms_visited": rooms,
@@ -1353,7 +1366,7 @@ def _write_artifacts(
         "contradicting_evidence": [],
         "missing_evidence": [],
         "insufficient_grounding": grounding_summary["insufficient_grounding"],
-        "not_final_evidence": grounding_summary["final_status"] != "success",
+        "not_final_evidence": not_final_evidence,
     }
     _write_json(output_dir / "world_model.json", world_model)
     _write_json(output_dir / "reference_world_model.json", reference_world_model)
@@ -1384,6 +1397,13 @@ def _write_artifacts(
         }
         validation_summary["passed"] = not validation_summary["errors"]
         coverage["validation_passed"] = bool(validation_summary["passed"])
+        coverage["artifact_validation_success"] = bool(validation_summary["passed"])
+        coverage["task_or_evidence_success"] = (
+            bool(validation_summary["passed"])
+            and coverage.get("final_status") == "success"
+            and coverage.get("insufficient_grounding") is not True
+            and coverage.get("not_final_evidence") is not True
+        )
         _write_json(output_dir / "coverage_report.json", coverage)
     _write_episode_log(output_dir / "episode_log.jsonl", frame_manifest, world_model, validation_summary)
     audit = _build_audit(

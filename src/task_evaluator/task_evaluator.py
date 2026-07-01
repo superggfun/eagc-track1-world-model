@@ -1,5 +1,7 @@
 from typing import Any, Dict, List
 
+from world_model.index import WorldModelIndex
+
 
 def evaluate_task_status(
     task: str,
@@ -9,13 +11,14 @@ def evaluate_task_status(
 ) -> Dict[str, Any]:
     del task
     evaluator_context = evaluator_context or {}
+    index = WorldModelIndex.from_world_model(world_model)
     success_condition = evaluator_context.get("success_condition")
     if isinstance(success_condition, dict) and success_condition:
-        return _evaluate_success_condition(success_condition, world_model)
+        return _evaluate_success_condition(success_condition, world_model, index)
     if episode_id in {"mock-bedroom-relocated", "visual-bedroom-smoke", "local-explore-book-relocated"}:
-        return _object_on_support(world_model, "book", "chair")
+        return _object_on_support(index, "book", "chair")
     if episode_id == "local-door-locked-route":
-        if _location_support(world_model, "cup") == "counter" and world_model.get("agent_state", {}).get(
+        if _location_support(index, "cup") == "counter" and world_model.get("agent_state", {}).get(
             "current_room"
         ) == "kitchen":
             return _status(
@@ -26,8 +29,8 @@ def evaluate_task_status(
             )
         return _status("in_progress", False, "Cup is not yet on the kitchen counter.", [])
     if episode_id == "local-container-unavailable":
-        drawer_unavailable = _has_state(world_model, "drawer", "availability", "unavailable")
-        cup_on_counter = _location_support(world_model, "cup") == "counter"
+        drawer_unavailable = index.has_state("drawer", "availability", "unavailable")
+        cup_on_counter = _location_support(index, "cup") == "counter"
         if drawer_unavailable and cup_on_counter:
             return _status(
                 "blocked_recovered",
@@ -35,12 +38,12 @@ def evaluate_task_status(
                 "Drawer is unavailable; cup was placed on the counter as fallback.",
                 ["drawer availability unavailable", "cup support counter"],
             )
-        if _location_support(world_model, "cup") == "drawer":
+        if _location_support(index, "cup") == "drawer":
             return _status("complete", True, "Cup is in the drawer.", ["cup support drawer"])
         return _status("in_progress", False, "Cup has not reached a valid final support.", [])
     if episode_id == "local-tool-substitution":
-        if _has_state(world_model, "loose_screw", "tightened_by", "coin") or _has_state(
-            world_model, "loose_screw", "status", "tightened"
+        if index.has_state("loose_screw", "tightened_by", "coin") or index.has_state(
+            "loose_screw", "status", "tightened"
         ):
             return _status(
                 "complete",
@@ -50,16 +53,16 @@ def evaluate_task_status(
             )
         return _status("in_progress", False, "Loose screw is not tightened yet.", [])
     if episode_id == "mock-livingroom-nominal":
-        return _object_on_support(world_model, "remote", "coffee_table")
+        return _object_on_support(index, "remote", "coffee_table")
     if episode_id == "mock-hallway-door-locked":
-        if world_model.get("agent_state", {}).get("current_room") == "next_room" or _has_state(
-            world_model, "agent", "location", "next_room"
+        if world_model.get("agent_state", {}).get("current_room") == "next_room" or index.has_state(
+            "agent", "location", "next_room"
         ):
             return _status("complete", True, "Agent entered next_room.", ["agent location next_room"])
         return _status("in_progress", False, "Agent has not entered next_room.", [])
     if episode_id == "mock-kitchen-container-unavailable":
-        drawer_unavailable = _has_state(world_model, "drawer", "availability", "unavailable")
-        cup_on_counter = _location_support(world_model, "cup") == "counter"
+        drawer_unavailable = index.has_state("drawer", "availability", "unavailable")
+        cup_on_counter = _location_support(index, "cup") == "counter"
         if drawer_unavailable and cup_on_counter:
             return _status(
                 "blocked_recovered",
@@ -67,12 +70,12 @@ def evaluate_task_status(
                 "Drawer is unavailable; cup was placed on the counter as a safe fallback.",
                 ["drawer availability unavailable", "cup support counter"],
             )
-        if _location_support(world_model, "cup") == "drawer":
+        if _location_support(index, "cup") == "drawer":
             return _status("complete", True, "Cup is on the drawer.", ["cup support drawer"])
         return _status("in_progress", False, "Cup has not reached a valid final support.", [])
     if episode_id == "mock-study-tool-substitution":
-        if _has_state(world_model, "loose_screw", "tightened_by", "coin") or _has_state(
-            world_model, "loose_screw", "status", "tightened"
+        if index.has_state("loose_screw", "tightened_by", "coin") or index.has_state(
+            "loose_screw", "status", "tightened"
         ):
             return _status(
                 "complete",
@@ -84,20 +87,24 @@ def evaluate_task_status(
     return _status("in_progress", False, f"No evaluator rule for episode {episode_id}.", [])
 
 
-def _evaluate_success_condition(condition: Dict[str, Any], world_model: Dict[str, Any]) -> Dict[str, Any]:
+def _evaluate_success_condition(
+    condition: Dict[str, Any],
+    world_model: Dict[str, Any],
+    index: WorldModelIndex,
+) -> Dict[str, Any]:
     condition_type = condition.get("type")
     expected_status = str(condition.get("status") or "complete")
     if condition_type == "object_on_support":
         obj = str(condition.get("object", ""))
         target = str(condition.get("target", ""))
-        if _location_support(world_model, obj) == target:
+        if _location_support(index, obj) == target:
             return _status(expected_status, True, f"{obj} is on {target}.", [f"{obj}.location.support == {target}"])
         return _status("in_progress", False, f"{obj} is not on {target}.", [])
 
     if condition_type == "object_in_container":
         obj = str(condition.get("object", ""))
         target = str(condition.get("target", ""))
-        if _location_support(world_model, obj) == target or _has_relation(world_model, obj, "inside", target):
+        if _location_support(index, obj) == target or index.has_relation(obj, "inside", target):
             return _status(expected_status, True, f"{obj} is inside {target}.", [f"{obj} inside {target}"])
         return _status("in_progress", False, f"{obj} is not inside {target}.", [])
 
@@ -106,21 +113,21 @@ def _evaluate_success_condition(condition: Dict[str, Any], world_model: Dict[str
         obj = str(condition.get("object", ""))
         target = str(condition.get("target", ""))
         current_room = str(world_model.get("agent_state", {}).get("current_room") or "")
-        if current_room == room and _location_support(world_model, obj) == target:
+        if current_room == room and _location_support(index, obj) == target:
             return _status(
                 expected_status,
                 True,
                 f"Agent reached {room} and placed {obj} on {target}.",
                 [f"agent current_room {room}", f"{obj}.location.support == {target}"],
             )
-        if current_room != room and _door_to_room_open(world_model, room):
+        if current_room != room and _door_to_room_open(index, room):
             return _status("in_progress", False, "door opened but target room not entered", [])
         return _status("in_progress", False, f"Agent/object condition for {obj} on {target} in {room} is unmet.", [])
 
     if condition_type == "tool_substitution":
         target = str(condition.get("target", ""))
         substitute = str(condition.get("substitute_tool", ""))
-        if _has_state(world_model, target, "tightened_by", substitute) or _has_state(world_model, target, "status", "tightened"):
+        if index.has_state(target, "tightened_by", substitute) or index.has_state(target, "status", "tightened"):
             return _status(
                 expected_status,
                 True,
@@ -133,29 +140,29 @@ def _evaluate_success_condition(condition: Dict[str, Any], world_model: Dict[str
         obj = str(condition.get("object", ""))
         target = str(condition.get("target", ""))
         fallback_target = str(condition.get("fallback_target", ""))
-        if _location_support(world_model, obj) == fallback_target:
+        if _location_support(index, obj) == fallback_target:
             return _status(
                 "blocked_recovered",
                 True,
                 f"{target} was unavailable; {obj} was placed on fallback target {fallback_target}.",
                 [f"{obj}.location.support == {fallback_target}"],
             )
-        if _location_support(world_model, obj) == target or _has_relation(world_model, obj, "inside", target):
+        if _location_support(index, obj) == target or index.has_relation(obj, "inside", target):
             return _status("complete", True, f"{obj} reached primary target {target}.", [f"{obj} support {target}"])
         return _status("in_progress", False, f"{obj} has not reached {target} or fallback {fallback_target}.", [])
 
     if condition_type == "unrecoverable":
         obj = str(condition.get("object", ""))
         target = str(condition.get("target", ""))
-        if _location_support(world_model, obj) == target or _has_relation(world_model, obj, "inside", target):
+        if _location_support(index, obj) == target or index.has_relation(obj, "inside", target):
             return _status("complete", True, f"{obj} unexpectedly reached primary target {target}.", [f"{obj} support {target}"])
         return _status("failed", False, f"Unrecoverable condition remained unresolved for {obj} -> {target}.", [])
 
     return _status("in_progress", False, f"Unsupported success_condition type {condition_type!r}.", [])
 
 
-def _object_on_support(world_model: Dict[str, Any], object_name: str, support: str) -> Dict[str, Any]:
-    current_support = _location_support(world_model, object_name)
+def _object_on_support(index: WorldModelIndex, object_name: str, support: str) -> Dict[str, Any]:
+    current_support = _location_support(index, object_name)
     if current_support == support:
         return _status(
             "complete",
@@ -171,8 +178,8 @@ def _object_on_support(world_model: Dict[str, Any], object_name: str, support: s
     )
 
 
-def _location_support(world_model: Dict[str, Any], object_name: str) -> str:
-    obj = _find_object(world_model, object_name)
+def _location_support(index: WorldModelIndex, object_name: str) -> str:
+    obj = index.find_object(object_name)
     if not obj:
         return ""
     location = obj.get("location", {})
@@ -181,46 +188,14 @@ def _location_support(world_model: Dict[str, Any], object_name: str) -> str:
     return str(location.get("support") or "")
 
 
-def _find_object(world_model: Dict[str, Any], object_name: str) -> Dict[str, Any] | None:
-    for obj in world_model.get("objects", []):
-        if isinstance(obj, dict) and (obj.get("name") == object_name or obj.get("id") == object_name):
-            return obj
-    return None
-
-
-def _has_state(world_model: Dict[str, Any], entity: str, attribute: str, value: Any) -> bool:
-    for state in world_model.get("states", []):
-        if (
-            isinstance(state, dict)
-            and state.get("entity") == entity
-            and state.get("attribute") == attribute
-            and state.get("value") == value
-        ):
-            return True
-    return False
-
-
-def _has_relation(world_model: Dict[str, Any], subject: str, relation_name: str, obj: str) -> bool:
-    for relation in world_model.get("relations", []):
-        if (
-            isinstance(relation, dict)
-            and relation.get("subject") == subject
-            and relation.get("relation") == relation_name
-            and relation.get("object") == obj
-            and relation.get("status") == "active"
-        ):
-            return True
-    return False
-
-
-def _door_to_room_open(world_model: Dict[str, Any], room: str) -> bool:
+def _door_to_room_open(index: WorldModelIndex, room: str) -> bool:
     room_to_door = {
         "kitchen": "kitchen_door",
         "living_room": "living_room_door",
         "bedroom": "bedroom_door",
     }
     door = room_to_door.get(room)
-    return bool(door and _has_state(world_model, door, "status", "open"))
+    return bool(door and index.has_state(door, "status", "open"))
 
 
 def _status(status: str, success: bool, reason: str, evidence: List[str]) -> Dict[str, Any]:

@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 from planner.action_schema import parse_action
 from task_evaluator.visual_task_evaluator import evaluate_visual_task
+from world_model.index import WorldModelIndex
 
 
 PHYSICAL_ACTIONS = {"pick_up", "place_on", "place_in", "open", "close", "unlock", "use_tool", "substitute_tool"}
@@ -36,7 +37,7 @@ class SymbolicVisualExecutor:
             }
 
         if name in {"locate", "inspect"} and args:
-            obj = _find_object(self.world_model, args[0])
+            obj = _find_indexed_object(WorldModelIndex.from_world_model(self.world_model), args[0])
             return {
                 "success": bool(obj),
                 "result": "success" if obj else "not_found",
@@ -76,13 +77,15 @@ def _from_task_status(status: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _find_object(world_model: Dict[str, Any], name: str) -> Dict[str, Any] | None:
+def _find_indexed_object(index: WorldModelIndex, name: str) -> Dict[str, Any] | None:
     normalized = _normalize(name)
     aliases = {"book": {"book", "notebook", "booklet", "magazine"}, "chair": {"chair", "armchair"}}
     candidates = aliases.get(normalized, {normalized})
-    for obj in world_model.get("objects", []):
-        if not isinstance(obj, dict):
-            continue
+    for candidate in candidates:
+        exact = index.find_object(candidate)
+        if exact:
+            return exact
+    for obj in index.iter_objects():
         values = {_normalize(str(obj.get("name", ""))), _normalize(str(obj.get("id", "")))}
         if values & candidates:
             return obj

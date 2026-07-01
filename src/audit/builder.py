@@ -258,8 +258,6 @@ def build_run_audit_from_context(ctx: RunAuditContext) -> Dict[str, Any]:
         audit.update(ctx.extra)
 
     return audit
-
-
 # ---------------------------------------------------------------------------
 # Mode‑specific context helpers
 # ---------------------------------------------------------------------------
@@ -407,76 +405,3 @@ def write_failure_audit(
     audit_path.parent.mkdir(parents=True, exist_ok=True)
     audit_path.write_text(_json.dumps(audit, indent=2, ensure_ascii=False), encoding="utf-8")
     return audit
-
-
-def _build_run_audit_legacy(
-    config: Dict[str, Any],
-    run_id: str,
-    episode_id: str,
-    output_dir: Path,
-    use_mock_llm: bool,
-    started_wall: datetime,
-    latency_seconds: float,
-    client: Any | None,
-    fallback_used: bool,
-    debug_raw_path: Path,
-    world_model_path: Path,
-    episode_log_path: Path,
-    validation_status: Dict[str, Any] | str,
-    prompt_version: str,
-    qwen_response_summary_path: Path,
-    env_name: str,
-    scene: str,
-    vision_mode: bool,
-    image_path: Path | None,
-    vision_call_success: bool,
-    vision_parse_success: bool,
-    simulator_frame_path: Path | None,
-    simulator_metadata_path: Path | None,
-    ai2thor_start_success: bool,
-    ai2thor_error_message: str,
-    oracle_metadata_mode: bool,
-    frame_count: int,
-    image_dir: Path | None,
-    processed_frames: list[str],
-) -> Dict[str, Any]:
-    qwen_call_count = 0 if use_mock_llm or client is None else getattr(client, "call_count", 0)
-    qwen_success_count = 0 if use_mock_llm or client is None else getattr(client, "success_count", 0)
-    qwen_failure_count = 0 if use_mock_llm or client is None else getattr(client, "failure_count", 0)
-    ctx = RunAuditContext(
-        episode_id=episode_id,
-        output_dir=output_dir,
-        run_id=run_id,
-        env_name=env_name,
-        scene=scene,
-        mode=env_name,
-        use_mock_llm=use_mock_llm,
-        model="deterministic-mock-llm" if use_mock_llm else config.get("model"),
-        base_url="mock://local" if use_mock_llm else config.get("base_url"),
-        prompt_version=prompt_version,
-        start_time=started_wall.isoformat(),
-        duration_seconds=latency_seconds,
-        success=True,
-        validation_status=validation_status,
-        world_model_path=world_model_path,
-        episode_log_path=episode_log_path,
-        debug_raw_path=debug_raw_path if debug_raw_path.exists() else None,
-        qwen_response_summary_path=qwen_response_summary_path if qwen_response_summary_path.exists() else None,
-        qwen_call_count=qwen_call_count,
-        qwen_call_success_count=qwen_success_count,
-        qwen_call_failure_count=qwen_failure_count,
-        fallback_used=fallback_used,
-        vision_mode=vision_mode,
-        image_path=str(image_path) if image_path else None,
-        vision_call_success=vision_call_success,
-        vision_parse_success=vision_parse_success,
-        simulator_frame_path=str(simulator_frame_path) if simulator_frame_path else None,
-        simulator_metadata_path=str(simulator_metadata_path) if simulator_metadata_path else None,
-        ai2thor_start_success=ai2thor_start_success,
-        ai2thor_error_message=ai2thor_error_message,
-        oracle_metadata_mode=oracle_metadata_mode,
-        frame_count=frame_count,
-        image_dir=str(image_dir) if image_dir else None,
-        processed_frames=processed_frames,
-    )
-    return build_run_audit_from_context(ctx)

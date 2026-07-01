@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -125,9 +126,18 @@ def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         command,
         cwd=PROJECT_ROOT,
+        env=_subprocess_env(),
         text=True,
         encoding="utf-8",
         errors="replace",
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+
+
+def _subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    src_path = str(PROJECT_ROOT / "src")
+    existing = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = os.pathsep.join([src_path, existing]) if existing else src_path
+    return env

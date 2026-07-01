@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from planner.action_schema import is_valid_action, parse_action
+from world_model.index import WorldModelIndex
 
 
 RELATION_STATUSES = {"active", "stale", "inferred", "uncertain"}
@@ -41,17 +42,18 @@ def validate(path: Path) -> List[str]:
         return ["World model must be a JSON object."]
 
     objects = data.get("objects", [])
+    index = WorldModelIndex.from_world_model(data)
     object_names = _object_names(objects)
     errors.extend(_validate_agent_state(data.get("agent_state")))
     errors.extend(_validate_topology(data.get("topology")))
     errors.extend(_validate_locations(objects))
     errors.extend(_validate_relations(data.get("relations", []), object_names, objects))
-    errors.extend(_validate_location_relation_consistency(data))
-    errors.extend(_validate_holding_consistency(data))
+    errors.extend(_validate_location_relation_consistency(data, index))
+    errors.extend(_validate_holding_consistency(data, index))
     errors.extend(_validate_actions(data, objects))
     errors.extend(_validate_recovery_links(data))
-    errors.extend(_validate_object_relocated(data, objects))
-    errors.extend(_validate_exception_state_effects(data))
+    errors.extend(_validate_object_relocated(data, index))
+    errors.extend(_validate_exception_state_effects(data, index))
     return errors
 
 
@@ -162,7 +164,7 @@ def _validate_recovery_links(data: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def _validate_object_relocated(data: Dict[str, Any], objects: Any) -> List[str]:
+def _validate_object_relocated(data: Dict[str, Any], index: WorldModelIndex) -> List[str]:
     errors: List[str] = []
     relocated = [
         item
@@ -173,7 +175,7 @@ def _validate_object_relocated(data: Dict[str, Any], objects: Any) -> List[str]:
     ]
     for item in relocated:
         object_name = item["exception"].get("object")
-        obj = _find_object(objects, object_name)
+        obj = index.find_object(object_name)
         if not obj or not isinstance(obj.get("location"), dict):
             errors.append(f"object_relocated for {object_name} must keep a structured object location.")
         stale_found = any(
@@ -191,21 +193,17 @@ def _validate_object_relocated(data: Dict[str, Any], objects: Any) -> List[str]:
     return errors
 
 
-def _validate_location_relation_consistency(data: Dict[str, Any]) -> List[str]:
+def _validate_location_relation_consistency(data: Dict[str, Any], index: WorldModelIndex) -> List[str]:
     errors: List[str] = []
     objects = data.get("objects", [])
     relations = data.get("relations", [])
     if not isinstance(objects, list) or not isinstance(relations, list):
         return errors
 
-    active_by_subject: Dict[str, List[Dict[str, Any]]] = {}
-    for relation in relations:
-        if (
-            isinstance(relation, dict)
-            and relation.get("relation") in LOCATION_RELATIONS
-            and relation.get("status") == "active"
-        ):
-            active_by_subject.setdefault(str(relation.get("subject")), []).append(relation)
+    active_by_subject: Dict[str, List[Dict[str, Any]]] = {
+        subject: [relation for relation in active_relations if relation.get("relation") in LOCATION_RELATIONS]
+        for subject, active_relations in index.active_relations_by_subject.items()
+    }
 
     for subject, active_relations in active_by_subject.items():
         if len(active_relations) > 1:
@@ -230,12 +228,11 @@ def _validate_location_relation_consistency(data: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def _validate_holding_consistency(data: Dict[str, Any]) -> List[str]:
+def _validate_holding_consistency(data: Dict[str, Any], index: WorldModelIndex) -> List[str]:
     errors: List[str] = []
     agent_state = data.get("agent_state", {})
     holding = agent_state.get("holding") if isinstance(agent_state, dict) else None
     states = data.get("states", [])
-    objects = data.get("objects", [])
 
     held_by_agent = [
         state
@@ -247,7 +244,7 @@ def _validate_holding_consistency(data: Dict[str, Any]) -> List[str]:
     if holding is None and held_by_agent:
         errors.append("agent_state.holding is null but states still contain held_by=agent.")
     if holding is not None:
-        obj = _find_object(objects, str(holding))
+        obj = index.find_object(str(holding))
         if not obj or not isinstance(obj.get("location"), dict):
             errors.append(f"held object {holding} is missing structured location.")
         elif obj["location"].get("support") != "agent_hand":
@@ -255,9 +252,8 @@ def _validate_holding_consistency(data: Dict[str, Any]) -> List[str]:
     return errors
 
 
-def _validate_exception_state_effects(data: Dict[str, Any]) -> List[str]:
+def _validate_exception_state_effects(data: Dict[str, Any], index: WorldModelIndex) -> List[str]:
     errors: List[str] = []
-    states = data.get("states", [])
     for item in data.get("exceptions", []):
         if not isinstance(item, dict) or not isinstance(item.get("exception"), dict):
             continue
@@ -266,19 +262,19 @@ def _validate_exception_state_effects(data: Dict[str, Any]) -> List[str]:
         obj = exception.get("object")
         if exception_type == "door_locked":
             if (
-                not _has_state(states, obj, "lock_state", "locked")
-                and not _has_state(states, obj, "status", "locked")
-                and not _has_state(states, obj, "observed_lock_state", "locked")
+                not index.has_state(obj, "lock_state", "locked")
+                and not index.has_state(obj, "status", "locked")
+                and not index.has_state(obj, "observed_lock_state", "locked")
             ):
                 errors.append("door_locked exception must record a locked state.")
         elif exception_type == "target_container_unavailable":
-            if not _has_state(states, obj, "availability", "unavailable"):
+            if not index.has_state(obj, "availability", "unavailable"):
                 errors.append("target_container_unavailable exception must record unavailable state.")
         elif exception_type == "tool_substitution":
             substitute = exception.get("substitute")
             if not substitute:
                 errors.append("tool_substitution exception must include substitute.")
-            if not _has_state(states, "task", "substitute_tool", substitute):
+            if not index.has_state("task", "substitute_tool", substitute):
                 errors.append("tool_substitution must record substitute_tool state.")
     return errors
 
@@ -359,17 +355,6 @@ def _action_context(data: Dict[str, Any], objects: Any) -> Dict[str, Any]:
     }
 
 
-def _has_state(states: Any, entity: str, attribute: str, value: Any) -> bool:
-    if not isinstance(states, list):
-        return False
-    for state in states:
-        if not isinstance(state, dict):
-            continue
-        if state.get("entity") == entity and state.get("attribute") == attribute and state.get("value") == value:
-            return True
-    return False
-
-
 def _object_names(objects: Any) -> Set[str]:
     names: Set[str] = set()
     if not isinstance(objects, list):
@@ -381,15 +366,6 @@ def _object_names(objects: Any) -> Set[str]:
             if obj.get("name"):
                 names.add(str(obj["name"]))
     return names
-
-
-def _find_object(objects: Any, name: str) -> Dict[str, Any] | None:
-    if not isinstance(objects, list):
-        return None
-    for obj in objects:
-        if isinstance(obj, dict) and (obj.get("name") == name or obj.get("id") == name):
-            return obj
-    return None
 
 
 def _plan_signature(plan: Any) -> tuple:

@@ -149,9 +149,10 @@ class AI2ThorAdapter(BaseEnvAdapter):
         if self.controller is not None:
             try:
                 self.controller.stop()
-            except Exception:
-                pass
-            self.controller = None
+            except Exception as exc:
+                self.error_message = f"AI2-THOR controller.stop() failed during close(): {type(exc).__name__}: {exc}"
+            finally:
+                self.controller = None
 
     def _save_frame(self, frame: Any) -> None:
         if frame is None:

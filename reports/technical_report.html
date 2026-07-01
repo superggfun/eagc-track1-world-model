@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>EAGC 2026 Track 1 Technical Report</title>
+<style>
+* { box-sizing: border-box; }
+@page { size: A4; margin: 11mm 12mm 14mm 12mm; @bottom-right { content: "Page " counter(page) " / " counter(pages); font-size: 8.5pt; color: #5d6a75; } }
+body { margin: 0; font-family: "DejaVu Sans", "Noto Sans CJK SC", "Microsoft YaHei", Arial, sans-serif; color: #222; font-size: 9.6pt; line-height: 1.38; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.header { display: grid; grid-template-columns: 1fr 43mm; gap: 8mm; padding-bottom: 8px; border-bottom: 2px solid #1f69a9; align-items: start; }
+h1 { font-size: 23pt; line-height: 1.05; color: #123d63; margin: 0 0 5px 0; letter-spacing: .2px; }
+.headline { font-size: 11.1pt; color: #1f69a9; font-weight: 700; margin-bottom: 5px; }
+.meta { font-size: 8.8pt; color:#3d4650; }
+.badgebox { background:#f3f8fc; border:1px solid #c8d9e8; border-radius:6px; padding:6px 8px; color:#123d63; font-size:8.8pt; }
+.badgebox div { padding: 2px 0; font-weight:700; }
+.badgebox .note { color:#555; font-weight:400; margin-top:4px; border-top:1px solid #d8e7f3; padding-top:5px; }
+h2 { color:#1f69a9; font-size: 13.2pt; margin: 11px 0 5px 0; border-bottom:1px solid #bdd3e7; padding-bottom:3px; }
+h3 { color:#123d63; font-size: 10.8pt; margin: 8px 0 3px 0; }
+p { margin: 4px 0 6px; text-align: justify; }
+ul { margin: 3px 0 6px 18px; padding:0; }
+li { margin:2px 0; }
+.code { font-family: "DejaVu Sans Mono", Consolas, monospace; background:#f1f6fb; border:1px solid #d7e4ef; color:#24384b; padding:1px 3px; border-radius:3px; font-size:8.8pt; }
+pre { font-family:"DejaVu Sans Mono", Consolas, monospace; background:#f6f9fc; border-left:3px solid #1f69a9; padding:7px 9px; margin:5px 0; font-size:8.3pt; white-space:pre-wrap; }
+table { width:100%; border-collapse:collapse; margin: 5px 0 8px; page-break-inside:auto; }
+th { background:#e6f1fa; color:#123d63; font-weight:700; text-align:left; border:1px solid #c7dce9; padding:4px 5px; font-size:8.9pt; }
+td { border:1px solid #d7e4ef; padding:4px 5px; vertical-align:top; font-size:8.65pt; }
+tr:nth-child(even) td { background:#fafcff; }
+.small td,.small th { font-size:8.25pt; padding:3px 4px; }
+.section { page-break-inside:auto; }
+.keep { page-break-inside: avoid; }
+.callout { background:#f5faff; border:1px solid #c7dce9; border-left:4px solid #1f69a9; padding:7px 9px; margin:7px 0; }
+.ok { color:#116329; font-weight:700; }
+.warn { color:#8a5a00; font-weight:700; }
+.no { color:#8a1f11; font-weight:700; }
+.footer-note { color:#6a737d; font-size:8.1pt; margin-top:8px; border-top:1px solid #d7e4ef; padding-top:6px; }
+</style></head><body>
+<div class="header">
+<div>
+<h1>EAGC 2026 Track 1 Technical Report</h1>
+<div class="headline">Executable World Model Agent - Qualification Submission</div>
+<div class="meta"><b>Version:</b> v0.17.6<br><b>Track:</b> Unseen Environment Exploration and Closed-Loop Task Execution<br><b>Evidence boundary:</b> LocalSim + MazeSim final evidence; VirtualHome diagnostics only<br><b>Generated:</b> 2026-07-01 UTC</div>
+</div>
+<div class="badgebox"><div>Closed-loop</div><div>World Model</div><div>Maze Oracle Validation</div><div>Docker Reproducible</div><div>Official Adapter Ready</div><div class="note">Local validation only. Not official hidden-evaluation score.</div></div>
+</div>
+
+<h2>Abstract</h2>
+<p>This submission implements a local Track 1 world-model agent prototype focused on closed-loop exploration, structured world-model construction, task planning, exception recovery, and reproducible evidence generation. The final evidence in this build is centered on LocalSim and MazeSim. LocalSim demonstrates an official-style Track 1 loop with exploration, task reception, execution, and recovery. MazeSim provides topology exploration, blocked-edge recovery, anti-loop stress cases, and oracle-based comparison reports where the reference maze is used only for validation.</p>
+<p>VirtualHome continuous tooling is implemented fail-closed. A real Unity/VLM partial live diagnostic is included under optional diagnostics, but no validated real Unity continuous + VLM final evidence is included in <span class="code">sample_outputs</span>. Mock VirtualHome replay is included only as CI/diagnostic evidence and is not counted as final Track 1 evidence. No model training, fine-tuning, reinforcement learning, or distillation is used; local Qwen/VLM calls, when enabled, are local inference calls through an OpenAI-compatible endpoint.</p>
+
+<h2>Evaluation and Verification Results</h2>
+<table class="small"><thead><tr><th>Check</th><th>Command / Artifact</th><th>Result</th></tr></thead><tbody><tr><td>Python compile</td><td>python -m compileall src tests tools</td><td>passed</td></tr><tr><td>Unit/regression tests</td><td>python -m pytest -q</td><td>175 passed</td></tr><tr><td>Docker smoke</td><td>python tools/run_test_suite.py --tier docker-smoke</td><td>passed</td></tr><tr><td>Source package reproducibility</td><td>python tools/check_source_package_repro.py --zip-path dist/source.zip</td><td>passed</td></tr><tr><td>Bundle checksum</td><td>checksums/SHA256SUMS.txt</td><td>passed</td></tr><tr><td>Source zip cleanliness</td><td>No outputs/dist/submission_bundle/venv/pycache/bytecode</td><td>passed</td></tr><tr><td>Local path leak scan</td><td>artifact/source JSON + path scan</td><td>passed</td></tr><tr><td>LocalSim final sample</td><td>sample_outputs/local_sim_track1_demo</td><td>passed</td></tr><tr><td>Maze stress final sample</td><td>sample_outputs/maze_stress</td><td>passed</td></tr><tr><td>Maze anti-loop final sample</td><td>sample_outputs/maze_anti_loop</td><td>passed</td></tr><tr><td>VirtualHome final sample</td><td>sample_outputs/virtualhome_exploration</td><td>not included</td></tr><tr><td>VirtualHome diagnostics</td><td>optional_diagnostics/virtualhome_partial_live + virtualhome_mock_replay</td><td>included, not final evidence</td></tr></tbody></table>
+<div class="callout"><b>Boundary:</b> all reported scores and diagnostics are local validation results. Official ranking must be determined by the EAGC hidden checker under the organizer runtime.</div>
+
+<h2>Challenge Alignment</h2>
+<p>Track 1 evaluates whether a system can explore a partially unseen environment, maintain a queryable world model, plan from that model, execute actions, update the model after new observations, and recover from controlled exceptions. This submission is organized around the same dimensions.</p>
+<table class="small"><thead><tr><th>Track 1 dimension</th><th>Submission evidence</th></tr></thead><tbody><tr><td>Task completion</td><td>LocalSim closed-loop task run with local heuristic score and phase budgets</td></tr><tr><td>World-model quality</td><td>world_model.json with rooms, topology, objects, relations, states, plans, exceptions, uncertainty, and evidence</td></tr><tr><td>Recovery and replanning</td><td>LocalSim controlled exceptions; MazeSim blocked-edge, dead-end, and unreachable-goal stress cases</td></tr><tr><td>Execution efficiency</td><td>step budgets, path-efficiency metrics, fallback counts, and Docker smoke tests</td></tr><tr><td>Robustness and safety</td><td>fail-closed adapters, no mock VirtualHome final evidence, source package checks, and path-leak scans</td></tr></tbody></table>
+
+<h2>Submission Package Contents</h2>
+<table class="small"><thead><tr><th>Directory</th><th>Role</th></tr></thead><tbody><tr><td>source/source.zip</td><td>Clean source package with flat src/ layout, tests, tools, docs, Dockerfile, and assets</td></tr><tr><td>docker/</td><td>Dockerfile and Docker run examples</td></tr><tr><td>reports/</td><td>Technical report PDF/HTML/Markdown and build status</td></tr><tr><td>disclosures/</td><td>Resource disclosure, reproducibility statement, system limitations, and open-source statement</td></tr><tr><td>sample_outputs/local_sim_track1_demo/</td><td>Main LocalSim closed-loop Track 1 evidence</td></tr><tr><td>sample_outputs/maze_stress/</td><td>MazeSim topology exploration with reference comparison</td></tr><tr><td>sample_outputs/maze_anti_loop/</td><td>Anti-loop, dead-end, blocked-shortcut, and unreachable-goal stress evidence</td></tr><tr><td>sample_outputs/visual_evidence_demo/</td><td>Supporting image-to-world-model evidence demo</td></tr><tr><td>optional_diagnostics/virtualhome_partial_live/</td><td>Real Unity/VLM partial diagnostic, not final evidence</td></tr><tr><td>optional_diagnostics/virtualhome_mock_replay/</td><td>Mock VirtualHome replay diagnostic only, not final evidence</td></tr><tr><td>checksums/SHA256SUMS.txt</td><td>SHA256 checksums for bundle files</td></tr></tbody></table>
+
+<h2>System Architecture</h2>
+<p>The implementation is organized as a flat <span class="code">src/</span> layout with environment adapters, perception, world-model update logic, planners, executors, validators, and reproducible harness entrypoints. The shared core follows a closed-loop pattern: observe, extract structured facts, update memory, plan or replan, execute, observe again, and audit the run.</p>
+<ul>
+<li><span class="code">env_adapters/</span>: LocalSim, MazeSim, VisualSequence, VirtualHome, and fail-closed official adapter placeholder.</li>
+<li><span class="code">world_model/</span>: schema, store, update helpers, indexing/canonicalization, action effects, and visibility updates.</li>
+<li><span class="code">planner/</span> and <span class="code">executor/</span>: action schema, rule planner, replanner, policy interfaces, action grounding, and simulated execution.</li>
+<li><span class="code">validators/</span>: structural, semantic, LocalSim, MazeSim, VirtualHome, leakage, and final-evidence checks.</li>
+</ul>
+
+<h2>World Model Design</h2>
+<p>The world model is serialized as <span class="code">world_model.json</span>. It contains agent state, visited rooms, topology nodes and edges, inferred frontiers, blocked edges, objects, support/container context, relations, states, affordances, uncertainty records, plans, replans, policy traces, and exception evidence. Reference or oracle files are validation-only answer keys and are explicitly marked with <span class="code">reference_used_for_generation=false</span> and <span class="code">reference_used_for_validation=true</span>.</p>
+
+<h2>LocalSim Track 1 Evidence</h2>
+<p>The LocalSim sample demonstrates a deterministic official-style Track 1 procedure with exploration, task reception and planning, execution, and recovery. It is intended for reproducibility and regression checking rather than official scoring.</p>
+<table class="small"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>Success</td><td>True</td></tr><tr><td>Score</td><td>100.0 / 100</td></tr><tr><td>Total Steps</td><td>17</td></tr><tr><td>Exploration Steps</td><td>8</td></tr><tr><td>Planning Steps</td><td>1</td></tr><tr><td>Execution Steps</td><td>3</td></tr><tr><td>Recovery Steps</td><td>5</td></tr></tbody></table>
+
+<h2>MazeSim Topology Evidence</h2>
+<p>MazeSim provides synthetic topology stress tests without external simulator assets. It validates exploration, topology construction, blocked-edge recovery, dead-end handling, and anti-loop behavior. Each output includes a predicted <span class="code">world_model.json</span>, agent <span class="code">episode_log.jsonl</span>, validation-only <span class="code">reference_maze.json</span>, and <span class="code">comparison_report.json</span>.</p>
+<h3>Maze Stress Summary</h3>
+<table class="small"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>Goal reached</td><td>True</td></tr><tr><td>Steps taken</td><td>28</td></tr><tr><td>Shortest path length</td><td>14</td></tr><tr><td>Map coverage</td><td>0.88</td></tr><tr><td>Topology edge precision</td><td>1.0</td></tr><tr><td>Topology edge recall</td><td>0.926</td></tr><tr><td>Reference used for generation</td><td>False</td></tr></tbody></table>
+<h3>Maze Anti-Loop Summary</h3>
+<table class="small"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>Scenarios run</td><td>4</td></tr><tr><td>Scenarios passed</td><td>4</td></tr><tr><td>Average edge precision</td><td>1.0</td></tr><tr><td>Average edge recall</td><td>0.979</td></tr><tr><td>Total replans</td><td>13</td></tr><tr><td>Total backtracks</td><td>11</td></tr><tr><td>Total oscillation count</td><td>0</td></tr></tbody></table>
+<p>The dead-end comb case intentionally causes repeated dead-end discovery and backtracking. The unreachable-goal case is expected to terminate gracefully with <span class="code">expected_outcome_met=true</span> rather than loop indefinitely.</p>
+
+<h2>Visual Evidence and VirtualHome Boundary</h2>
+<p>The bundle contains a small <span class="code">visual_evidence_demo</span> as supporting evidence for image-to-world-model extraction and symbolic visual task answering. VirtualHome is treated carefully because a full VirtualHome scene graph can act as simulator ground truth. Final VirtualHome evidence is accepted only when it is a continuous episode with real captured images, real <span class="code">vlm_frame_extraction</span>, observation-side action grounding, and a separate reference answer key used only for validation.</p>
+<table class="small"><thead><tr><th>VirtualHome category</th><th>Status</th></tr></thead><tbody><tr><td>Final VirtualHome sample in sample_outputs</td><td>Not included</td></tr><tr><td>Reason</td><td>No validated real Unity continuous + VLM final run in this build</td></tr><tr><td>Partial live diagnostic</td><td>Included under optional_diagnostics/virtualhome_partial_live</td></tr><tr><td>Partial live status</td><td>partial</td></tr><tr><td>Partial live frames / Qwen calls</td><td>7 real frames / 7 real vision calls</td></tr><tr><td>Partial live reason</td><td>insufficient executable action grounding</td></tr><tr><td>Mock replay fixture</td><td>Included only under optional_diagnostics/virtualhome_mock_replay</td></tr><tr><td>Mock evidence level</td><td>mock_ci_smoke</td></tr><tr><td>Mock prediction mode</td><td>mock_visual_extraction</td></tr><tr><td>Mock treated as final evidence</td><td>No</td></tr></tbody></table>
+<p>The partial live diagnostic demonstrates that real Unity frame capture and real Qwen vision calls can run, but action grounding was insufficient. It is therefore correctly classified as optional diagnostics, not final Track 1 evidence.</p>
+
+<h2>Official Runtime Adapter Preparedness</h2>
+<p>An official runtime adapter boundary is included so future hidden-evaluation integration should affect only the adapter/action-translation layer. It fails closed until official runtime details are released and does not silently fall back to LocalSim.</p>
+<table class="small"><thead><tr><th>Item</th><th>Status</th></tr></thead><tbody><tr><td>OfficialAdapter included</td><td>True</td></tr><tr><td>Status</td><td>fail-closed placeholder</td></tr><tr><td>Silent fallback to LocalSim</td><td>False</td></tr><tr><td>Integration boundary</td><td>future official runtime should implement observe / step / action_schema only</td></tr></tbody></table>
+
+<h2>Artifact Integrity and Reproducibility</h2>
+<p>The submitted Dockerfile builds a lightweight Python agent container. Model weights are not packaged inside the image; local Qwen/vLLM inference is configured through environment variables when needed.</p>
+<pre>python -m compileall src tests tools
+python -m pytest -q
+python tools/package_source.py
+python tools/check_source_package_repro.py --zip-path dist/source.zip
+python tools/create_submission_bundle.py
+python tools/run_test_suite.py --tier docker-smoke --timeout-seconds 300</pre>
+<p>The source package check excludes generated outputs, virtual environments, build artifacts, <span class="code">__pycache__</span>, bytecode files, local simulator caches, and the submission bundle itself.</p>
+
+<h2>Compute Budget and Local Test Hardware</h2>
+<table class="small"><thead><tr><th>Component</th><th>Local setup</th></tr></thead><tbody><tr><td>CPU</td><td>AMD Ryzen 9 9950X3D, 16 cores / 32 threads</td></tr><tr><td>RAM</td><td>128 GB system memory</td></tr><tr><td>GPU</td><td>NVIDIA GeForce RTX 5090, 32 GB VRAM</td></tr><tr><td>OS</td><td>Windows 11 with WSL2 Ubuntu 24.04</td></tr><tr><td>Containerization</td><td>Docker / Docker Desktop for local smoke tests</td></tr><tr><td>Model endpoint</td><td>Local OpenAI-compatible vLLM/Qwen endpoint when real model calls are enabled</td></tr></tbody></table>
+<p>No training, fine-tuning, reinforcement learning, or distillation was performed. The GPU was used for local VLM/Qwen inference experiments and smoke testing only.</p>
+
+<h2>Resource Disclosure Summary</h2>
+<ul>
+<li>Public resources are used as design references only.</li>
+<li>LocalSim and MazeSim are self-built local development environments.</li>
+<li>MazeSim reference specs are validation-only oracles, not agent inputs.</li>
+<li>VirtualHome scene graph is allowed only as a local reference answer key when real VirtualHome evidence is generated.</li>
+<li>Qwen model weights are not redistributed.</li>
+<li>No online model APIs are required for official-style local execution.</li>
+<li>The Docker image excludes model weights and external simulator assets.</li>
+</ul>
+
+<h2>Failure Analysis and Known Limitations</h2>
+<ul>
+<li>LocalSim and MazeSim are local development environments, not official hidden evaluation.</li>
+<li>MazeSim stresses topology and replanning but does not replace household manipulation simulators.</li>
+<li>VirtualHome final evidence is not included because no validated real continuous Unity + VLM final run is available.</li>
+<li>VirtualHome partial live reached real frame capture and real VLM calls, but stopped as partial due to insufficient executable action grounding.</li>
+<li>Visual evidence demo is supportive and does not represent physical robot interaction.</li>
+<li>Real AI2-THOR, ProcTHOR, Habitat, and official runtime integration remain future work.</li>
+<li>Official container execution constraints and hidden checker interfaces must be aligned once the organizer runtime is released.</li>
+</ul>
+
+<h2>Final Submission Boundary Statement</h2>
+<p>All scores and metrics in this report are local validation or diagnostic results. They are not official EAGC hidden-evaluation scores. Official ranking must be determined by the EAGC hidden checker under the organizer runtime.</p>
+<div class="footer-note">Generated from the current submission bundle. Styling follows the uploaded blue report/resume template while adapting it for a technical report.</div>
+</body></html>

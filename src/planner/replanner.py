@@ -1,6 +1,7 @@
 from typing import Any, Dict
 
 from planner.action_schema import invalid_actions, parse_action
+from world_model.index import WorldModelIndex
 from world_model.update import mark_object_location_unknown
 
 
@@ -11,6 +12,7 @@ class Replanner:
         reason = failure.get("message", "Action failed during execution.")
 
         exception_type = exception.get("type", "unknown_exception")
+        index = WorldModelIndex.from_world_model(world_model)
 
         if exception_type == "object_relocated":
             recovery_actions = []
@@ -22,7 +24,7 @@ class Replanner:
                         if action not in recovery_actions:
                             recovery_actions.append(action)
             if not has_likely_location:
-                for action in _search_actions_for_object(world_model, object_name):
+                for action in _search_actions_for_object(world_model, index, object_name):
                     if action not in recovery_actions:
                         recovery_actions.append(action)
             mark_object_location_unknown(world_model, object_name, reason)
@@ -42,7 +44,7 @@ class Replanner:
         elif exception_type == "door_locked":
             door = object_name if object_name != "target object" else "door"
             required_key = str(exception.get("required_key") or "")
-            if not required_key and _find_object(world_model, "key"):
+            if not required_key and index.find_object("key"):
                 required_key = "key"
             if required_key:
                 recovery_actions = [f"search({required_key})", f"pick_up({required_key})", f"unlock({door})", f"open({door})"]
@@ -92,9 +94,13 @@ class Replanner:
         return plan
 
 
-def _search_actions_for_object(world_model: Dict[str, Any], object_name: str) -> list[str]:
+def _search_actions_for_object(
+    world_model: Dict[str, Any],
+    index: WorldModelIndex,
+    object_name: str,
+) -> list[str]:
     candidates: list[str] = []
-    obj = _find_object(world_model, object_name)
+    obj = index.find_object(object_name)
     location = obj.get("location", {}) if obj else {}
     if isinstance(location, dict):
         for key in ["support", "region", "room"]:
@@ -133,10 +139,3 @@ def _placement_target(action: str) -> str:
     if action_name in {"place_on", "place_in"} and len(args) == 2:
         return args[1]
     return ""
-
-
-def _find_object(world_model: Dict[str, Any], object_name: str) -> Dict[str, Any] | None:
-    for obj in world_model.get("objects", []):
-        if isinstance(obj, dict) and (obj.get("name") == object_name or obj.get("id") == object_name):
-            return obj
-    return None
